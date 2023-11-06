@@ -1,0 +1,122 @@
+syntax = "proto3";
+package message;
+option go_package  = "/message";
+//import "google/protobuf/wrappers.proto";
+
+message Ping {
+}
+
+// Main event structure
+// events are used to transmit actions from either
+// server -> client
+// client -> server
+message Event {
+  // Event type
+  uint32 type = 1;
+  // Sender id/Target id
+  uint32 id = 2;
+  // The event
+  bytes e = 3;
+}
+
+
+
+// List of events clients send expecting a response
+
+// Register
+message Register {
+  string nick = 1;
+}
+message RegisterOk {
+  uint32 id = 1;
+  // map data should only be sent once at the start
+  // as the response to a client register
+  // message MapData {
+  //   message MapRow {
+  //     repeated uint32 asset = 1;
+  //   }
+  //   repeated MapRow y = 1; 
+  // }
+  // MapData ground = 2;
+  // MapData stuff = 3;
+  int32 fovX = 4;
+  int32 fovY = 5;
+  PlayerAction self = 6;
+  repeated PlayerAction spawns = 7;
+}
+// Move
+message Move {
+  uint32 dir = 1;
+}
+message MoveOk {
+  bool ok = 1;
+}
+message Dir {
+  uint32 dir = 1;
+}
+
+
+
+// List of events server sends to client
+
+// Player update
+// The message the server sends all clients (*excluding the trigger client)
+// about that players latest update.
+// It should only be sent to players that are in range from this.
+message PlayerAction {
+  uint32 action = 1;
+  uint32 id = 2;
+  string nick = 3;
+  uint32 x = 4;
+  uint32 y = 5;
+  uint32 d = 6;
+  uint32 body = 7;
+  uint32 head = 8;
+  uint32 shield = 9;
+  uint32 weapon = 10;
+}
+message PlayerActions {
+  repeated PlayerAction playerActions = 1;
+}
+
+// Spell cast
+// Simple message the server sends all clients (*excluding the trigger client)
+// when a spell is casted in the field of view of the player.
+message SpellCast {
+  uint32 type = 1;
+  uint32 target = 4;
+}
+
+// Melee cast
+message MeleCast {
+  uint32 target = 4;
+}
+
+// (*excluding the trigger client)
+// This is because the client triggering an event will play
+// that event in his own UI when the server confirms.
+// If the server confirms these events are broadcasted, 
+// if the response is 'no' nothing is done.
+
+
+
+// Main tick structure
+// ticks are used to have visual information about the players
+// ticks are transmited through UDP, so packets may be missed. 
+// using it to have a constant status of what skin the player has seems a good use. ¯\_(ツ)_/¯
+// message Tick {
+//   repeated Entity entities = 1;
+// }
+
+
+// message Entity {
+//   int32 id = 1;
+//   int32 x = 2;
+//   int32 y = 3;
+//   string type = 4;
+//   int32 form = 5;
+//   google.protobuf.Int32Value body = 6;
+//   google.protobuf.Int32Value head = 7;
+//   google.protobuf.Int32Value shield = 8;
+//   google.protobuf.Int32Value weapon = 9;
+// }
