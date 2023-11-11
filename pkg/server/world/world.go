@@ -18,7 +18,7 @@ func init() {
 	FillBlockers(maps.MapLayers[maps.Stuff], PlayerGrid)
 }
 
-func FillBlockers(aa [][]assets.Asset, g *tile.Grid[thing.Thing]) {
+func FillBlockers(aa [][]assets.Image, g *tile.Grid[thing.Thing]) {
 	for y := 0; y < len(aa); y++ {
 		for x := 0; x < len(aa[y]); x++ {
 			if assets.IsSolid(aa[y][x]) {

@@ -26,6 +26,14 @@ func NewHandler(g *Game) *Handler {
 	h.h[events.RegisterOk] = h.RegisterOk
 	h.h[events.MoveOk] = h.MoveOk
 
+	h.h[events.CastMeleeOk] = h.CastMeleeOk
+	h.h[events.RecivedMelee] = h.RecivedMelee
+	h.h[events.MeleeHit] = h.MeleeHit
+
+	h.h[events.CastSpellOk] = h.CastSpellOk
+	h.h[events.RecivedSpell] = h.RecivedSpell
+	h.h[events.SpellHit] = h.SpellHit
+
 	h.h[events.PlayerAction] = h.PlayerAction
 	h.h[events.PlayerActions] = h.PlayerActions
 	return h
@@ -64,9 +72,8 @@ func (h *Handler) RegisterOk(e *message.Event) {
 	rok := events.Proto(e.E, &message.RegisterOk{})
 	h.g.sessionID = rok.Id
 	h.g.world = NewMap(MapConfigFromRegisterOk(rok))
-	h.g.client = player.NewClientP()
-	h.g.player = player.NewRegisterOk(rok, h.g.client)
-	players := player.NewFromLogIn(rok)
+	h.g.player, h.g.client = player.NewRegisterOk(rok)
+	players := player.NewFromLogIn(h.g.player, rok, h.g.SoundBoard)
 	for id, p := range players {
 		h.g.players[id] = p
 		h.g.playersY = append(h.g.playersY, p)
@@ -74,9 +81,37 @@ func (h *Handler) RegisterOk(e *message.Event) {
 	log.Println("RegisterOk finished")
 }
 
+// Event responses
+
 func (h *Handler) MoveOk(e *message.Event) {
 	h.g.client.MoveOk <- events.Proto(e.E, &message.MoveOk{}).Ok
 }
+
+func (h *Handler) CastMeleeOk(e *message.Event) {
+	h.g.client.CastMeleeOk <- events.Proto(e.E, &message.CastMeleeOk{})
+}
+
+func (h *Handler) MeleeHit(e *message.Event) {
+	h.g.client.MeleeHit <- events.Proto(e.E, &message.MeleeHit{})
+}
+
+func (h *Handler) RecivedMelee(e *message.Event) {
+	h.g.client.RecivedMelee <- events.Proto(e.E, &message.RecivedMelee{})
+}
+
+func (h *Handler) CastSpellOk(e *message.Event) {
+	h.g.client.CastSpellOk <- events.Proto(e.E, &message.CastSpellOk{})
+}
+
+func (h *Handler) SpellHit(e *message.Event) {
+	h.g.client.SpellHit <- events.Proto(e.E, &message.SpellHit{})
+}
+
+func (h *Handler) RecivedSpell(e *message.Event) {
+	h.g.client.RecivedSpell <- events.Proto(e.E, &message.RecivedSpell{})
+}
+
+// Actions
 
 func (h *Handler) PlayerAction(e *message.Event) {
 	h.playerAction(events.Proto(e.E, &message.PlayerAction{}))
@@ -95,9 +130,10 @@ func (h *Handler) playerAction(a *message.PlayerAction) {
 		p.Process(a)
 		return
 	}
-	h.g.players[a.Id] = player.ProcessNew(a)
+	h.g.players[a.Id] = player.ProcessNew(h.g.player, a, h.g.SoundBoard)
 	h.g.playersY = append(h.g.playersY, h.g.players[a.Id])
-	MustAt(h.g.players[a.Id].X, h.g.players[a.Id].Y).SimpleSpawn(h.g.players[a.Id])
+	h.g.players[a.Id].Tile = MustAt(h.g.players[a.Id].X, h.g.players[a.Id].Y)
+	h.g.players[a.Id].Tile.SimpleSpawn(h.g.players[a.Id])
 }
 
 func (h *Handler) HandleClient() {
@@ -111,6 +147,11 @@ func (h *Handler) HandleClient() {
 			h.g.m.Write(&message.Event{Type: events.Move, Id: h.g.sessionID,
 				E: events.Bytes(&message.Move{Dir: msg}),
 			})
+		case <-h.g.client.CastMelee:
+			h.g.m.Write(&message.Event{Type: events.CastMelee, Id: h.g.sessionID})
+
+		case msg := <-h.g.client.CastSpell:
+			h.g.m.Write(&message.Event{Type: events.CastSpell, Id: h.g.sessionID, E: events.Bytes(msg)})
 		}
 	}
 }
@@ -123,6 +164,6 @@ func (h *Handler) SendPing() {
 }
 
 func (h *Handler) Ping(e *message.Event) {
-	log.Printf("ping response arrived %v", time.Since(h.ping).String())
+	//log.Printf("ping response arrived %v", time.Since(h.ping).String())
 	h.g.latency = fmt.Sprintf("%v", time.Since(h.ping).String())
 }

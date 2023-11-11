@@ -1,8 +1,10 @@
 package game
 
 import (
+	"math/rand"
 	"os"
 	"os/signal"
+	"time"
 
 	"github.com/rywk/minigoao/pkg/constants"
 	"github.com/rywk/minigoao/pkg/server/net"
@@ -36,6 +38,7 @@ func New() *GameServer {
 }
 
 func (g *GameServer) init() {
+	rand.Seed(time.Now().UnixNano())
 	g.l = net.NewListener(constants.Port)
 	go g.NewPlayerHandler()
 }

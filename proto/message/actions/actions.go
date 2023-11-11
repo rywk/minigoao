@@ -7,6 +7,7 @@ const (
 	Despawn
 	Move
 	Dir
+	Died
 
 	Nothing
 )

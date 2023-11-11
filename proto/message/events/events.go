@@ -1,6 +1,7 @@
 package events
 
 import (
+	"github.com/rywk/minigoao/proto/message"
 	"google.golang.org/protobuf/proto"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 )
@@ -29,8 +30,12 @@ const (
 	MoveOk
 	CastSpell
 	CastSpellOk
-	HitMelee
-	HitMeleeOk
+	RecivedSpell
+	SpellHit
+	CastMelee
+	CastMeleeOk
+	RecivedMelee
+	MeleeHit
 
 	Dir
 	// Events the server sends to clients
@@ -48,3 +53,7 @@ const (
 	// used to use arrays of this len instead of slices
 	Len
 )
+
+func New(e E, id uint32, data []byte) *message.Event {
+	return &message.Event{Type: e, Id: id, E: data}
+}

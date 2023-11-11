@@ -2,7 +2,11 @@ package player
 
 import (
 	"log"
+	"math/rand"
+	"time"
 
+	"github.com/rywk/minigoao/pkg/constants"
+	"github.com/rywk/minigoao/pkg/constants/spell"
 	"github.com/rywk/minigoao/pkg/direction"
 	"github.com/rywk/minigoao/pkg/server/net"
 	"github.com/rywk/minigoao/pkg/server/world"
@@ -11,6 +15,7 @@ import (
 	"github.com/rywk/minigoao/proto/message/actions"
 	"github.com/rywk/minigoao/proto/message/events"
 	"github.com/rywk/tile"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 type Handler struct {
@@ -27,8 +32,8 @@ func NewHandlers(c *net.Conn) *Handler {
 	list[events.Register] = h.Register
 	list[events.Move] = h.Move
 	list[events.Dir] = h.Dir
+	list[events.CastMelee] = h.CastMelee
 	list[events.CastSpell] = h.CastSpell
-	list[events.HitMelee] = h.HitMelee
 	h.h = list
 	return h
 }
@@ -54,14 +59,29 @@ func (h *Handler) HandleMapEvents() {
 		if ev.Emmiter == h.p.ID {
 			continue
 		}
-		pa, ok := ev.Data.(*message.PlayerAction)
-		if !ok {
-			continue
-		}
-		h.c.Send() <- &message.Event{
-			Id:   ev.Emmiter,
-			Type: events.PlayerAction,
-			E:    events.Bytes(pa),
+		switch m := ev.Data.(type) {
+		case *message.PlayerAction:
+			h.c.Send() <- &message.Event{
+				Id:   ev.Emmiter,
+				Type: events.PlayerAction,
+				E:    events.Bytes(m),
+			}
+		case *message.MeleeHit:
+			if m.To != h.p.ID {
+				h.c.Send() <- &message.Event{
+					Id:   ev.Emmiter,
+					Type: events.MeleeHit,
+					E:    events.Bytes(m),
+				}
+			}
+		case *message.SpellHit:
+			if m.To != h.p.ID {
+				h.c.Send() <- &message.Event{
+					Id:   ev.Emmiter,
+					Type: events.SpellHit,
+					E:    events.Bytes(m),
+				}
+			}
 		}
 	}
 	close(h.c.Send())
@@ -72,21 +92,26 @@ func (h *Handler) Register(e *message.Event) {
 	h.p.Nick = events.Proto(e.E, &message.Register{}).Nick
 	log.Printf("Client [%v, %v, %v] start to register\n", h.p.ID, h.p.Nick, h.c.Addr)
 	playersVisible := h.p.Spawn()
-	go h.HandleMapEvents()
-	rp := &message.RegisterOk{
+	h.c.Send() <- events.New(events.RegisterOk, 0, events.Bytes(&message.RegisterOk{
 		Id:     h.c.ID,
+		MaxHP:  uint32(h.p.MaxHP),
+		MaxMP:  uint32(h.p.MaxMP),
+		HP:     uint32(h.p.HP),
+		MP:     uint32(h.p.MP),
 		FovX:   DefaultScreenWidth,
 		FovY:   DefaultScreenHeight,
 		Self:   h.p.ToProto(actions.Spawn),
 		Spawns: playersVisible,
-	}
-	h.c.Send() <- &message.Event{Type: events.RegisterOk, E: events.Bytes(rp)}
+	}))
+	go h.HandleMapEvents()
 	log.Printf("Client [%v, %v, %v] finish register\n", h.p.ID, h.p.Nick, h.c.Addr)
 }
 
 func (h *Handler) Dir(e *message.Event) {
 	d := events.Proto(e.E, &message.Dir{}).Dir
-	h.p.D = d
+	h.p.Modify(func(p *Player) {
+		p.D = d
+	})
 	t, _ := world.PlayerGrid.At(int16(h.p.X), int16(h.p.Y))
 	t.ChangeDirection(d, h.p.ID, h.p.ToProto(actions.Dir))
 }
@@ -101,7 +126,9 @@ func (h *Handler) Move(e *message.Event) {
 		// If in the end the player changed direction but didnt move
 		// notify the direction change
 		if changeDir && !moved {
-			h.p.D = d
+			h.p.Modify(func(p *Player) {
+				p.D = d
+			})
 			t, _ := world.PlayerGrid.At(int16(h.p.X), int16(h.p.Y))
 			t.ChangeDirection(d, h.p.ID, h.p.ToProto(actions.Dir))
 		}
@@ -123,10 +150,14 @@ func (h *Handler) Move(e *message.Event) {
 		return
 	}
 	pt, _ := world.PlayerGrid.At(int16(h.p.X), int16(h.p.Y))
-	log.Println(h.p.X, h.p.Y, "-->", nx, ny)
-	if CanWalkTo(t) {
-		h.p.X, h.p.Y = nx, ny
-		h.p.D = d
+	log.Println(h.p.Nick+":", h.p.X, h.p.Y, "-->", nx, ny)
+	if CanWalkTo(t) && !h.p.Inmobilized || h.p.Dead {
+		h.p.Modify(func(p *Player) {
+			p.X, p.Y = nx, ny
+			p.D = d
+			p.ViewRect = playerView(nx, ny)
+		})
+
 		moved = MovePlayer(h.p, pt, t)
 		h.c.Send() <- &message.Event{
 			Id:   e.Id,
@@ -135,7 +166,6 @@ func (h *Handler) Move(e *message.Event) {
 				Ok: true,
 			})}
 		newPlayersInRange := []*message.PlayerAction{}
-		h.p.ViewRect = playerView(nx, ny)
 		myDespawnForOthers := h.p.ToProto(actions.Despawn)
 		checkPlayers := func(a actions.A) func(tile.Point, tile.Tile[thing.Thing]) {
 			return func(p tile.Point, t tile.Tile[thing.Thing]) {
@@ -172,12 +202,99 @@ func (h *Handler) Move(e *message.Event) {
 
 }
 
-func (h *Handler) CastSpell(e *message.Event) {
+func (h *Handler) CastMelee(e *message.Event) {
+	if h.p.Dead {
+		h.Send(events.CastMeleeOk, &message.CastMeleeOk{Ok: false})
+		return
+	}
+	nx, ny := h.p.X, h.p.Y
+	switch h.p.D {
+	case direction.Front:
+		ny++
+	case direction.Back:
+		ny--
+	case direction.Left:
+		nx--
+	case direction.Right:
+		nx++
+	}
+	pt, _ := world.PlayerGrid.At(int16(h.p.X), int16(h.p.Y))
+	t, ok := world.PlayerGrid.At(int16(nx), int16(ny))
+	if !ok {
+		h.Send(events.CastMeleeOk, &message.CastMeleeOk{Ok: false})
+		pt.TriggerEvent(h.p.ID, &message.MeleeHit{Ok: false, From: h.p.ID})
+		return
+	}
+	var p *Player
+	t.Range(func(th thing.Thing) error {
+		if p, ok = th.(*Player); ok {
+			return constants.Err{}
+		}
+		return nil
+	})
+	if p != nil && !p.Dead {
+		// we hit someone alive
+		damage := 70 + rand.Intn(60)
+		p.Modify(func(pl *Player) {
+			pl.HP = pl.HP - damage
+			if pl.HP <= 0 {
+				pl.HP = 0
+				pl.Dead = true
+			}
+		})
+		h.Send(events.CastMeleeOk, &message.CastMeleeOk{Ok: true, Id: p.ID, Dmg: uint32(damage)})
+		p.Handler.Send(events.RecivedMelee, &message.RecivedMelee{Id: h.p.ID, Dmg: uint32(damage), Hp: uint32(p.HP)})
+		pt.TriggerEvent(h.p.ID, &message.MeleeHit{Ok: true, From: h.p.ID, To: p.ID})
+		if p.HP == 0 {
+			t.TriggerEvent(p.ID, p.ToProto(actions.Died))
+		}
 
+		return
+	}
+	// no one is there
+	h.Send(events.CastMeleeOk, &message.CastMeleeOk{Ok: false})
+	pt.TriggerEvent(h.p.ID, &message.MeleeHit{Ok: false, From: h.p.ID})
 }
 
-func (h *Handler) HitMelee(e *message.Event) {
+const ()
 
+func (h *Handler) CastSpell(e *message.Event) {
+	cs := events.Proto(e.E, &message.CastSpell{})
+	if h.p.Dead {
+		h.Send(events.CastSpellOk, &message.CastSpellOk{Ok: false})
+		return
+	}
+	log.Println(cs.X, cs.Y)
+	t, ok := world.PlayerGrid.At(int16(cs.X), int16(cs.Y))
+	if !ok {
+		h.Send(events.CastSpellOk, &message.CastSpellOk{Ok: false})
+		return
+	}
+	var p *Player
+	t.Range(func(th thing.Thing) error {
+		if p, ok = th.(*Player); ok {
+			return constants.Err{}
+		}
+		return nil
+	})
+	if p != nil && !p.Dead {
+		// we hit someone alive, we had mana for the spell
+		if cs.Spell == spell.InmoRm && !p.Inmobilized {
+			h.Send(events.CastSpellOk, &message.CastSpellOk{Ok: false})
+			return
+		}
+		if ok, dmg := SpellHandle(cs.Spell, h.p, p); ok {
+			h.Send(events.CastSpellOk, &message.CastSpellOk{Ok: true, Id: p.ID, Dmg: uint32(dmg), Mp: uint32(h.p.MP), Spell: cs.Spell})
+			p.Handler.Send(events.RecivedSpell, &message.RecivedSpell{Id: h.p.ID, Dmg: uint32(dmg), Hp: uint32(p.HP), Spell: cs.Spell})
+			t.TriggerEvent(h.p.ID, &message.SpellHit{From: h.p.ID, To: p.ID, Spell: cs.Spell})
+			if p.Dead {
+				t.TriggerEvent(p.ID, p.ToProto(actions.Died))
+			}
+			return
+		}
+	}
+	// no one is there
+	h.Send(events.CastSpellOk, &message.CastSpellOk{Ok: false})
 }
 
 func (h *Handler) Ping(e *message.Event) {
@@ -194,4 +311,26 @@ func (h *Handler) SendDespawnFrom(id uint32, e *message.PlayerAction) {
 func (h *Handler) SendPlayerActions(e []*message.PlayerAction) {
 	h.c.Send() <- &message.Event{Id: h.p.ID, Type: events.PlayerActions,
 		E: events.Bytes(&message.PlayerActions{PlayerActions: e})}
+}
+
+func (h *Handler) Send(e events.E, data protoreflect.ProtoMessage) {
+	h.c.Send() <- &message.Event{Type: e, Id: h.p.ID,
+		E: events.Bytes(data),
+	}
+}
+
+var (
+	spellConfig = map[spell.Spell]Spell{
+		spell.Apoca:  NewApoca(1100, 150, 40),
+		spell.Inmo:   NewInmo(300, time.Second*6),
+		spell.InmoRm: NewInmoRm(370),
+	}
+)
+
+func SpellHandle(s spell.Spell, caster, reciver *Player) (ok bool, dmg int) {
+	sp, ok := spellConfig[s]
+	if !ok {
+		return false, 0
+	}
+	return sp.Cast(caster, reciver)
 }

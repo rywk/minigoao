@@ -20,10 +20,18 @@ type AF interface {
 	Finished() bool
 }
 
+type Effect interface {
+	Play() bool
+	EffectFrame() *ebiten.Image
+	EffectOpt(*ebiten.DrawImageOptions) *ebiten.DrawImageOptions
+}
+
 type (
 	SpriteConfig struct {
 		X, Y          int
 		Width, Height int
+		GridW, GridH  int
+		FrameCount    int
 
 		// frames for in game direction
 		DirectionLength map[direction.D]int
@@ -36,6 +44,8 @@ type (
 	Animation struct {
 		// mapping game direction to frame reading direction
 		directionMap map[direction.D]*Sprites
+
+		sprites *Sprites
 
 		currentDir direction.D
 	}
@@ -91,6 +101,49 @@ func (s *Still) Stopped(d direction.D) *ebiten.Image {
 	return s.directionMap[d]
 }
 
+func NewEffectAnimation(img *ebiten.Image, config SpriteConfig) *Animation {
+	a := &Animation{currentDir: direction.Front}
+	y := config.Y
+	frames := config.DirectionLength[direction.Right]
+	sprits := []*ebiten.Image{}
+	if config.GridH == 0 {
+		x := config.X
+		for i := 0; i < frames; i++ {
+			sprits = append(sprits, img.SubImage(image.Rect(x, y, x+config.Width, y+config.Height)).(*ebiten.Image))
+			x += config.Width
+		}
+		a.sprites = NewSprites(sprits)
+	} else {
+		x := 0
+		y := 0
+		for j := 0; j < config.GridH; j++ {
+			for i := 0; i < config.GridW; i++ {
+				sprits = append(sprits, img.SubImage(image.Rect(x, y, x+config.Width, y+config.Height)).(*ebiten.Image))
+				x += config.Width
+			}
+			x = 0
+			y += config.Height
+		}
+		a.sprites = NewSprites(sprits)
+
+	}
+	return a
+}
+
+func NewEffectGridAnimation(img *ebiten.Image, config SpriteConfig) *Animation {
+	a := &Animation{currentDir: direction.Front}
+	y := config.Y
+	frames := config.DirectionLength[direction.Right]
+	sprits := []*ebiten.Image{}
+	x := config.X
+	for i := 0; i < frames; i++ {
+		sprits = append(sprits, img.SubImage(image.Rect(x, y, x+config.Width, y+config.Height)).(*ebiten.Image))
+		x += config.Width
+	}
+	a.sprites = NewSprites(sprits)
+	return a
+}
+
 func NewBodyAnimation(img *ebiten.Image, config SpriteConfig) *Animation {
 	a := &Animation{currentDir: direction.Front, directionMap: make(map[uint32]*Sprites)}
 	y := config.Y
@@ -107,6 +160,18 @@ func NewBodyAnimation(img *ebiten.Image, config SpriteConfig) *Animation {
 		y += config.Height
 	}
 	return a
+}
+
+func (a *Animation) EffectOpt(op *ebiten.DrawImageOptions) *ebiten.DrawImageOptions {
+	return op
+}
+
+func (a *Animation) Play() bool {
+	return a.sprites.Next()
+}
+
+func (a *Animation) EffectFrame() *ebiten.Image {
+	return a.sprites.Frame()
 }
 
 func (a *Animation) Dir(d direction.D) {
@@ -140,11 +205,13 @@ func NewSprites(strip []*ebiten.Image) *Sprites {
 	}
 }
 
-func (s *Sprites) Next() {
+func (s *Sprites) Next() bool {
 	if s.i+1 == s.len {
 		s.i = 0
+		return false
 	} else {
 		s.i++
+		return true
 	}
 }
 

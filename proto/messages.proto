@@ -43,19 +43,89 @@ message RegisterOk {
   int32 fovY = 5;
   PlayerAction self = 6;
   repeated PlayerAction spawns = 7;
+  uint32 maxHP = 8;
+  uint32 maxMP = 9;
+  uint32 HP = 10;
+  uint32 MP = 11;
 }
-// Move
+
+// Move request
 message Move {
   uint32 dir = 1;
 }
+// Move response
 message MoveOk {
   bool ok = 1;
 }
+// Direction change event (clients send this, but is also used to broadcast)
 message Dir {
   uint32 dir = 1;
 }
 
+// Melee request
+message CastMelee {}
+// Melee response
+// - ok: did you hit something?
+// - id: ok who?
+// - dmg: by how much.
+message CastMeleeOk {
+  bool ok = 1;
+  uint32 id = 2; // the id of what we hit
+  uint32 dmg = 3;
+}
+// Melee event, you got hit!
+message RecivedMelee {
+  uint32 id = 1;
+  uint32 dmg = 2;
+  uint32 hp = 3;
+}
+// Melee broadcast event, 
+// every player reciving this has the ids of the playes involved,
+// so we just send this to reproduce the animations in their clients.
+message MeleeHit {
+  bool ok = 1;
+  uint32 from = 2;
+  uint32 to = 3;
+}
 
+// Spell request
+// - x, y: where in the map you tried to cast
+// - spell: what spell spell.Spell
+message CastSpell {
+  uint32 x = 1;
+  uint32 y = 2;
+  uint32 spell = 3;
+}
+// Spell response
+// - ok: did you hit something?
+// - id: ok who?
+// - dmg: by how much.
+message CastSpellOk {
+  bool ok = 1;
+  uint32 id = 2; // the id of what we hit
+  uint32 dmg = 3;
+  uint32 spell = 4;
+  uint32 mp = 5;
+}
+// Spell event, you got hit!
+message RecivedSpell {
+  uint32 id = 1;
+  uint32 dmg = 2;
+  uint32 hp = 3;
+  uint32 spell = 4;
+}
+// Spell broadcast event, 
+// every player reciving this has the ids of the playes involved,
+// so we just send this to reproduce the animations in their clients.
+message SpellHit {
+  uint32 from = 2;
+  uint32 to = 3;
+  uint32 spell = 4;
+}
+
+message Potion {
+  uint32 type = 1;
+}
 
 // List of events server sends to client
 
@@ -70,10 +140,11 @@ message PlayerAction {
   uint32 x = 4;
   uint32 y = 5;
   uint32 d = 6;
-  uint32 body = 7;
-  uint32 head = 8;
-  uint32 shield = 9;
+  bool dead = 7;
+  uint32 armor = 8;
+  uint32 helmet = 9;
   uint32 weapon = 10;
+  uint32 shield = 11;
 }
 message PlayerActions {
   repeated PlayerAction playerActions = 1;
@@ -87,10 +158,7 @@ message SpellCast {
   uint32 target = 4;
 }
 
-// Melee cast
-message MeleCast {
-  uint32 target = 4;
-}
+
 
 // (*excluding the trigger client)
 // This is because the client triggering an event will play

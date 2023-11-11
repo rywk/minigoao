@@ -198,6 +198,10 @@ type RegisterOk struct {
 	FovY   int32           `protobuf:"varint,5,opt,name=fovY,proto3" json:"fovY,omitempty"`
 	Self   *PlayerAction   `protobuf:"bytes,6,opt,name=self,proto3" json:"self,omitempty"`
 	Spawns []*PlayerAction `protobuf:"bytes,7,rep,name=spawns,proto3" json:"spawns,omitempty"`
+	MaxHP  uint32          `protobuf:"varint,8,opt,name=maxHP,proto3" json:"maxHP,omitempty"`
+	MaxMP  uint32          `protobuf:"varint,9,opt,name=maxMP,proto3" json:"maxMP,omitempty"`
+	HP     uint32          `protobuf:"varint,10,opt,name=HP,proto3" json:"HP,omitempty"`
+	MP     uint32          `protobuf:"varint,11,opt,name=MP,proto3" json:"MP,omitempty"`
 }
 
 func (x *RegisterOk) Reset() {
@@ -267,7 +271,35 @@ func (x *RegisterOk) GetSpawns() []*PlayerAction {
 	return nil
 }
 
-// Move
+func (x *RegisterOk) GetMaxHP() uint32 {
+	if x != nil {
+		return x.MaxHP
+	}
+	return 0
+}
+
+func (x *RegisterOk) GetMaxMP() uint32 {
+	if x != nil {
+		return x.MaxMP
+	}
+	return 0
+}
+
+func (x *RegisterOk) GetHP() uint32 {
+	if x != nil {
+		return x.HP
+	}
+	return 0
+}
+
+func (x *RegisterOk) GetMP() uint32 {
+	if x != nil {
+		return x.MP
+	}
+	return 0
+}
+
+// Move request
 type Move struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -315,6 +347,7 @@ func (x *Move) GetDir() uint32 {
 	return 0
 }
 
+// Move response
 type MoveOk struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -362,6 +395,7 @@ func (x *MoveOk) GetOk() bool {
 	return false
 }
 
+// Direction change event (clients send this, but is also used to broadcast)
 type Dir struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -409,6 +443,529 @@ func (x *Dir) GetDir() uint32 {
 	return 0
 }
 
+// Melee request
+type CastMelee struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *CastMelee) Reset() {
+	*x = CastMelee{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_messages_proto_msgTypes[7]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *CastMelee) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CastMelee) ProtoMessage() {}
+
+func (x *CastMelee) ProtoReflect() protoreflect.Message {
+	mi := &file_messages_proto_msgTypes[7]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CastMelee.ProtoReflect.Descriptor instead.
+func (*CastMelee) Descriptor() ([]byte, []int) {
+	return file_messages_proto_rawDescGZIP(), []int{7}
+}
+
+// Melee response
+// - ok: did you hit something?
+// - id: ok who?
+// - dmg: by how much.
+type CastMeleeOk struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Ok  bool   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	Id  uint32 `protobuf:"varint,2,opt,name=id,proto3" json:"id,omitempty"` // the id of what we hit
+	Dmg uint32 `protobuf:"varint,3,opt,name=dmg,proto3" json:"dmg,omitempty"`
+}
+
+func (x *CastMeleeOk) Reset() {
+	*x = CastMeleeOk{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_messages_proto_msgTypes[8]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *CastMeleeOk) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CastMeleeOk) ProtoMessage() {}
+
+func (x *CastMeleeOk) ProtoReflect() protoreflect.Message {
+	mi := &file_messages_proto_msgTypes[8]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CastMeleeOk.ProtoReflect.Descriptor instead.
+func (*CastMeleeOk) Descriptor() ([]byte, []int) {
+	return file_messages_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *CastMeleeOk) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *CastMeleeOk) GetId() uint32 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *CastMeleeOk) GetDmg() uint32 {
+	if x != nil {
+		return x.Dmg
+	}
+	return 0
+}
+
+// Melee event, you got hit!
+type RecivedMelee struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Id  uint32 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Dmg uint32 `protobuf:"varint,2,opt,name=dmg,proto3" json:"dmg,omitempty"`
+	Hp  uint32 `protobuf:"varint,3,opt,name=hp,proto3" json:"hp,omitempty"`
+}
+
+func (x *RecivedMelee) Reset() {
+	*x = RecivedMelee{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_messages_proto_msgTypes[9]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *RecivedMelee) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RecivedMelee) ProtoMessage() {}
+
+func (x *RecivedMelee) ProtoReflect() protoreflect.Message {
+	mi := &file_messages_proto_msgTypes[9]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RecivedMelee.ProtoReflect.Descriptor instead.
+func (*RecivedMelee) Descriptor() ([]byte, []int) {
+	return file_messages_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *RecivedMelee) GetId() uint32 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *RecivedMelee) GetDmg() uint32 {
+	if x != nil {
+		return x.Dmg
+	}
+	return 0
+}
+
+func (x *RecivedMelee) GetHp() uint32 {
+	if x != nil {
+		return x.Hp
+	}
+	return 0
+}
+
+// Melee broadcast event,
+// every player reciving this has the ids of the playes involved,
+// so we just send this to reproduce the animations in their clients.
+type MeleeHit struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Ok   bool   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	From uint32 `protobuf:"varint,2,opt,name=from,proto3" json:"from,omitempty"`
+	To   uint32 `protobuf:"varint,3,opt,name=to,proto3" json:"to,omitempty"`
+}
+
+func (x *MeleeHit) Reset() {
+	*x = MeleeHit{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_messages_proto_msgTypes[10]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *MeleeHit) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MeleeHit) ProtoMessage() {}
+
+func (x *MeleeHit) ProtoReflect() protoreflect.Message {
+	mi := &file_messages_proto_msgTypes[10]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MeleeHit.ProtoReflect.Descriptor instead.
+func (*MeleeHit) Descriptor() ([]byte, []int) {
+	return file_messages_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *MeleeHit) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *MeleeHit) GetFrom() uint32 {
+	if x != nil {
+		return x.From
+	}
+	return 0
+}
+
+func (x *MeleeHit) GetTo() uint32 {
+	if x != nil {
+		return x.To
+	}
+	return 0
+}
+
+// Spell request
+// - x, y: where in the map you tried to cast
+// - spell: what spell spell.Spell
+type CastSpell struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	X     uint32 `protobuf:"varint,1,opt,name=x,proto3" json:"x,omitempty"`
+	Y     uint32 `protobuf:"varint,2,opt,name=y,proto3" json:"y,omitempty"`
+	Spell uint32 `protobuf:"varint,3,opt,name=spell,proto3" json:"spell,omitempty"`
+}
+
+func (x *CastSpell) Reset() {
+	*x = CastSpell{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_messages_proto_msgTypes[11]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *CastSpell) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CastSpell) ProtoMessage() {}
+
+func (x *CastSpell) ProtoReflect() protoreflect.Message {
+	mi := &file_messages_proto_msgTypes[11]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CastSpell.ProtoReflect.Descriptor instead.
+func (*CastSpell) Descriptor() ([]byte, []int) {
+	return file_messages_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *CastSpell) GetX() uint32 {
+	if x != nil {
+		return x.X
+	}
+	return 0
+}
+
+func (x *CastSpell) GetY() uint32 {
+	if x != nil {
+		return x.Y
+	}
+	return 0
+}
+
+func (x *CastSpell) GetSpell() uint32 {
+	if x != nil {
+		return x.Spell
+	}
+	return 0
+}
+
+// Spell response
+// - ok: did you hit something?
+// - id: ok who?
+// - dmg: by how much.
+type CastSpellOk struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Ok    bool   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	Id    uint32 `protobuf:"varint,2,opt,name=id,proto3" json:"id,omitempty"` // the id of what we hit
+	Dmg   uint32 `protobuf:"varint,3,opt,name=dmg,proto3" json:"dmg,omitempty"`
+	Spell uint32 `protobuf:"varint,4,opt,name=spell,proto3" json:"spell,omitempty"`
+	Mp    uint32 `protobuf:"varint,5,opt,name=mp,proto3" json:"mp,omitempty"`
+}
+
+func (x *CastSpellOk) Reset() {
+	*x = CastSpellOk{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_messages_proto_msgTypes[12]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *CastSpellOk) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CastSpellOk) ProtoMessage() {}
+
+func (x *CastSpellOk) ProtoReflect() protoreflect.Message {
+	mi := &file_messages_proto_msgTypes[12]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CastSpellOk.ProtoReflect.Descriptor instead.
+func (*CastSpellOk) Descriptor() ([]byte, []int) {
+	return file_messages_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *CastSpellOk) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *CastSpellOk) GetId() uint32 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *CastSpellOk) GetDmg() uint32 {
+	if x != nil {
+		return x.Dmg
+	}
+	return 0
+}
+
+func (x *CastSpellOk) GetSpell() uint32 {
+	if x != nil {
+		return x.Spell
+	}
+	return 0
+}
+
+func (x *CastSpellOk) GetMp() uint32 {
+	if x != nil {
+		return x.Mp
+	}
+	return 0
+}
+
+// Spell event, you got hit!
+type RecivedSpell struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Id    uint32 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Dmg   uint32 `protobuf:"varint,2,opt,name=dmg,proto3" json:"dmg,omitempty"`
+	Hp    uint32 `protobuf:"varint,3,opt,name=hp,proto3" json:"hp,omitempty"`
+	Spell uint32 `protobuf:"varint,4,opt,name=spell,proto3" json:"spell,omitempty"`
+}
+
+func (x *RecivedSpell) Reset() {
+	*x = RecivedSpell{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_messages_proto_msgTypes[13]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *RecivedSpell) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RecivedSpell) ProtoMessage() {}
+
+func (x *RecivedSpell) ProtoReflect() protoreflect.Message {
+	mi := &file_messages_proto_msgTypes[13]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RecivedSpell.ProtoReflect.Descriptor instead.
+func (*RecivedSpell) Descriptor() ([]byte, []int) {
+	return file_messages_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *RecivedSpell) GetId() uint32 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *RecivedSpell) GetDmg() uint32 {
+	if x != nil {
+		return x.Dmg
+	}
+	return 0
+}
+
+func (x *RecivedSpell) GetHp() uint32 {
+	if x != nil {
+		return x.Hp
+	}
+	return 0
+}
+
+func (x *RecivedSpell) GetSpell() uint32 {
+	if x != nil {
+		return x.Spell
+	}
+	return 0
+}
+
+// Spell broadcast event,
+// every player reciving this has the ids of the playes involved,
+// so we just send this to reproduce the animations in their clients.
+type SpellHit struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	From  uint32 `protobuf:"varint,2,opt,name=from,proto3" json:"from,omitempty"`
+	To    uint32 `protobuf:"varint,3,opt,name=to,proto3" json:"to,omitempty"`
+	Spell uint32 `protobuf:"varint,4,opt,name=spell,proto3" json:"spell,omitempty"`
+}
+
+func (x *SpellHit) Reset() {
+	*x = SpellHit{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_messages_proto_msgTypes[14]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *SpellHit) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SpellHit) ProtoMessage() {}
+
+func (x *SpellHit) ProtoReflect() protoreflect.Message {
+	mi := &file_messages_proto_msgTypes[14]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SpellHit.ProtoReflect.Descriptor instead.
+func (*SpellHit) Descriptor() ([]byte, []int) {
+	return file_messages_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *SpellHit) GetFrom() uint32 {
+	if x != nil {
+		return x.From
+	}
+	return 0
+}
+
+func (x *SpellHit) GetTo() uint32 {
+	if x != nil {
+		return x.To
+	}
+	return 0
+}
+
+func (x *SpellHit) GetSpell() uint32 {
+	if x != nil {
+		return x.Spell
+	}
+	return 0
+}
+
 // Player update
 // The message the server sends all clients (*excluding the trigger client)
 // about that players latest update.
@@ -424,16 +981,17 @@ type PlayerAction struct {
 	X      uint32 `protobuf:"varint,4,opt,name=x,proto3" json:"x,omitempty"`
 	Y      uint32 `protobuf:"varint,5,opt,name=y,proto3" json:"y,omitempty"`
 	D      uint32 `protobuf:"varint,6,opt,name=d,proto3" json:"d,omitempty"`
-	Body   uint32 `protobuf:"varint,7,opt,name=body,proto3" json:"body,omitempty"`
-	Head   uint32 `protobuf:"varint,8,opt,name=head,proto3" json:"head,omitempty"`
-	Shield uint32 `protobuf:"varint,9,opt,name=shield,proto3" json:"shield,omitempty"`
+	Dead   bool   `protobuf:"varint,7,opt,name=dead,proto3" json:"dead,omitempty"`
+	Armor  uint32 `protobuf:"varint,8,opt,name=armor,proto3" json:"armor,omitempty"`
+	Helmet uint32 `protobuf:"varint,9,opt,name=helmet,proto3" json:"helmet,omitempty"`
 	Weapon uint32 `protobuf:"varint,10,opt,name=weapon,proto3" json:"weapon,omitempty"`
+	Shield uint32 `protobuf:"varint,11,opt,name=shield,proto3" json:"shield,omitempty"`
 }
 
 func (x *PlayerAction) Reset() {
 	*x = PlayerAction{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_messages_proto_msgTypes[7]
+		mi := &file_messages_proto_msgTypes[15]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -446,7 +1004,7 @@ func (x *PlayerAction) String() string {
 func (*PlayerAction) ProtoMessage() {}
 
 func (x *PlayerAction) ProtoReflect() protoreflect.Message {
-	mi := &file_messages_proto_msgTypes[7]
+	mi := &file_messages_proto_msgTypes[15]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -459,7 +1017,7 @@ func (x *PlayerAction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerAction.ProtoReflect.Descriptor instead.
 func (*PlayerAction) Descriptor() ([]byte, []int) {
-	return file_messages_proto_rawDescGZIP(), []int{7}
+	return file_messages_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *PlayerAction) GetAction() uint32 {
@@ -504,23 +1062,23 @@ func (x *PlayerAction) GetD() uint32 {
 	return 0
 }
 
-func (x *PlayerAction) GetBody() uint32 {
+func (x *PlayerAction) GetDead() bool {
 	if x != nil {
-		return x.Body
+		return x.Dead
+	}
+	return false
+}
+
+func (x *PlayerAction) GetArmor() uint32 {
+	if x != nil {
+		return x.Armor
 	}
 	return 0
 }
 
-func (x *PlayerAction) GetHead() uint32 {
+func (x *PlayerAction) GetHelmet() uint32 {
 	if x != nil {
-		return x.Head
-	}
-	return 0
-}
-
-func (x *PlayerAction) GetShield() uint32 {
-	if x != nil {
-		return x.Shield
+		return x.Helmet
 	}
 	return 0
 }
@@ -528,6 +1086,13 @@ func (x *PlayerAction) GetShield() uint32 {
 func (x *PlayerAction) GetWeapon() uint32 {
 	if x != nil {
 		return x.Weapon
+	}
+	return 0
+}
+
+func (x *PlayerAction) GetShield() uint32 {
+	if x != nil {
+		return x.Shield
 	}
 	return 0
 }
@@ -543,7 +1108,7 @@ type PlayerActions struct {
 func (x *PlayerActions) Reset() {
 	*x = PlayerActions{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_messages_proto_msgTypes[8]
+		mi := &file_messages_proto_msgTypes[16]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -556,7 +1121,7 @@ func (x *PlayerActions) String() string {
 func (*PlayerActions) ProtoMessage() {}
 
 func (x *PlayerActions) ProtoReflect() protoreflect.Message {
-	mi := &file_messages_proto_msgTypes[8]
+	mi := &file_messages_proto_msgTypes[16]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -569,7 +1134,7 @@ func (x *PlayerActions) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerActions.ProtoReflect.Descriptor instead.
 func (*PlayerActions) Descriptor() ([]byte, []int) {
-	return file_messages_proto_rawDescGZIP(), []int{8}
+	return file_messages_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *PlayerActions) GetPlayerActions() []*PlayerAction {
@@ -594,7 +1159,7 @@ type SpellCast struct {
 func (x *SpellCast) Reset() {
 	*x = SpellCast{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_messages_proto_msgTypes[9]
+		mi := &file_messages_proto_msgTypes[17]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -607,7 +1172,7 @@ func (x *SpellCast) String() string {
 func (*SpellCast) ProtoMessage() {}
 
 func (x *SpellCast) ProtoReflect() protoreflect.Message {
-	mi := &file_messages_proto_msgTypes[9]
+	mi := &file_messages_proto_msgTypes[17]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -620,7 +1185,7 @@ func (x *SpellCast) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SpellCast.ProtoReflect.Descriptor instead.
 func (*SpellCast) Descriptor() ([]byte, []int) {
-	return file_messages_proto_rawDescGZIP(), []int{9}
+	return file_messages_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *SpellCast) GetType() uint32 {
@@ -637,54 +1202,6 @@ func (x *SpellCast) GetTarget() uint32 {
 	return 0
 }
 
-// Melee cast
-type MeleCast struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Target uint32 `protobuf:"varint,4,opt,name=target,proto3" json:"target,omitempty"`
-}
-
-func (x *MeleCast) Reset() {
-	*x = MeleCast{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_messages_proto_msgTypes[10]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *MeleCast) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*MeleCast) ProtoMessage() {}
-
-func (x *MeleCast) ProtoReflect() protoreflect.Message {
-	mi := &file_messages_proto_msgTypes[10]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use MeleCast.ProtoReflect.Descriptor instead.
-func (*MeleCast) Descriptor() ([]byte, []int) {
-	return file_messages_proto_rawDescGZIP(), []int{10}
-}
-
-func (x *MeleCast) GetTarget() uint32 {
-	if x != nil {
-		return x.Target
-	}
-	return 0
-}
-
 var File_messages_proto protoreflect.FileDescriptor
 
 var file_messages_proto_rawDesc = []byte{
@@ -695,7 +1212,7 @@ var file_messages_proto_rawDesc = []byte{
 	0x0a, 0x02, 0x69, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x02, 0x69, 0x64, 0x12, 0x0c,
 	0x0a, 0x01, 0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x01, 0x65, 0x22, 0x1e, 0x0a, 0x08,
 	0x52, 0x65, 0x67, 0x69, 0x73, 0x74, 0x65, 0x72, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x69, 0x63, 0x6b,
-	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x69, 0x63, 0x6b, 0x22, 0x9e, 0x01, 0x0a,
+	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x69, 0x63, 0x6b, 0x22, 0xea, 0x01, 0x0a,
 	0x0a, 0x52, 0x65, 0x67, 0x69, 0x73, 0x74, 0x65, 0x72, 0x4f, 0x6b, 0x12, 0x0e, 0x0a, 0x02, 0x69,
 	0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x02, 0x69, 0x64, 0x12, 0x12, 0x0a, 0x04, 0x66,
 	0x6f, 0x76, 0x58, 0x18, 0x04, 0x20, 0x01, 0x28, 0x05, 0x52, 0x04, 0x66, 0x6f, 0x76, 0x58, 0x12,
@@ -705,12 +1222,50 @@ var file_messages_proto_rawDesc = []byte{
 	0x65, 0x72, 0x41, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x04, 0x73, 0x65, 0x6c, 0x66, 0x12, 0x2d,
 	0x0a, 0x06, 0x73, 0x70, 0x61, 0x77, 0x6e, 0x73, 0x18, 0x07, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x15,
 	0x2e, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x2e, 0x50, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x41,
-	0x63, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x06, 0x73, 0x70, 0x61, 0x77, 0x6e, 0x73, 0x22, 0x18, 0x0a,
-	0x04, 0x4d, 0x6f, 0x76, 0x65, 0x12, 0x10, 0x0a, 0x03, 0x64, 0x69, 0x72, 0x18, 0x01, 0x20, 0x01,
-	0x28, 0x0d, 0x52, 0x03, 0x64, 0x69, 0x72, 0x22, 0x18, 0x0a, 0x06, 0x4d, 0x6f, 0x76, 0x65, 0x4f,
-	0x6b, 0x12, 0x0e, 0x0a, 0x02, 0x6f, 0x6b, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08, 0x52, 0x02, 0x6f,
-	0x6b, 0x22, 0x17, 0x0a, 0x03, 0x44, 0x69, 0x72, 0x12, 0x10, 0x0a, 0x03, 0x64, 0x69, 0x72, 0x18,
-	0x01, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x03, 0x64, 0x69, 0x72, 0x22, 0xcc, 0x01, 0x0a, 0x0c, 0x50,
+	0x63, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x06, 0x73, 0x70, 0x61, 0x77, 0x6e, 0x73, 0x12, 0x14, 0x0a,
+	0x05, 0x6d, 0x61, 0x78, 0x48, 0x50, 0x18, 0x08, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x05, 0x6d, 0x61,
+	0x78, 0x48, 0x50, 0x12, 0x14, 0x0a, 0x05, 0x6d, 0x61, 0x78, 0x4d, 0x50, 0x18, 0x09, 0x20, 0x01,
+	0x28, 0x0d, 0x52, 0x05, 0x6d, 0x61, 0x78, 0x4d, 0x50, 0x12, 0x0e, 0x0a, 0x02, 0x48, 0x50, 0x18,
+	0x0a, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x02, 0x48, 0x50, 0x12, 0x0e, 0x0a, 0x02, 0x4d, 0x50, 0x18,
+	0x0b, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x02, 0x4d, 0x50, 0x22, 0x18, 0x0a, 0x04, 0x4d, 0x6f, 0x76,
+	0x65, 0x12, 0x10, 0x0a, 0x03, 0x64, 0x69, 0x72, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x03,
+	0x64, 0x69, 0x72, 0x22, 0x18, 0x0a, 0x06, 0x4d, 0x6f, 0x76, 0x65, 0x4f, 0x6b, 0x12, 0x0e, 0x0a,
+	0x02, 0x6f, 0x6b, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08, 0x52, 0x02, 0x6f, 0x6b, 0x22, 0x17, 0x0a,
+	0x03, 0x44, 0x69, 0x72, 0x12, 0x10, 0x0a, 0x03, 0x64, 0x69, 0x72, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x0d, 0x52, 0x03, 0x64, 0x69, 0x72, 0x22, 0x0b, 0x0a, 0x09, 0x43, 0x61, 0x73, 0x74, 0x4d, 0x65,
+	0x6c, 0x65, 0x65, 0x22, 0x3f, 0x0a, 0x0b, 0x43, 0x61, 0x73, 0x74, 0x4d, 0x65, 0x6c, 0x65, 0x65,
+	0x4f, 0x6b, 0x12, 0x0e, 0x0a, 0x02, 0x6f, 0x6b, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08, 0x52, 0x02,
+	0x6f, 0x6b, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x02,
+	0x69, 0x64, 0x12, 0x10, 0x0a, 0x03, 0x64, 0x6d, 0x67, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0d, 0x52,
+	0x03, 0x64, 0x6d, 0x67, 0x22, 0x40, 0x0a, 0x0c, 0x52, 0x65, 0x63, 0x69, 0x76, 0x65, 0x64, 0x4d,
+	0x65, 0x6c, 0x65, 0x65, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0d,
+	0x52, 0x02, 0x69, 0x64, 0x12, 0x10, 0x0a, 0x03, 0x64, 0x6d, 0x67, 0x18, 0x02, 0x20, 0x01, 0x28,
+	0x0d, 0x52, 0x03, 0x64, 0x6d, 0x67, 0x12, 0x0e, 0x0a, 0x02, 0x68, 0x70, 0x18, 0x03, 0x20, 0x01,
+	0x28, 0x0d, 0x52, 0x02, 0x68, 0x70, 0x22, 0x3e, 0x0a, 0x08, 0x4d, 0x65, 0x6c, 0x65, 0x65, 0x48,
+	0x69, 0x74, 0x12, 0x0e, 0x0a, 0x02, 0x6f, 0x6b, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08, 0x52, 0x02,
+	0x6f, 0x6b, 0x12, 0x12, 0x0a, 0x04, 0x66, 0x72, 0x6f, 0x6d, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0d,
+	0x52, 0x04, 0x66, 0x72, 0x6f, 0x6d, 0x12, 0x0e, 0x0a, 0x02, 0x74, 0x6f, 0x18, 0x03, 0x20, 0x01,
+	0x28, 0x0d, 0x52, 0x02, 0x74, 0x6f, 0x22, 0x3d, 0x0a, 0x09, 0x43, 0x61, 0x73, 0x74, 0x53, 0x70,
+	0x65, 0x6c, 0x6c, 0x12, 0x0c, 0x0a, 0x01, 0x78, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x01,
+	0x78, 0x12, 0x0c, 0x0a, 0x01, 0x79, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x01, 0x79, 0x12,
+	0x14, 0x0a, 0x05, 0x73, 0x70, 0x65, 0x6c, 0x6c, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x05,
+	0x73, 0x70, 0x65, 0x6c, 0x6c, 0x22, 0x65, 0x0a, 0x0b, 0x43, 0x61, 0x73, 0x74, 0x53, 0x70, 0x65,
+	0x6c, 0x6c, 0x4f, 0x6b, 0x12, 0x0e, 0x0a, 0x02, 0x6f, 0x6b, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08,
+	0x52, 0x02, 0x6f, 0x6b, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0d,
+	0x52, 0x02, 0x69, 0x64, 0x12, 0x10, 0x0a, 0x03, 0x64, 0x6d, 0x67, 0x18, 0x03, 0x20, 0x01, 0x28,
+	0x0d, 0x52, 0x03, 0x64, 0x6d, 0x67, 0x12, 0x14, 0x0a, 0x05, 0x73, 0x70, 0x65, 0x6c, 0x6c, 0x18,
+	0x04, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x05, 0x73, 0x70, 0x65, 0x6c, 0x6c, 0x12, 0x0e, 0x0a, 0x02,
+	0x6d, 0x70, 0x18, 0x05, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x02, 0x6d, 0x70, 0x22, 0x56, 0x0a, 0x0c,
+	0x52, 0x65, 0x63, 0x69, 0x76, 0x65, 0x64, 0x53, 0x70, 0x65, 0x6c, 0x6c, 0x12, 0x0e, 0x0a, 0x02,
+	0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x02, 0x69, 0x64, 0x12, 0x10, 0x0a, 0x03,
+	0x64, 0x6d, 0x67, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x03, 0x64, 0x6d, 0x67, 0x12, 0x0e,
+	0x0a, 0x02, 0x68, 0x70, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x02, 0x68, 0x70, 0x12, 0x14,
+	0x0a, 0x05, 0x73, 0x70, 0x65, 0x6c, 0x6c, 0x18, 0x04, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x05, 0x73,
+	0x70, 0x65, 0x6c, 0x6c, 0x22, 0x44, 0x0a, 0x08, 0x53, 0x70, 0x65, 0x6c, 0x6c, 0x48, 0x69, 0x74,
+	0x12, 0x12, 0x0a, 0x04, 0x66, 0x72, 0x6f, 0x6d, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x04,
+	0x66, 0x72, 0x6f, 0x6d, 0x12, 0x0e, 0x0a, 0x02, 0x74, 0x6f, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0d,
+	0x52, 0x02, 0x74, 0x6f, 0x12, 0x14, 0x0a, 0x05, 0x73, 0x70, 0x65, 0x6c, 0x6c, 0x18, 0x04, 0x20,
+	0x01, 0x28, 0x0d, 0x52, 0x05, 0x73, 0x70, 0x65, 0x6c, 0x6c, 0x22, 0xe6, 0x01, 0x0a, 0x0c, 0x50,
 	0x6c, 0x61, 0x79, 0x65, 0x72, 0x41, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x16, 0x0a, 0x06, 0x61,
 	0x63, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x06, 0x61, 0x63, 0x74,
 	0x69, 0x6f, 0x6e, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0d, 0x52,
@@ -718,24 +1273,23 @@ var file_messages_proto_rawDesc = []byte{
 	0x09, 0x52, 0x04, 0x6e, 0x69, 0x63, 0x6b, 0x12, 0x0c, 0x0a, 0x01, 0x78, 0x18, 0x04, 0x20, 0x01,
 	0x28, 0x0d, 0x52, 0x01, 0x78, 0x12, 0x0c, 0x0a, 0x01, 0x79, 0x18, 0x05, 0x20, 0x01, 0x28, 0x0d,
 	0x52, 0x01, 0x79, 0x12, 0x0c, 0x0a, 0x01, 0x64, 0x18, 0x06, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x01,
-	0x64, 0x12, 0x12, 0x0a, 0x04, 0x62, 0x6f, 0x64, 0x79, 0x18, 0x07, 0x20, 0x01, 0x28, 0x0d, 0x52,
-	0x04, 0x62, 0x6f, 0x64, 0x79, 0x12, 0x12, 0x0a, 0x04, 0x68, 0x65, 0x61, 0x64, 0x18, 0x08, 0x20,
-	0x01, 0x28, 0x0d, 0x52, 0x04, 0x68, 0x65, 0x61, 0x64, 0x12, 0x16, 0x0a, 0x06, 0x73, 0x68, 0x69,
-	0x65, 0x6c, 0x64, 0x18, 0x09, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x06, 0x73, 0x68, 0x69, 0x65, 0x6c,
-	0x64, 0x12, 0x16, 0x0a, 0x06, 0x77, 0x65, 0x61, 0x70, 0x6f, 0x6e, 0x18, 0x0a, 0x20, 0x01, 0x28,
-	0x0d, 0x52, 0x06, 0x77, 0x65, 0x61, 0x70, 0x6f, 0x6e, 0x22, 0x4c, 0x0a, 0x0d, 0x50, 0x6c, 0x61,
-	0x79, 0x65, 0x72, 0x41, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x12, 0x3b, 0x0a, 0x0d, 0x70, 0x6c,
-	0x61, 0x79, 0x65, 0x72, 0x41, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28,
-	0x0b, 0x32, 0x15, 0x2e, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x2e, 0x50, 0x6c, 0x61, 0x79,
-	0x65, 0x72, 0x41, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x0d, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72,
-	0x41, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x22, 0x37, 0x0a, 0x09, 0x53, 0x70, 0x65, 0x6c, 0x6c,
-	0x43, 0x61, 0x73, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x74, 0x79, 0x70, 0x65, 0x18, 0x01, 0x20, 0x01,
-	0x28, 0x0d, 0x52, 0x04, 0x74, 0x79, 0x70, 0x65, 0x12, 0x16, 0x0a, 0x06, 0x74, 0x61, 0x72, 0x67,
-	0x65, 0x74, 0x18, 0x04, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x06, 0x74, 0x61, 0x72, 0x67, 0x65, 0x74,
-	0x22, 0x22, 0x0a, 0x08, 0x4d, 0x65, 0x6c, 0x65, 0x43, 0x61, 0x73, 0x74, 0x12, 0x16, 0x0a, 0x06,
-	0x74, 0x61, 0x72, 0x67, 0x65, 0x74, 0x18, 0x04, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x06, 0x74, 0x61,
-	0x72, 0x67, 0x65, 0x74, 0x42, 0x0a, 0x5a, 0x08, 0x2f, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65,
-	0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x64, 0x12, 0x12, 0x0a, 0x04, 0x64, 0x65, 0x61, 0x64, 0x18, 0x07, 0x20, 0x01, 0x28, 0x08, 0x52,
+	0x04, 0x64, 0x65, 0x61, 0x64, 0x12, 0x14, 0x0a, 0x05, 0x61, 0x72, 0x6d, 0x6f, 0x72, 0x18, 0x08,
+	0x20, 0x01, 0x28, 0x0d, 0x52, 0x05, 0x61, 0x72, 0x6d, 0x6f, 0x72, 0x12, 0x16, 0x0a, 0x06, 0x68,
+	0x65, 0x6c, 0x6d, 0x65, 0x74, 0x18, 0x09, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x06, 0x68, 0x65, 0x6c,
+	0x6d, 0x65, 0x74, 0x12, 0x16, 0x0a, 0x06, 0x77, 0x65, 0x61, 0x70, 0x6f, 0x6e, 0x18, 0x0a, 0x20,
+	0x01, 0x28, 0x0d, 0x52, 0x06, 0x77, 0x65, 0x61, 0x70, 0x6f, 0x6e, 0x12, 0x16, 0x0a, 0x06, 0x73,
+	0x68, 0x69, 0x65, 0x6c, 0x64, 0x18, 0x0b, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x06, 0x73, 0x68, 0x69,
+	0x65, 0x6c, 0x64, 0x22, 0x4c, 0x0a, 0x0d, 0x50, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x41, 0x63, 0x74,
+	0x69, 0x6f, 0x6e, 0x73, 0x12, 0x3b, 0x0a, 0x0d, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x41, 0x63,
+	0x74, 0x69, 0x6f, 0x6e, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x6d, 0x65,
+	0x73, 0x73, 0x61, 0x67, 0x65, 0x2e, 0x50, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x41, 0x63, 0x74, 0x69,
+	0x6f, 0x6e, 0x52, 0x0d, 0x70, 0x6c, 0x61, 0x79, 0x65, 0x72, 0x41, 0x63, 0x74, 0x69, 0x6f, 0x6e,
+	0x73, 0x22, 0x37, 0x0a, 0x09, 0x53, 0x70, 0x65, 0x6c, 0x6c, 0x43, 0x61, 0x73, 0x74, 0x12, 0x12,
+	0x0a, 0x04, 0x74, 0x79, 0x70, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x04, 0x74, 0x79,
+	0x70, 0x65, 0x12, 0x16, 0x0a, 0x06, 0x74, 0x61, 0x72, 0x67, 0x65, 0x74, 0x18, 0x04, 0x20, 0x01,
+	0x28, 0x0d, 0x52, 0x06, 0x74, 0x61, 0x72, 0x67, 0x65, 0x74, 0x42, 0x0a, 0x5a, 0x08, 0x2f, 0x6d,
+	0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -750,7 +1304,7 @@ func file_messages_proto_rawDescGZIP() []byte {
 	return file_messages_proto_rawDescData
 }
 
-var file_messages_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_messages_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_messages_proto_goTypes = []interface{}{
 	(*Ping)(nil),          // 0: message.Ping
 	(*Event)(nil),         // 1: message.Event
@@ -759,20 +1313,27 @@ var file_messages_proto_goTypes = []interface{}{
 	(*Move)(nil),          // 4: message.Move
 	(*MoveOk)(nil),        // 5: message.MoveOk
 	(*Dir)(nil),           // 6: message.Dir
-	(*PlayerAction)(nil),  // 7: message.PlayerAction
-	(*PlayerActions)(nil), // 8: message.PlayerActions
-	(*SpellCast)(nil),     // 9: message.SpellCast
-	(*MeleCast)(nil),      // 10: message.MeleCast
+	(*CastMelee)(nil),     // 7: message.CastMelee
+	(*CastMeleeOk)(nil),   // 8: message.CastMeleeOk
+	(*RecivedMelee)(nil),  // 9: message.RecivedMelee
+	(*MeleeHit)(nil),      // 10: message.MeleeHit
+	(*CastSpell)(nil),     // 11: message.CastSpell
+	(*CastSpellOk)(nil),   // 12: message.CastSpellOk
+	(*RecivedSpell)(nil),  // 13: message.RecivedSpell
+	(*SpellHit)(nil),      // 14: message.SpellHit
+	(*PlayerAction)(nil),  // 15: message.PlayerAction
+	(*PlayerActions)(nil), // 16: message.PlayerActions
+	(*SpellCast)(nil),     // 17: message.SpellCast
 }
 var file_messages_proto_depIdxs = []int32{
-	7, // 0: message.RegisterOk.self:type_name -> message.PlayerAction
-	7, // 1: message.RegisterOk.spawns:type_name -> message.PlayerAction
-	7, // 2: message.PlayerActions.playerActions:type_name -> message.PlayerAction
-	3, // [3:3] is the sub-list for method output_type
-	3, // [3:3] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	15, // 0: message.RegisterOk.self:type_name -> message.PlayerAction
+	15, // 1: message.RegisterOk.spawns:type_name -> message.PlayerAction
+	15, // 2: message.PlayerActions.playerActions:type_name -> message.PlayerAction
+	3,  // [3:3] is the sub-list for method output_type
+	3,  // [3:3] is the sub-list for method input_type
+	3,  // [3:3] is the sub-list for extension type_name
+	3,  // [3:3] is the sub-list for extension extendee
+	0,  // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_messages_proto_init() }
@@ -866,7 +1427,7 @@ func file_messages_proto_init() {
 			}
 		}
 		file_messages_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*PlayerAction); i {
+			switch v := v.(*CastMelee); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -878,7 +1439,7 @@ func file_messages_proto_init() {
 			}
 		}
 		file_messages_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*PlayerActions); i {
+			switch v := v.(*CastMeleeOk); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -890,7 +1451,7 @@ func file_messages_proto_init() {
 			}
 		}
 		file_messages_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SpellCast); i {
+			switch v := v.(*RecivedMelee); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -902,7 +1463,91 @@ func file_messages_proto_init() {
 			}
 		}
 		file_messages_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*MeleCast); i {
+			switch v := v.(*MeleeHit); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_messages_proto_msgTypes[11].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*CastSpell); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_messages_proto_msgTypes[12].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*CastSpellOk); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_messages_proto_msgTypes[13].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*RecivedSpell); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_messages_proto_msgTypes[14].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SpellHit); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_messages_proto_msgTypes[15].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*PlayerAction); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_messages_proto_msgTypes[16].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*PlayerActions); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_messages_proto_msgTypes[17].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SpellCast); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -920,7 +1565,7 @@ func file_messages_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_messages_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   11,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

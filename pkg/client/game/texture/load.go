@@ -7,7 +7,8 @@ import (
 	"sync"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/rywk/minigoao/pkg/client/game/texture/assets"
+	"github.com/rywk/minigoao/pkg/client/game/assets/img"
+	"github.com/rywk/minigoao/pkg/constants/spell"
 	"github.com/rywk/minigoao/pkg/direction"
 	asset "github.com/rywk/minigoao/proto/message/assets"
 )
@@ -15,7 +16,7 @@ import (
 const GrassTextureSize = 128
 
 var (
-	assetConfig = map[asset.Asset]struct {
+	assetConfig = map[asset.Image]struct {
 		c   SpriteConfig
 		img []byte
 	}{
@@ -24,14 +25,131 @@ var (
 				Width:  GrassTextureSize,
 				Height: GrassTextureSize,
 			},
-			img: assets.GrassPatches_png,
+			img: img.GrassPatches_png,
 		},
 		asset.Tiletest: {
 			c: SpriteConfig{
 				Width:  32,
 				Height: 32,
 			},
-			img: assets.Tiletest_png,
+			img: img.Tiletest_png,
+		},
+		asset.Shroom: {
+			c: SpriteConfig{
+				Width:  29,
+				Height: 29,
+			},
+			img: img.Ongo_png,
+		},
+		asset.MeleeHit: {
+			c: SpriteConfig{
+				Width:  32,
+				Height: 32,
+				DirectionLength: map[direction.D]int{
+					direction.Right: 5,
+				},
+			},
+			img: img.MeleeHit_png,
+		},
+		asset.SpellApoca: {
+			c: SpriteConfig{
+				Width:      145,
+				Height:     145,
+				GridW:      4,
+				GridH:      4,
+				FrameCount: 16,
+				DirectionLength: map[direction.D]int{
+					direction.Right: 5,
+				},
+			},
+			img: img.SpellApoca_png,
+		},
+		asset.SpellInmo: {
+			c: SpriteConfig{
+				Width:  128,
+				Height: 128,
+				DirectionLength: map[direction.D]int{
+					direction.Right: 15,
+				},
+			},
+			img: img.SpellInmo_png,
+		},
+		asset.NakedBody: {
+			c: SpriteConfig{
+				Width:  25,
+				Height: 45,
+				DirectionLength: map[direction.D]int{
+					direction.Front: 6,
+					direction.Back:  6,
+					direction.Left:  5,
+					direction.Right: 5,
+				},
+				RealDirMap: map[direction.D]direction.D{
+					direction.Front: direction.Right,
+					direction.Back:  direction.Right,
+					direction.Left:  direction.Right,
+					direction.Right: direction.Right,
+				},
+			},
+			img: img.BodyNaked_png,
+		},
+		asset.Head: {
+			c: SpriteConfig{
+				Width:  17,
+				Height: 50,
+				RealDirMap: map[direction.D]direction.D{
+					direction.Front: direction.Right,
+					direction.Back:  direction.Right,
+					direction.Left:  direction.Right,
+					direction.Right: direction.Right,
+				},
+			},
+			img: img.Head_png,
+		},
+		asset.DeadBody: {
+			c: SpriteConfig{
+				Width:  25,
+				Height: 29,
+				DirectionLength: map[direction.D]int{
+					direction.Front: 3,
+					direction.Back:  3,
+					direction.Left:  3,
+					direction.Right: 3,
+				},
+				RealDirMap: map[direction.D]direction.D{
+					direction.Front: direction.Right,
+					direction.Back:  direction.Right,
+					direction.Left:  direction.Right,
+					direction.Right: direction.Right,
+				},
+			},
+			img: img.DeadBody_png,
+		},
+		asset.DeadHead: {
+			c: SpriteConfig{
+				Width:  16,
+				Height: 16,
+				RealDirMap: map[direction.D]direction.D{
+					direction.Front: direction.Right,
+					direction.Back:  direction.Right,
+					direction.Left:  direction.Right,
+					direction.Right: direction.Right,
+				},
+			},
+			img: img.DeadHead_png,
+		},
+		asset.ProHat: {
+			c: SpriteConfig{
+				Width:  25,
+				Height: 32,
+				RealDirMap: map[direction.D]direction.D{
+					direction.Front: direction.Right,
+					direction.Back:  direction.Right,
+					direction.Left:  direction.Right,
+					direction.Right: direction.Right,
+				},
+			},
+			img: img.HatPro_png,
 		},
 		asset.DarkArmour: {
 			c: SpriteConfig{
@@ -50,7 +168,7 @@ var (
 					direction.Right: direction.Right,
 				},
 			},
-			img: assets.Body_png,
+			img: img.DarkArmor_png,
 		},
 		asset.WarAxe: {
 			c: SpriteConfig{
@@ -69,12 +187,18 @@ var (
 					direction.Right: direction.Right,
 				},
 			},
-			img: assets.Axe_png,
+			img: img.Axe_png,
 		},
-		asset.Head: {
+		asset.SpecialSword: {
 			c: SpriteConfig{
-				Width:  17,
-				Height: 50,
+				Width:  25,
+				Height: 45,
+				DirectionLength: map[direction.D]int{
+					direction.Front: 6,
+					direction.Back:  6,
+					direction.Left:  5,
+					direction.Right: 5,
+				},
 				RealDirMap: map[direction.D]direction.D{
 					direction.Front: direction.Right,
 					direction.Back:  direction.Right,
@@ -82,21 +206,52 @@ var (
 					direction.Right: direction.Right,
 				},
 			},
-			img: assets.Head_png,
+			img: img.SwordSpecial_png,
 		},
-		asset.Shroom: {
+		asset.TowerShield: {
 			c: SpriteConfig{
-				Width:  29,
-				Height: 29,
+				Width:  42,
+				Height: 64,
+				DirectionLength: map[direction.D]int{
+					direction.Front: 6,
+					direction.Back:  6,
+					direction.Left:  5,
+					direction.Right: 5,
+				},
+				RealDirMap: map[direction.D]direction.D{
+					direction.Front: direction.Right,
+					direction.Back:  direction.Right,
+					direction.Left:  direction.Right,
+					direction.Right: direction.Right,
+				},
 			},
-			img: assets.Ongo_png,
+			img: img.ShieldTower_png,
+		},
+		asset.SilverShield: {
+			c: SpriteConfig{
+				Width:  25,
+				Height: 45,
+				DirectionLength: map[direction.D]int{
+					direction.Front: 6,
+					direction.Back:  6,
+					direction.Left:  5,
+					direction.Right: 5,
+				},
+				RealDirMap: map[direction.D]direction.D{
+					direction.Front: direction.Right,
+					direction.Back:  direction.Right,
+					direction.Left:  direction.Right,
+					direction.Right: direction.Right,
+				},
+			},
+			img: img.ShieldSilver_png,
 		},
 	}
 )
 
 var loaded = &sync.Map{}
 
-func LoadAnimation(a asset.Asset) A {
+func LoadAnimation(a asset.Image) A {
 	v, ok := loaded.Load(a)
 	if ok {
 		return NewBodyAnimation(v.(*ebiten.Image), assetConfig[a].c)
@@ -111,7 +266,7 @@ func LoadAnimation(a asset.Asset) A {
 	return NewBodyAnimation(ei, cfg.c)
 }
 
-func LoadStill(a asset.Asset) A {
+func LoadStill(a asset.Image) A {
 	v, ok := loaded.Load(a)
 	if ok {
 		return NewHeadStill(v.(*ebiten.Image), assetConfig[a].c)
@@ -126,7 +281,7 @@ func LoadStill(a asset.Asset) A {
 	return NewHeadStill(ei, cfg.c)
 }
 
-func LoadTexture(a asset.Asset) T {
+func LoadTexture(a asset.Image) T {
 	if a == asset.Nothing {
 		return &EmptyTexture{}
 	}
@@ -142,4 +297,37 @@ func LoadTexture(a asset.Asset) T {
 	ei := ebiten.NewImageFromImage(img)
 	loaded.Store(a, ei)
 	return NewTexture(ei, cfg.c)
+}
+
+func LoadEffect(a asset.Image) Effect {
+	v, ok := loaded.Load(a)
+	if ok {
+		return NewEffectAnimation(v.(*ebiten.Image), assetConfig[a].c)
+	}
+	cfg := assetConfig[a]
+	img, _, err := image.Decode(bytes.NewReader(cfg.img))
+	if err != nil {
+		log.Fatal(err)
+	}
+	ei := ebiten.NewImageFromImage(img)
+	loaded.Store(a, ei)
+	return NewEffectAnimation(ei, cfg.c)
+}
+
+func Decode(bs []byte) *ebiten.Image {
+	img, _, err := image.Decode(bytes.NewReader(bs))
+	if err != nil {
+		log.Fatal(err)
+	}
+	return ebiten.NewImageFromImage(img)
+}
+
+func AssetFromSpell(s spell.Spell) asset.Image {
+	switch s {
+	case spell.Apoca:
+		return asset.SpellApoca
+	case spell.Inmo:
+		return asset.SpellInmo
+	}
+	return 0
 }

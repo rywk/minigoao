@@ -16,13 +16,16 @@ import (
 )
 
 const (
+	MaxHP = 300
+	MaxMP = 2500
+
 	StartHP        = 300
 	StartMP        = 2500
 	StartX, StartY = 1, 1
-	DefaultHead    = asset.Head
+	DefaultHead    = asset.ProHat
 	DefaultBody    = asset.DarkArmour
 	DefaultWeapon  = asset.WarAxe
-	DefaultShield  = asset.Nothing
+	DefaultShield  = asset.SilverShield
 
 	DefaultScreenWidth  = 35
 	DefaultScreenHeight = 25
@@ -39,18 +42,24 @@ type Player struct {
 	X, Y int
 	D    direction.D
 	// Player health points
-	HP int
+	HP, MaxHP int
 	// Player mana points
-	MP int
+	MP, MaxMP int
+
 	// Dead
 	Dead bool
-	// IDs for skins
-	Body   asset.Asset
-	Head   asset.Asset
-	Weapon asset.Asset
-	Shield asset.Asset
+	// Inmobilized
+	Inmobilized      bool
+	CancelAutoRemove chan struct{}
 
-	WalkLock *sync.Mutex
+	// IDs for skins
+	Armor  asset.Image
+	Helmet asset.Image
+	Weapon asset.Image
+	Shield asset.Image
+
+	WalkLock   *sync.Mutex
+	ModifyLock *sync.Mutex
 
 	// Internal player
 	Handler  *Handler
@@ -60,18 +69,21 @@ type Player struct {
 
 func RunPlayer(c *net.Conn) {
 	p := &Player{
-		ID:       c.ID,
-		X:        StartX,
-		Y:        StartY,
-		D:        direction.Front,
-		HP:       StartHP,
-		MP:       StartMP,
-		Head:     DefaultHead,
-		Body:     DefaultBody,
-		Weapon:   DefaultWeapon,
-		Shield:   DefaultShield,
-		Handler:  NewHandlers(c),
-		WalkLock: &sync.Mutex{},
+		ID:         c.ID,
+		X:          StartX,
+		Y:          StartY,
+		D:          direction.Front,
+		HP:         StartHP,
+		MP:         StartMP,
+		MaxHP:      MaxHP,
+		MaxMP:      MaxMP,
+		Helmet:     DefaultHead,
+		Armor:      DefaultBody,
+		Weapon:     DefaultWeapon,
+		Shield:     DefaultShield,
+		Handler:    NewHandlers(c),
+		WalkLock:   &sync.Mutex{},
+		ModifyLock: &sync.Mutex{},
 	}
 	p.Handler.SetPlayer(p)
 	p.Handler.Handle()
@@ -139,8 +151,9 @@ func (p *Player) ToProto(a actions.A) *message.PlayerAction {
 		Y:      uint32(p.Y),
 		D:      p.D,
 		Nick:   p.Nick,
-		Body:   p.Body,
-		Head:   p.Head,
+		Dead:   p.Dead,
+		Armor:  p.Armor,
+		Helmet: p.Helmet,
 		Weapon: p.Weapon,
 		Shield: p.Shield,
 	}
@@ -198,4 +211,10 @@ func CanWalkTo(t tile.Tile[thing.Thing]) bool {
 func MovePlayer(p *Player, pt, t tile.Tile[thing.Thing]) bool {
 	pt.MoveTo(t, p, p.ID, p.ToProto(actions.Move))
 	return true
+}
+
+func (p *Player) Modify(fn func(p *Player)) {
+	p.ModifyLock.Lock()
+	fn(p)
+	p.ModifyLock.Unlock()
 }

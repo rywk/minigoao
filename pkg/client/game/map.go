@@ -4,6 +4,7 @@ import (
 	"log"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/rywk/minigoao/pkg/client/game/player"
 	"github.com/rywk/minigoao/pkg/client/game/texture"
 	"github.com/rywk/minigoao/pkg/constants"
 	"github.com/rywk/minigoao/pkg/maps"
@@ -26,8 +27,8 @@ type MapConfig struct {
 	Width, Height         int
 	StartX, StartY        int
 	ViewWidth, ViewHeight int
-	GroundMapTextures     [][]assets.Asset
-	StuffMapTextures      [][]assets.Asset
+	GroundMapTextures     [][]assets.Image
+	StuffMapTextures      [][]assets.Image
 }
 
 func MapConfigFromRegisterOk(rok *message.RegisterOk) *MapConfig {
@@ -103,4 +104,9 @@ func (m *Map) Draw() {
 
 func (m *Map) Image() *ebiten.Image {
 	return m.world
+}
+
+func MapSoundToPlayer(p *player.P, x, y int) (float64, float64) {
+	diffX, diffY := p.X-x, p.Y-y
+	return float64(diffX) * 0.08, float64(diffY) * 0.08
 }

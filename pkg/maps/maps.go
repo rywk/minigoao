@@ -16,15 +16,15 @@ const (
 	layerTypes
 )
 
-var MapLayers = [layerTypes][][]assets.Asset{
+var MapLayers = [layerTypes][][]assets.Image{
 	FillLayer(constants.WorldX, constants.WorldY, assets.Grass),
 	RandomShroomLayer(constants.WorldX, constants.WorldY),
 }
 
-func RandomShroomLayer(width, height int) [][]assets.Asset {
-	layer := make([][]assets.Asset, height)
+func RandomShroomLayer(width, height int) [][]assets.Image {
+	layer := make([][]assets.Image, height)
 	for y := 0; y < height; y++ {
-		layer[y] = make([]assets.Asset, width)
+		layer[y] = make([]assets.Image, width)
 		for x := 0; x < width; x++ {
 			a := assets.Nothing
 			if x%25 == 0 && y%25 == 0 {
@@ -36,10 +36,10 @@ func RandomShroomLayer(width, height int) [][]assets.Asset {
 	return layer
 }
 
-func FillLayer(width, height int, a assets.Asset) [][]assets.Asset {
-	layer := make([][]assets.Asset, height)
+func FillLayer(width, height int, a assets.Image) [][]assets.Image {
+	layer := make([][]assets.Image, height)
 	for y := 0; y < height; y++ {
-		layer[y] = make([]assets.Asset, width)
+		layer[y] = make([]assets.Image, width)
 		for x := 0; x < width; x++ {
 			layer[y][x] = a
 		}

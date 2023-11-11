@@ -1,17 +1,35 @@
 package assets
 
-import "reflect"
+import (
+	"reflect"
 
-type Asset = uint32
+	"github.com/rywk/minigoao/pkg/constants/spell"
+)
+
+type Image = uint32
 
 const (
+	Nothing Image = iota
 	// Ground assets
-	Grass Asset = iota
+	Grass
 
+	// Default skins
+	NakedBody
+	Head
+	DeadBody
+	DeadHead
 	// Skins
+	ProHat
 	DarkArmour
 	WarAxe
-	Head
+	SpecialSword
+	SilverShield
+	TowerShield
+
+	// Effects
+	MeleeHit
+	SpellInmo
+	SpellApoca
 	Tiletest
 
 	// Mark
@@ -23,13 +41,39 @@ const (
 	// ---
 
 	// Can be used as the total of assests
-	Nothing
+	Len
 )
 
-func IsSolid(a Asset) bool {
-	return a > SolidBlocks && a < Nothing
+func IsSolid(a Image) bool {
+	return a > SolidBlocks && a < Len
 }
 
-func AssetName(a Asset) string {
+func AssetName(a Image) string {
 	return reflect.TypeOf(a).Name()
+}
+
+type Sound = uint32
+
+const (
+	Spawn Sound = iota
+	Walk1
+	Walk2
+	MeleeAir
+	MeleeBlood
+	SpellInmoSound
+	SpellInmoRmSound
+	SpellApocaSound
+)
+
+func SoundFromSpell(s spell.Spell) Sound {
+	switch s {
+	case spell.Apoca:
+		return SpellApocaSound
+	case spell.Inmo:
+		return SpellInmoSound
+	case spell.InmoRm:
+		return SpellInmoRmSound
+
+	}
+	return 0
 }
