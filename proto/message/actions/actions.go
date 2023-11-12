@@ -8,6 +8,7 @@ const (
 	Move
 	Dir
 	Died
+	Revive
 
 	Nothing
 )

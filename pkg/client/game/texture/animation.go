@@ -4,7 +4,7 @@ import (
 	"image"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/rywk/minigoao/pkg/direction"
+	"github.com/rywk/minigoao/pkg/constants/direction"
 )
 
 type A interface {

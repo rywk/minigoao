@@ -7,6 +7,8 @@ const (
 	InmoRm
 	Apoca
 	Desca
+	HealWounds
+	Revive
 
 	None
 )

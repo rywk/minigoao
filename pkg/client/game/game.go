@@ -15,13 +15,14 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/audio"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/examples/resources/fonts"
-	"github.com/rywk/minigoao/pkg/audio2d"
+	"github.com/rywk/minigoao/pkg/client/audio2d"
 	"github.com/rywk/minigoao/pkg/client/game/player"
 	"github.com/rywk/minigoao/pkg/client/game/typing"
 	"github.com/rywk/minigoao/pkg/conc"
 	"github.com/rywk/minigoao/pkg/constants"
+	"github.com/rywk/minigoao/pkg/constants/direction"
+	"github.com/rywk/minigoao/pkg/constants/potion"
 	"github.com/rywk/minigoao/pkg/constants/spell"
-	"github.com/rywk/minigoao/pkg/direction"
 	"github.com/rywk/minigoao/pkg/messenger"
 	"github.com/rywk/minigoao/pkg/server/world/thing"
 	"github.com/rywk/minigoao/proto/message"
@@ -128,6 +129,7 @@ type Game struct {
 	// Here we listen to what the client wants to do
 	// and return the result to the player
 	client *player.ClientP
+	stats  *Stats
 
 	keys       *Keys
 	combatKeys *CombatKeys
@@ -194,6 +196,7 @@ func (g *Game) StartGame(nick string) {
 	// This creates the local player
 	g.handler.RegisterOk(<-g.handler.Events)
 	g.playersY = append(g.playersY, g.player)
+	g.stats = NewStats(g, 15, ScreenHeight-95)
 	// After registration was handled
 	// start to consume everything
 	go g.handler.Start()
@@ -259,6 +262,8 @@ func (g *Game) updateGame() error {
 	sort.Slice(g.playersY, func(i, j int) bool {
 		return g.playersY[i].Pos[1] < g.playersY[j].Pos[1]
 	})
+	g.stats.Update()
+	g.combatKeys.MoveSpellPicker()
 	if ebiten.IsKeyPressed(ebiten.KeyZ) {
 		g.Reset()
 	}
@@ -278,16 +283,19 @@ func (g *Game) ProcessCombat() {
 			Y:     uint32(worldY / constants.TileSize),
 			Spell: spellType}
 	}
+	if pressedPotion := g.combatKeys.PressedPotion(); pressedPotion != potion.None {
+		g.client.UsePotion <- &message.UsePotion{Type: pressedPotion}
+	}
 	select {
 	case m := <-g.client.CastMeleeOk:
 		log.Printf("CastMeleeOk m: %#v\n", m)
-		if m.Ok {
-			g.SoundBoard.Play(assets.MeleeBlood)
-			g.player.Effect.NewAttackNumber(int(m.Dmg))
-			g.players[m.Id].Effect.NewMeleeHit()
+		if !m.Ok {
+			g.SoundBoard.Play(assets.MeleeAir)
 			break
 		}
-		g.SoundBoard.Play(assets.MeleeAir)
+		g.SoundBoard.Play(assets.MeleeBlood)
+		g.player.Effect.NewAttackNumber(int(m.Dmg))
+		g.players[m.Id].Effect.NewMeleeHit()
 	case m := <-g.client.RecivedMelee:
 		g.SoundBoard.Play(assets.MeleeBlood)
 		g.player.Effect.NewMeleeHit()
@@ -299,32 +307,42 @@ func (g *Game) ProcessCombat() {
 		}
 	case m := <-g.client.MeleeHit:
 		log.Printf("MeleeHit m: %#v\n", m)
-		if m.Ok {
-			g.SoundBoard.PlayFrom(assets.MeleeBlood, g.player.X, g.player.Y, g.players[m.To].X, g.players[m.To].Y)
-			g.players[m.To].Effect.NewMeleeHit()
+		if !m.Ok {
+			g.SoundBoard.PlayFrom(assets.MeleeAir, g.player.X, g.player.Y, g.players[m.From].X, g.players[m.From].Y)
 			break
 		}
-		g.SoundBoard.PlayFrom(assets.MeleeAir, g.player.X, g.player.Y, g.players[m.From].X, g.players[m.From].Y)
+		g.SoundBoard.PlayFrom(assets.MeleeBlood, g.player.X, g.player.Y, g.players[m.To].X, g.players[m.To].Y)
+		g.players[m.To].Effect.NewMeleeHit()
 	case m := <-g.client.CastSpellOk:
 		log.Printf("CastSpellOk m: %#v\n", m)
-		if m.Ok {
-			g.player.Client.MP = int(m.Mp)
-			g.SoundBoard.Play(assets.SoundFromSpell(m.Spell))
-			g.player.Effect.NewAttackNumber(int(m.Dmg))
-			if m.Id == g.sessionID {
-				g.player.Effect.NewSpellHit(m.Spell)
-			} else {
-				g.players[m.Id].Effect.NewSpellHit(m.Spell)
-			}
+		if !m.Ok {
 			break
 		}
+		g.player.Client.MP = int(m.Mp)
+		g.player.Effect.NewAttackNumber(int(m.Dmg))
+		if m.Id == g.sessionID {
+			g.player.Effect.NewSpellHit(m.Spell)
+			g.SoundBoard.Play(assets.SoundFromSpell(m.Spell))
+		} else {
+			g.players[m.Id].Effect.NewSpellHit(m.Spell)
+			g.SoundBoard.PlayFrom(assets.SoundFromSpell(m.Spell), g.player.X, g.player.Y, g.players[m.Id].X, g.players[m.Id].Y)
+		}
+
 	case m := <-g.client.RecivedSpell:
-		if m.Spell == spell.InmoRm {
-			break // reciving inmo remove has no effect on client, you just can move
+		log.Printf("RecivedSpell m: %#v\n", m)
+		switch m.Spell {
+		case spell.Inmo:
+			g.player.Inmobilized = true
+		case spell.InmoRm:
+			g.player.Inmobilized = false
+		case spell.Revive:
+			g.player.Dead = false
+		}
+		if m.Id == g.sessionID {
+			break
 		}
 		g.SoundBoard.Play(assets.SoundFromSpell(m.Spell))
 		g.player.Effect.NewSpellHit(m.Spell)
-		log.Printf("RecivedSpell m: %#v\n", m)
 		g.players[m.Id].Effect.NewAttackNumber(int(m.Dmg))
 		g.player.Client.HP = int(m.Hp)
 		if g.player.Client.HP == 0 {
@@ -334,6 +352,16 @@ func (g *Game) ProcessCombat() {
 		log.Printf("SpellHit m: %#v\n", m)
 		g.SoundBoard.PlayFrom(assets.SoundFromSpell(m.Spell), g.player.X, g.player.Y, g.players[m.To].X, g.players[m.To].Y)
 		g.players[m.To].Effect.NewSpellHit(m.Spell)
+	case m := <-g.client.UsePotionOk:
+		log.Printf("UsePotionOk m: %#v\n", m)
+		if m.Ok {
+			g.player.Client.HP += int(m.DeltaHP)
+			g.player.Client.MP += int(m.DeltaMP)
+			g.SoundBoard.Play(assets.Potion)
+		}
+	case m := <-g.client.PotionUsed:
+		log.Printf("PotionUsed m: %#v\n", m)
+		g.SoundBoard.PlayFrom(assets.Potion, g.player.X, g.player.Y, int(m.X), int(m.Y))
 	default:
 	}
 }
@@ -406,16 +434,22 @@ func (g *Game) ProcessMovement() {
 			g.client.Dir <- d
 			return
 		}
-		if !g.player.Walking {
-			g.SoundBoard.Play(assets.Walk1)
-			g.soundPrevWalk = 1
-		} else {
-			if g.soundPrevWalk == 1 {
-				g.SoundBoard.Play(assets.Walk2)
-				g.soundPrevWalk = 2
-			} else {
+		if g.player.Inmobilized {
+			g.client.Dir <- d
+			return
+		}
+		if !g.player.Dead {
+			if !g.player.Walking {
 				g.SoundBoard.Play(assets.Walk1)
 				g.soundPrevWalk = 1
+			} else {
+				if g.soundPrevWalk == 1 {
+					g.SoundBoard.Play(assets.Walk2)
+					g.soundPrevWalk = 2
+				} else {
+					g.SoundBoard.Play(assets.Walk1)
+					g.soundPrevWalk = 1
+				}
 			}
 		}
 		g.moveLatency = time.Now()
@@ -453,24 +487,15 @@ func (g *Game) drawGame(screen *ebiten.Image) {
 		} else {
 			p.DrawNick(g.world.Image())
 		}
+		p.Effect.Draw(g.world.Image())
 	}
 	g.Render(g.world.Image(), screen)
-
-	worldX, worldY := g.ScreenToWorld(ebiten.CursorPosition())
 
 	ebitenutil.DebugPrint(screen,
 		fmt.Sprintf("TPS: %0.2f\nFPS: %v\nPing: %v\nMove (WASD)\nMelee (Space)", ebiten.ActualTPS(), int(ebiten.ActualFPS()), g.latency))
 
-	ebitenutil.DebugPrintAt(screen,
-		fmt.Sprintf("%s\nCursor World Pos: %d,%d", g.String(),
-			int(worldX/constants.TileSize), int(worldY/constants.TileSize)),
-		0, ScreenHeight-32,
-	)
-	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(ScreenWidth-156, ScreenHeight-156)
-	g.combatKeys.ShowSpellPicker(screen, op)
-
-	//ebitenutil.DebugPrint(screen, fmt.Sprintf("TPS: %0.2f", ebiten.ActualTPS()))
+	g.combatKeys.ShowSpellPicker(screen)
+	g.stats.Draw(screen)
 }
 
 type Camera struct {

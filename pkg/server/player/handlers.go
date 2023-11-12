@@ -6,8 +6,9 @@ import (
 	"time"
 
 	"github.com/rywk/minigoao/pkg/constants"
+	"github.com/rywk/minigoao/pkg/constants/direction"
+	"github.com/rywk/minigoao/pkg/constants/potion"
 	"github.com/rywk/minigoao/pkg/constants/spell"
-	"github.com/rywk/minigoao/pkg/direction"
 	"github.com/rywk/minigoao/pkg/server/net"
 	"github.com/rywk/minigoao/pkg/server/world"
 	"github.com/rywk/minigoao/pkg/server/world/thing"
@@ -34,6 +35,7 @@ func NewHandlers(c *net.Conn) *Handler {
 	list[events.Dir] = h.Dir
 	list[events.CastMelee] = h.CastMelee
 	list[events.CastSpell] = h.CastSpell
+	list[events.UsePotion] = h.UsePotion
 	h.h = list
 	return h
 }
@@ -256,8 +258,6 @@ func (h *Handler) CastMelee(e *message.Event) {
 	pt.TriggerEvent(h.p.ID, &message.MeleeHit{Ok: false, From: h.p.ID})
 }
 
-const ()
-
 func (h *Handler) CastSpell(e *message.Event) {
 	cs := events.Proto(e.E, &message.CastSpell{})
 	if h.p.Dead {
@@ -277,24 +277,73 @@ func (h *Handler) CastSpell(e *message.Event) {
 		}
 		return nil
 	})
-	if p != nil && !p.Dead {
-		// we hit someone alive, we had mana for the spell
-		if cs.Spell == spell.InmoRm && !p.Inmobilized {
-			h.Send(events.CastSpellOk, &message.CastSpellOk{Ok: false})
-			return
-		}
-		if ok, dmg := SpellHandle(cs.Spell, h.p, p); ok {
-			h.Send(events.CastSpellOk, &message.CastSpellOk{Ok: true, Id: p.ID, Dmg: uint32(dmg), Mp: uint32(h.p.MP), Spell: cs.Spell})
-			p.Handler.Send(events.RecivedSpell, &message.RecivedSpell{Id: h.p.ID, Dmg: uint32(dmg), Hp: uint32(p.HP), Spell: cs.Spell})
-			t.TriggerEvent(h.p.ID, &message.SpellHit{From: h.p.ID, To: p.ID, Spell: cs.Spell})
-			if p.Dead {
-				t.TriggerEvent(p.ID, p.ToProto(actions.Died))
+	if p != nil {
+		if !p.Dead {
+			// we hit someone alive, we had mana for the spell
+			if cs.Spell == spell.InmoRm && !p.Inmobilized {
+				h.Send(events.CastSpellOk, &message.CastSpellOk{Ok: false})
+				return
 			}
-			return
+			if ok, dmg := SpellHandle(cs.Spell, h.p, p); ok {
+				h.Send(events.CastSpellOk, &message.CastSpellOk{Ok: true, Id: p.ID, Dmg: uint32(dmg), Mp: uint32(h.p.MP), Spell: cs.Spell})
+				p.Handler.Send(events.RecivedSpell, &message.RecivedSpell{Id: h.p.ID, Dmg: uint32(dmg), Hp: uint32(p.HP), Spell: cs.Spell})
+				t.TriggerEvent(h.p.ID, &message.SpellHit{From: h.p.ID, To: p.ID, Spell: cs.Spell})
+				if p.Dead {
+					t.TriggerEvent(p.ID, p.ToProto(actions.Died))
+				}
+				return
+			}
+		} else if cs.Spell == spell.Revive {
+			if ok, dmg := SpellHandle(cs.Spell, h.p, p); ok {
+				h.Send(events.CastSpellOk, &message.CastSpellOk{Ok: true, Id: p.ID, Dmg: uint32(dmg), Mp: uint32(h.p.MP), Spell: cs.Spell})
+				p.Handler.Send(events.RecivedSpell, &message.RecivedSpell{Id: h.p.ID, Dmg: uint32(dmg), Hp: uint32(p.HP), Spell: cs.Spell})
+				t.TriggerEvent(h.p.ID, &message.SpellHit{From: h.p.ID, To: p.ID, Spell: cs.Spell})
+				t.TriggerEvent(p.ID, p.ToProto(actions.Revive))
+				return
+			}
 		}
 	}
 	// no one is there
 	h.Send(events.CastSpellOk, &message.CastSpellOk{Ok: false})
+}
+
+const (
+	HealthPotionRestoreValue = 30
+	ManaPotionRestoreValue   = .05 // of total
+)
+
+func (h *Handler) UsePotion(e *message.Event) {
+	h.p.PotionLock.Lock()
+	defer h.p.PotionLock.Unlock()
+	pot := events.Proto(e.E, &message.UsePotion{})
+	if h.p.Dead {
+		h.Send(events.UsePotionOk, &message.UsePotionOk{Ok: false})
+		return
+	}
+	switch pot.Type {
+	case potion.Red:
+		val := HealthPotionRestoreValue
+		if h.p.HP+val >= h.p.MaxHP {
+			val = h.p.MaxHP - h.p.HP
+		}
+		h.p.HP = h.p.HP + val
+		h.Send(events.UsePotionOk, &message.UsePotionOk{Ok: true, DeltaHP: uint32(val)})
+		if t, ok := world.PlayerGrid.At(int16(h.p.X), int16(h.p.Y)); ok {
+			t.TriggerEvent(h.p.ID, &message.PotionUsed{X: uint32(h.p.X), Y: uint32(h.p.Y)})
+		}
+	case potion.Blue:
+		val := int(float64(h.p.MaxMP) * ManaPotionRestoreValue)
+		if h.p.MP+val >= h.p.MaxMP {
+			val = h.p.MaxMP - h.p.MP
+		}
+		h.p.MP = h.p.MP + val
+		h.Send(events.UsePotionOk, &message.UsePotionOk{Ok: true, DeltaMP: uint32(val)})
+		if t, ok := world.PlayerGrid.At(int16(h.p.X), int16(h.p.Y)); ok {
+			t.TriggerEvent(h.p.ID, &message.PotionUsed{X: uint32(h.p.X), Y: uint32(h.p.Y)})
+		}
+	default:
+		log.Println("NON EXISTENT POTION", pot.Type)
+	}
 }
 
 func (h *Handler) Ping(e *message.Event) {
@@ -321,15 +370,21 @@ func (h *Handler) Send(e events.E, data protoreflect.ProtoMessage) {
 
 var (
 	spellConfig = map[spell.Spell]Spell{
-		spell.Apoca:  NewApoca(1100, 150, 40),
-		spell.Inmo:   NewInmo(300, time.Second*6),
-		spell.InmoRm: NewInmoRm(370),
+		spell.Revive:     NewRevive(1300),
+		spell.HealWounds: NewHealWounds(650, 40, 10),
+		spell.InmoRm:     NewInmoRm(370),
+		spell.Inmo:       NewInmo(300, time.Second*6),
+		spell.Apoca:      NewApoca(1100, 170, 20),
+		spell.Desca:      NewDesca(700, 90, 15),
 	}
 )
 
 func SpellHandle(s spell.Spell, caster, reciver *Player) (ok bool, dmg int) {
 	sp, ok := spellConfig[s]
 	if !ok {
+		return false, 0
+	}
+	if caster.ID == reciver.ID && !sp.CanSelfCast() {
 		return false, 0
 	}
 	return sp.Cast(caster, reciver)

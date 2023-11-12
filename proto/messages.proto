@@ -123,8 +123,21 @@ message SpellHit {
   uint32 spell = 4;
 }
 
-message Potion {
+// Potion asks to use a potion for mana or health points, specified in the `type`
+message UsePotion {
   uint32 type = 1;
+}
+// PotionOk is the response for a potion use
+message UsePotionOk {
+  bool ok = 1;
+  uint32 deltaHP = 2;
+  uint32 deltaMP = 3;
+}
+// PotionUsed is the event for the the client to reproduce the potion sound
+// from the place it was sent, we dont need to know by who, just where
+message PotionUsed {
+  uint32 x = 1;
+  uint32 y = 2;
 }
 
 // List of events server sends to client

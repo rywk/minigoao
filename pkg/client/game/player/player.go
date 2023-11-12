@@ -8,12 +8,12 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
-	"github.com/rywk/minigoao/pkg/audio2d"
+	"github.com/rywk/minigoao/pkg/client/audio2d"
 	"github.com/rywk/minigoao/pkg/client/game/texture"
 	"github.com/rywk/minigoao/pkg/conc"
 	"github.com/rywk/minigoao/pkg/constants"
+	"github.com/rywk/minigoao/pkg/constants/direction"
 	"github.com/rywk/minigoao/pkg/constants/spell"
-	"github.com/rywk/minigoao/pkg/direction"
 	"github.com/rywk/minigoao/pkg/server/world/thing"
 	"github.com/rywk/minigoao/proto/message"
 	"github.com/rywk/minigoao/proto/message/actions"
@@ -24,16 +24,16 @@ import (
 
 // Player
 type P struct {
-	local  *P
-	ID     uint32
-	Nick   string
-	X, Y   int
-	DX, DY int
-	Pos    f64.Vec2
-	Tile   tile.Tile[thing.Thing]
-	Dead   bool
+	local       *P
+	ID          uint32
+	Nick        string
+	X, Y        int
+	DX, DY      int
+	Pos         f64.Vec2
+	Tile        tile.Tile[thing.Thing]
+	Dead        bool
+	Inmobilized bool
 
-	//Body, Weapon, Head, Shield     assets.Asset
 	Armor, Weapon, Helmet, Shield       texture.A
 	NakedBody, Head, DeadBody, DeadHead texture.A
 	Walking                             bool
@@ -70,6 +70,10 @@ type ClientP struct {
 
 	Dir chan direction.D
 
+	UsePotion   chan *message.UsePotion
+	UsePotionOk chan *message.UsePotionOk
+	PotionUsed  chan *message.PotionUsed
+
 	CastMelee    chan struct{}
 	CastMeleeOk  chan *message.CastMeleeOk
 	RecivedMelee chan *message.RecivedMelee
@@ -86,6 +90,10 @@ func NewClientP() *ClientP {
 		Move:   make(chan direction.D),
 		Dir:    make(chan direction.D),
 		MoveOk: make(chan bool),
+
+		UsePotion:   make(chan *message.UsePotion),
+		UsePotionOk: make(chan *message.UsePotionOk),
+		PotionUsed:  make(chan *message.PotionUsed),
 
 		CastMelee:    make(chan struct{}),
 		CastMeleeOk:  make(chan *message.CastMeleeOk),
@@ -116,23 +124,25 @@ func (p *ClientP) DirToNewPos(d direction.D) (int, int) {
 func (p *P) Nil() bool { return p == nil }
 
 func (p *P) Update(counter int, g *tile.Grid[thing.Thing]) {
-	if p.Armor != nil {
-		p.Armor.Dir(p.Direction)
-	} else if !p.Dead {
-		p.NakedBody.Dir(p.Direction)
-	} else {
+	if p.Dead {
 		p.DeadBody.Dir(p.Direction)
-	}
-	if !p.Dead {
-		p.Head.Dir(p.Direction)
-	} else {
 		p.DeadHead.Dir(p.Direction)
-	}
-	if p.Weapon != nil && !p.Dead {
-		p.Weapon.Dir(p.Direction)
-	}
-	if p.Shield != nil && !p.Dead {
-		p.Shield.Dir(p.Direction)
+	} else {
+		if p.Armor != nil {
+			p.Armor.Dir(p.Direction)
+		} else {
+			p.NakedBody.Dir(p.Direction)
+		}
+		p.Head.Dir(p.Direction)
+		if p.Helmet != nil {
+			p.Helmet.Dir(p.Direction)
+		}
+		if p.Weapon != nil {
+			p.Weapon.Dir(p.Direction)
+		}
+		if p.Shield != nil {
+			p.Shield.Dir(p.Direction)
+		}
 	}
 	p.UpdateFrames(counter)
 	if p.Client == nil {
@@ -146,50 +156,43 @@ const PlayerHeadDrawOffsetX, PlayerHeadDrawOffsetY = 4, -9
 func (p *P) Draw(screen *ebiten.Image) {
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(p.Pos[0]+PlayerDrawOffsetX, p.Pos[1]+PlayerDrawOffsetY)
-	if p.Direction == direction.Left || p.Direction == direction.Front {
-		if p.Dead {
-			op.GeoM.Translate(2, 5)
-			screen.DrawImage(p.DeadBody.Frame(), op)
-		} else if p.Armor != nil {
-			screen.DrawImage(p.Armor.Frame(), op)
-		} else {
-			screen.DrawImage(p.NakedBody.Frame(), op)
-		}
-		if !p.Dead && p.Shield != nil {
-			screen.DrawImage(p.Shield.Frame(), op)
-		}
-
-	} else {
-
-		if !p.Dead && p.Shield != nil {
-			screen.DrawImage(p.Shield.Frame(), op)
-		}
-		if p.Dead {
-			op.GeoM.Translate(2, 5)
-			screen.DrawImage(p.DeadBody.Frame(), op)
-		} else if p.Armor != nil {
-			screen.DrawImage(p.Armor.Frame(), op)
-		} else {
-			screen.DrawImage(p.NakedBody.Frame(), op)
-		}
-
+	if p.Dead {
+		op.GeoM.Translate(2, 5)
+		screen.DrawImage(p.DeadBody.Frame(), op)
+		op.GeoM.Translate(PlayerHeadDrawOffsetX, PlayerHeadDrawOffsetY)
+		screen.DrawImage(p.DeadHead.Frame(), op)
+		return
 	}
-	if !p.Dead && p.Weapon != nil {
+
+	if p.Direction == direction.Left || p.Direction == direction.Front {
+		if p.Armor != nil {
+			screen.DrawImage(p.Armor.Frame(), op)
+		} else {
+			screen.DrawImage(p.NakedBody.Frame(), op)
+		}
+		if p.Shield != nil {
+			screen.DrawImage(p.Shield.Frame(), op)
+		}
+	} else {
+		if p.Shield != nil {
+			screen.DrawImage(p.Shield.Frame(), op)
+		}
+		if p.Armor != nil {
+			screen.DrawImage(p.Armor.Frame(), op)
+		} else {
+			screen.DrawImage(p.NakedBody.Frame(), op)
+		}
+	}
+	if p.Weapon != nil {
 		screen.DrawImage(p.Weapon.Frame(), op)
 	}
-
 	op.GeoM.Translate(PlayerHeadDrawOffsetX, PlayerHeadDrawOffsetY)
-	if p.Dead {
-		screen.DrawImage(p.DeadHead.Frame(), op)
-	} else {
-		screen.DrawImage(p.Head.Frame(), op)
-		if p.Helmet != nil {
-			op.GeoM.Translate(-3, -6)
-			screen.DrawImage(p.Helmet.Frame(), op)
-		}
+	screen.DrawImage(p.Head.Frame(), op)
+	if p.Helmet != nil {
+		op.GeoM.Translate(-3, -6)
+		screen.DrawImage(p.Helmet.Frame(), op)
 	}
-	op.GeoM.Translate(-4, 10)
-	p.Effect.Draw(screen, op)
+
 }
 
 func (p *P) DrawNick(screen *ebiten.Image) {
@@ -219,46 +222,44 @@ func (p *P) UpdateFrames(c int) {
 		if p.Walking {
 			if p.Dead {
 				p.DeadBody.Next(p.Direction)
-			} else if p.Armor != nil {
-				p.Armor.Next(p.Direction)
-			} else {
-				p.NakedBody.Next(p.Direction)
-			}
-			if p.Dead {
 				p.DeadHead.Next(p.Direction)
 			} else {
-				p.NakedBody.Next(p.Direction)
+				if p.Armor != nil {
+					p.Armor.Next(p.Direction)
+				} else {
+					p.NakedBody.Next(p.Direction)
+				}
+				p.Head.Next(p.Direction)
 				if p.Helmet != nil {
 					p.Helmet.Next(p.Direction)
 				}
-			}
-			if !p.Dead && p.Weapon != nil {
-				p.Weapon.Next(p.Direction)
-			}
-			if !p.Dead && p.Shield != nil {
-				p.Shield.Next(p.Direction)
+				if p.Weapon != nil {
+					p.Weapon.Next(p.Direction)
+				}
+				if p.Shield != nil {
+					p.Shield.Next(p.Direction)
+				}
 			}
 		} else {
 			if p.Dead {
 				p.DeadBody.Stopped(p.Direction)
-			} else if p.Armor != nil {
-				p.Armor.Stopped(p.Direction)
-			} else {
-				p.NakedBody.Stopped(p.Direction)
-			}
-			if p.Dead {
 				p.DeadHead.Stopped(p.Direction)
 			} else {
-				p.NakedBody.Stopped(p.Direction)
+				if p.Armor != nil {
+					p.Armor.Stopped(p.Direction)
+				} else {
+					p.NakedBody.Stopped(p.Direction)
+				}
+				p.Head.Stopped(p.Direction)
 				if p.Helmet != nil {
 					p.Helmet.Stopped(p.Direction)
 				}
-			}
-			if !p.Dead && p.Weapon != nil {
-				p.Weapon.Stopped(p.Direction)
-			}
-			if !p.Dead && p.Shield != nil {
-				p.Shield.Stopped(p.Direction)
+				if p.Weapon != nil {
+					p.Weapon.Stopped(p.Direction)
+				}
+				if p.Shield != nil {
+					p.Shield.Stopped(p.Direction)
+				}
 			}
 		}
 	}
@@ -278,6 +279,8 @@ func (p *P) Process(a *message.PlayerAction) {
 		p.movesBuffered <- a
 	case actions.Died:
 		p.Dead = true
+	case actions.Revive:
+		p.Dead = false
 	}
 }
 
@@ -366,7 +369,7 @@ func NewFromLogIn(l *P, e *message.RegisterOk, sb *audio2d.SoundBoard) map[uint3
 }
 
 func actionToP(l *P, a *message.PlayerAction) *P {
-	return &P{
+	p := &P{
 		local:     l,
 		ID:        a.Id,
 		X:         int(a.X),
@@ -392,11 +395,13 @@ func actionToP(l *P, a *message.PlayerAction) *P {
 		// we want to do them in order
 		// but we dont want to block whos sending
 		Effects: make(chan texture.Effect, 10),
-		Effect: &PEffects{
-			active: make([]texture.Effect, 0),
-			Add:    make(chan texture.Effect, 10),
-		},
 	}
+	p.Effect = &PEffects{
+		p:      p,
+		active: make([]texture.Effect, 0),
+		Add:    make(chan texture.Effect, 10),
+	}
+	return p
 }
 
 func (p *P) What() uint32       { return thing.Player }
@@ -406,6 +411,7 @@ func (p *P) Is(id uint32) bool  { return id == p.ID }
 func (p *P) Player(uint32) bool { return false }
 
 type PEffects struct {
+	p      *P
 	active []texture.Effect
 	Add    chan texture.Effect
 }
@@ -417,16 +423,33 @@ func (pfx *PEffects) NewMeleeHit() {
 func (pfx *PEffects) NewSpellHit(s spell.Spell) {
 	a := texture.AssetFromSpell(s)
 	if a != assets.Nothing {
-		pfx.Add <- &SpellOffset{texture.LoadEffect(a)}
+		pfx.Add <- NewSpellOffset(a)
 	}
 }
 
 func (pfx *PEffects) NewAttackNumber(dmg int) {
-	pfx.Add <- &AtkDmgFxTxt{img: ebiten.NewImage(40, 40), dmg: strconv.FormatInt(int64(dmg), 10)}
+	if dmg > 0 {
+		pfx.Add <- &AtkDmgFxTxt{img: ebiten.NewImage(40, 40), dmg: strconv.FormatInt(int64(dmg), 10)}
+	}
 }
 
 type SpellOffset struct {
-	fx texture.Effect
+	x, y int
+	fx   texture.Effect
+}
+
+var spellOffsets = map[assets.Image]struct{ x, y int }{
+	assets.SpellApoca:      {-50, -80},
+	assets.SpellInmo:       {-45, -60},
+	assets.SpellInmoRm:     {-20, -30},
+	assets.SpellDesca:      {-45, -70},
+	assets.SpellHealWounds: {-20, -30},
+	assets.SpellRevive:     {-30, -40},
+}
+
+func NewSpellOffset(a assets.Image) *SpellOffset {
+	off := spellOffsets[a]
+	return &SpellOffset{off.x, off.y, texture.LoadEffect(a)}
 }
 
 func (as *SpellOffset) Play() bool {
@@ -438,7 +461,7 @@ func (as *SpellOffset) EffectFrame() *ebiten.Image {
 }
 
 func (as *SpellOffset) EffectOpt(op *ebiten.DrawImageOptions) *ebiten.DrawImageOptions {
-	op.GeoM.Translate(-70, -45)
+	op.GeoM.Translate(float64(as.x), float64(as.y))
 	return op
 }
 
@@ -491,7 +514,9 @@ func (pfx *PEffects) Update(counter int) {
 	}
 }
 
-func (pfx *PEffects) Draw(screen *ebiten.Image, op *ebiten.DrawImageOptions) {
+func (pfx *PEffects) Draw(screen *ebiten.Image) {
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(pfx.p.Pos[0], pfx.p.Pos[1])
 	for _, fx := range pfx.active {
 		screen.DrawImage(fx.EffectFrame(), fx.EffectOpt(op))
 	}

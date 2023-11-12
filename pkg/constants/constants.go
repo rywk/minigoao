@@ -1,7 +1,7 @@
 package constants
 
 const (
-	Port = ":25565"
+	Port = ":5555"
 )
 
 const (
@@ -13,10 +13,6 @@ const (
 	// and preallocate a mximun of online players
 	// and use like a fast map, idk
 	MaxConnCount = 50
-)
-
-const (
-	EmptyTileData = 333
 )
 
 type Err struct{}

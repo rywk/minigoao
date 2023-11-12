@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/rywk/minigoao/pkg/constants"
-	"github.com/rywk/minigoao/pkg/direction"
+	"github.com/rywk/minigoao/pkg/constants/direction"
 	"github.com/rywk/minigoao/pkg/server/net"
 	"github.com/rywk/minigoao/pkg/server/world"
 	"github.com/rywk/minigoao/pkg/server/world/thing"
@@ -21,10 +21,10 @@ const (
 
 	StartHP        = 300
 	StartMP        = 2500
-	StartX, StartY = 1, 1
+	StartX, StartY = 70, 70
 	DefaultHead    = asset.ProHat
 	DefaultBody    = asset.DarkArmour
-	DefaultWeapon  = asset.WarAxe
+	DefaultWeapon  = asset.SpecialSword
 	DefaultShield  = asset.SilverShield
 
 	DefaultScreenWidth  = 35
@@ -49,8 +49,7 @@ type Player struct {
 	// Dead
 	Dead bool
 	// Inmobilized
-	Inmobilized      bool
-	CancelAutoRemove chan struct{}
+	Inmobilized bool
 
 	// IDs for skins
 	Armor  asset.Image
@@ -58,6 +57,7 @@ type Player struct {
 	Weapon asset.Image
 	Shield asset.Image
 
+	PotionLock *sync.Mutex
 	WalkLock   *sync.Mutex
 	ModifyLock *sync.Mutex
 
@@ -84,10 +84,11 @@ func RunPlayer(c *net.Conn) {
 		Handler:    NewHandlers(c),
 		WalkLock:   &sync.Mutex{},
 		ModifyLock: &sync.Mutex{},
+		PotionLock: &sync.Mutex{},
 	}
 	p.Handler.SetPlayer(p)
 	p.Handler.Handle()
-	log.Println("EXITED PLAYER", p.Nick)
+	log.Printf("Player %v disconnected.\n", p.Nick)
 }
 
 func (p *Player) Blocking() bool {

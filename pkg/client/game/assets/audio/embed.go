@@ -15,6 +15,9 @@ var (
 	//go:embed melee_hit.wav
 	MeleeHit_wav []byte
 
+	//go:embed potion.wav
+	Potion_wav []byte
+
 	//go:embed spawn.wav
 	Spawn_wav []byte
 
@@ -24,4 +27,10 @@ var (
 	SpellInmo_wav []byte
 	//go:embed spell_inmo_rm.wav
 	SpellInmoRm_wav []byte
+	//go:embed spell_desca.wav
+	SpellDesca_wav []byte
+	//go:embed spell_revive.wav
+	SpellRevive_wav []byte
+	//go:embed spell_heal_wounds.wav
+	SpellHealWounds_wav []byte
 )

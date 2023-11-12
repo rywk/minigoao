@@ -16,14 +16,27 @@ var (
 
 	// Spell Icons
 
-	//go:embed spell_icon_placeholder.png
-	PlaceholderSpellIcon_png []byte
-	//go:embed icon_apoca.png
-	IconSpellApoca_png []byte
-	//go:embed icon_inmo.png
-	IconSpellInmo_png []byte
-	//go:embed icon_inmo_rm.png
-	IconSpellInmoRm_png []byte
+	//go:embed placeholder_spellbar.png
+	PlaceholderSpellbar_png []byte
+	//go:embed spellbar_icons.png
+	SpellbarIcons_png []byte
+	//go:embed spell_selector.png
+	SpellSelector_png []byte
+
+	// Stats
+
+	//go:embed hp_bar_stats_big.png
+	BigHPBar_png []byte
+	//go:embed mp_bar_stats_big.png
+	BigMPBar_png []byte
+	//go:embed placeholder_stats.png
+	PlaceholderStats_png []byte
+	//go:embed hp_bar_stats_mini.png
+	MiniHPBar_png []byte
+	//go:embed mp_bar_stats_mini.png
+	MiniMPBar_png []byte
+	//go:embed mini_placeholder_stats.png
+	MiniPlaceholderStats_png []byte
 
 	// Effects
 
@@ -31,8 +44,16 @@ var (
 	MeleeHit_png []byte
 	//go:embed spell_apoca.png
 	SpellApoca_png []byte
+	//go:embed spell_desca.png
+	SpellDesca_png []byte
 	//go:embed spell_inmo.png
 	SpellInmo_png []byte
+	//go:embed spell_inmo_rm.png
+	SpellInmoRm_png []byte
+	//go:embed spell_heal_wounds.png
+	SpellHealWounds_png []byte
+	//go:embed spell_revive.png
+	SpellRevive_png []byte
 
 	// Body
 

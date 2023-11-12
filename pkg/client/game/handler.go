@@ -34,6 +34,9 @@ func NewHandler(g *Game) *Handler {
 	h.h[events.RecivedSpell] = h.RecivedSpell
 	h.h[events.SpellHit] = h.SpellHit
 
+	h.h[events.UsePotionOk] = h.UsePotionOk
+	h.h[events.PotionUsed] = h.PotionUsed
+
 	h.h[events.PlayerAction] = h.PlayerAction
 	h.h[events.PlayerActions] = h.PlayerActions
 	return h
@@ -111,6 +114,14 @@ func (h *Handler) RecivedSpell(e *message.Event) {
 	h.g.client.RecivedSpell <- events.Proto(e.E, &message.RecivedSpell{})
 }
 
+func (h *Handler) UsePotionOk(e *message.Event) {
+	h.g.client.UsePotionOk <- events.Proto(e.E, &message.UsePotionOk{})
+}
+
+func (h *Handler) PotionUsed(e *message.Event) {
+	h.g.client.PotionUsed <- events.Proto(e.E, &message.PotionUsed{})
+}
+
 // Actions
 
 func (h *Handler) PlayerAction(e *message.Event) {
@@ -152,6 +163,9 @@ func (h *Handler) HandleClient() {
 
 		case msg := <-h.g.client.CastSpell:
 			h.g.m.Write(&message.Event{Type: events.CastSpell, Id: h.g.sessionID, E: events.Bytes(msg)})
+
+		case msg := <-h.g.client.UsePotion:
+			h.g.m.Write(&message.Event{Type: events.UsePotion, Id: h.g.sessionID, E: events.Bytes(msg)})
 		}
 	}
 }

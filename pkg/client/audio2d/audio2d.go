@@ -71,7 +71,6 @@ func (s *Sound) PlayFrom(x, y, sx, sy int) {
 	} else {
 		my = mapValue(float64(dy), 0, 20, 1, 10)
 	}
-
 	leftCh, rightCh := beep.Dup(s.buffer.Streamer(0, s.buffer.Len()))
 	leftCh = effects.Mono(multiplyChannels(1, 0, leftCh))
 	rightCh = effects.Mono(multiplyChannels(0, 1, rightCh))
@@ -84,14 +83,18 @@ func NewSoundBoard() *SoundBoard {
 	sb.sampleRate = SampleRate
 	speaker.Init(sb.sampleRate, sb.sampleRate.N(time.Second/45))
 	sb.sounds = map[assets.Sound]*Sound{
-		assets.Spawn:            NewSound(audiofile.Spawn_wav),
-		assets.MeleeAir:         NewSound(audiofile.MeleeAir_wav),
-		assets.MeleeBlood:       NewSound(audiofile.MeleeHit_wav),
-		assets.Walk1:            NewSound(audiofile.Walk1_wav),
-		assets.Walk2:            NewSound(audiofile.Walk2_wav),
-		assets.SpellApocaSound:  NewSound(audiofile.SpellApoca_wav),
-		assets.SpellInmoSound:   NewSound(audiofile.SpellInmo_wav),
-		assets.SpellInmoRmSound: NewSound(audiofile.SpellInmoRm_wav),
+		assets.Spawn:                NewSound(audiofile.Spawn_wav),
+		assets.MeleeAir:             NewSound(audiofile.MeleeAir_wav),
+		assets.MeleeBlood:           NewSound(audiofile.MeleeHit_wav),
+		assets.Walk1:                NewSound(audiofile.Walk1_wav),
+		assets.Walk2:                NewSound(audiofile.Walk2_wav),
+		assets.SpellApocaSound:      NewSound(audiofile.SpellApoca_wav),
+		assets.SpellDescaSound:      NewSound(audiofile.SpellDesca_wav),
+		assets.SpellInmoSound:       NewSound(audiofile.SpellInmo_wav),
+		assets.SpellHealWoundsSound: NewSound(audiofile.SpellHealWounds_wav),
+		assets.SpellReviveSound:     NewSound(audiofile.SpellRevive_wav),
+		assets.SpellInmoRmSound:     NewSound(audiofile.SpellInmoRm_wav),
+		assets.Potion:               NewSound(audiofile.Potion_wav),
 	}
 	return sb
 }

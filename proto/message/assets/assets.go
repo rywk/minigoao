@@ -29,7 +29,11 @@ const (
 	// Effects
 	MeleeHit
 	SpellInmo
+	SpellInmoRm
 	SpellApoca
+	SpellDesca
+	SpellHealWounds
+	SpellRevive
 	Tiletest
 
 	// Mark
@@ -58,11 +62,15 @@ const (
 	Spawn Sound = iota
 	Walk1
 	Walk2
+	Potion
 	MeleeAir
 	MeleeBlood
+	SpellReviveSound
+	SpellHealWoundsSound
 	SpellInmoSound
 	SpellInmoRmSound
 	SpellApocaSound
+	SpellDescaSound
 )
 
 func SoundFromSpell(s spell.Spell) Sound {
@@ -73,6 +81,12 @@ func SoundFromSpell(s spell.Spell) Sound {
 		return SpellInmoSound
 	case spell.InmoRm:
 		return SpellInmoRmSound
+	case spell.Desca:
+		return SpellDescaSound
+	case spell.HealWounds:
+		return SpellHealWoundsSound
+	case spell.Revive:
+		return SpellReviveSound
 
 	}
 	return 0

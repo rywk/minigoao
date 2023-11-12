@@ -8,8 +8,8 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/rywk/minigoao/pkg/client/game/assets/img"
+	"github.com/rywk/minigoao/pkg/constants/direction"
 	"github.com/rywk/minigoao/pkg/constants/spell"
-	"github.com/rywk/minigoao/pkg/direction"
 	asset "github.com/rywk/minigoao/proto/message/assets"
 )
 
@@ -58,11 +58,18 @@ var (
 				GridW:      4,
 				GridH:      4,
 				FrameCount: 16,
-				DirectionLength: map[direction.D]int{
-					direction.Right: 5,
-				},
 			},
 			img: img.SpellApoca_png,
+		},
+		asset.SpellDesca: {
+			c: SpriteConfig{
+				Width:      127,
+				Height:     127,
+				GridW:      5,
+				GridH:      3,
+				FrameCount: 15,
+			},
+			img: img.SpellDesca_png,
 		},
 		asset.SpellInmo: {
 			c: SpriteConfig{
@@ -73,6 +80,36 @@ var (
 				},
 			},
 			img: img.SpellInmo_png,
+		},
+		asset.SpellInmoRm: {
+			c: SpriteConfig{
+				Width:      68,
+				Height:     68,
+				GridW:      5,
+				GridH:      4,
+				FrameCount: 20,
+			},
+			img: img.SpellInmoRm_png,
+		},
+		asset.SpellHealWounds: {
+			c: SpriteConfig{
+				Width:      68,
+				Height:     68,
+				GridW:      5,
+				GridH:      4,
+				FrameCount: 20,
+			},
+			img: img.SpellHealWounds_png,
+		},
+		asset.SpellRevive: {
+			c: SpriteConfig{
+				Width:      76,
+				Height:     76,
+				GridW:      5,
+				GridH:      6,
+				FrameCount: 30,
+			},
+			img: img.SpellRevive_png,
 		},
 		asset.NakedBody: {
 			c: SpriteConfig{
@@ -328,6 +365,14 @@ func AssetFromSpell(s spell.Spell) asset.Image {
 		return asset.SpellApoca
 	case spell.Inmo:
 		return asset.SpellInmo
+	case spell.InmoRm:
+		return asset.SpellInmoRm
+	case spell.Desca:
+		return asset.SpellDesca
+	case spell.Revive:
+		return asset.SpellRevive
+	case spell.HealWounds:
+		return asset.SpellHealWounds
 	}
 	return 0
 }

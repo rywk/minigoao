@@ -36,6 +36,9 @@ const (
 	CastMeleeOk
 	RecivedMelee
 	MeleeHit
+	UsePotion
+	UsePotionOk
+	PotionUsed
 
 	Dir
 	// Events the server sends to clients
