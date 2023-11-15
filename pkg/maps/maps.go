@@ -1,6 +1,7 @@
 package maps
 
 import (
+	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/rywk/minigoao/pkg/constants"
 	"github.com/rywk/minigoao/proto/message/assets"
 )
@@ -45,4 +46,9 @@ func FillLayer(width, height int, a assets.Image) [][]assets.Image {
 		}
 	}
 	return layer
+}
+
+type YSortable interface {
+	ValueY() float64
+	Draw(*ebiten.Image)
 }

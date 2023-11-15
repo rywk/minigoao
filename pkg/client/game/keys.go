@@ -162,6 +162,8 @@ type CombatKeys struct {
 	placeholder          *ebiten.Image
 	iconImg              *ebiten.Image
 	selectedImg          *ebiten.Image
+
+	cursorMode ebiten.CursorShapeType
 }
 
 func NewCombatKeys(cfg *KeyConfig) *CombatKeys {
@@ -288,6 +290,12 @@ func (ck *CombatKeys) SetSpell() {
 
 func (ck *CombatKeys) CastSpell() (bool, spell.Spell, int, int) {
 	ck.SetSpell()
+	// if spell is picked and mouse mode is not crosshair, activate and set
+	if ck.spell != spell.None && ck.cursorMode != ebiten.CursorShapeCrosshair {
+		ebiten.SetCursorShape(ebiten.CursorShapeCrosshair)
+		ck.cursorMode = ebiten.CursorShapeCrosshair
+	}
+
 	if ck.spell != spell.None && ebiten.IsMouseButtonPressed(ebiten.MouseButton0) &&
 		time.Since(ck.lastCast) > ck.cfg.SpellCooldown &&
 		time.Since(ck.lastMelee) > ck.cfg.SwitchCooldown {
@@ -297,6 +305,11 @@ func (ck *CombatKeys) CastSpell() (bool, spell.Spell, int, int) {
 		ck.spell = spell.None
 		ck.lastSpellKey = -1
 		return true, pspell, x, y
+	}
+
+	if ck.spell == spell.None && ck.cursorMode == ebiten.CursorShapeCrosshair {
+		ebiten.SetCursorShape(ebiten.CursorShapeDefault)
+		ck.cursorMode = ebiten.CursorShapeDefault
 	}
 	return false, spell.None, 0, 0
 }

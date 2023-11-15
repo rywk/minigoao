@@ -23,6 +23,7 @@ import (
 	"github.com/rywk/minigoao/pkg/constants/direction"
 	"github.com/rywk/minigoao/pkg/constants/potion"
 	"github.com/rywk/minigoao/pkg/constants/spell"
+	"github.com/rywk/minigoao/pkg/maps"
 	"github.com/rywk/minigoao/pkg/messenger"
 	"github.com/rywk/minigoao/pkg/server/world/thing"
 	"github.com/rywk/minigoao/proto/message"
@@ -116,7 +117,7 @@ type Game struct {
 	// Player map
 	players [constants.MaxConnCount]*player.P
 	// player depth matrix (for drawing)
-	playersY           []*player.P
+	playersY           []maps.YSortable
 	playersYsyncHelper [constants.MaxConnCount]*player.P
 
 	player *player.P
@@ -247,8 +248,8 @@ func (g *Game) updateGame() error {
 			if !p.Dead {
 				MustAt(p.X, p.Y).SimpleDespawn(p)
 			}
-			for iy, py := range g.playersY {
-				if i == int(py.ID) {
+			for iy, ys := range g.playersY {
+				if py, ok := ys.(*player.P); ok && i == int(py.ID) {
 					g.playersY[iy] = g.playersY[len(g.playersY)-1]
 					g.playersY = g.playersY[:len(g.playersY)-1]
 					break
@@ -260,7 +261,7 @@ func (g *Game) updateGame() error {
 		p.Effect.Update(g.counter)
 	}
 	sort.Slice(g.playersY, func(i, j int) bool {
-		return g.playersY[i].Pos[1] < g.playersY[j].Pos[1]
+		return g.playersY[i].ValueY() < g.playersY[j].ValueY()
 	})
 	g.stats.Update()
 	g.combatKeys.MoveSpellPicker()
@@ -355,8 +356,11 @@ func (g *Game) ProcessCombat() {
 	case m := <-g.client.UsePotionOk:
 		log.Printf("UsePotionOk m: %#v\n", m)
 		if m.Ok {
-			g.player.Client.HP += int(m.DeltaHP)
-			g.player.Client.MP += int(m.DeltaMP)
+			if m.NewHP != 0 {
+				g.player.Client.HP = int(m.NewHP)
+			} else {
+				g.player.Client.MP = int(m.NewMP)
+			}
 			g.SoundBoard.Play(assets.Potion)
 		}
 	case m := <-g.client.PotionUsed:
@@ -368,8 +372,7 @@ func (g *Game) ProcessCombat() {
 
 func (g *Game) ProcessMovement() {
 	if allowed, ok := conc.Check(g.client.MoveOk); ok {
-		log.Println("Move:", allowed, "in", time.Since(g.moveLatency).String(),
-			"dir:", direction.S(g.lastDir))
+		log.Printf("Move: %v in %vms, dir: %v\n", allowed, time.Since(g.moveLatency).Milliseconds(), direction.S(g.lastDir))
 		g.lastMoveOkArrived = true
 		if !allowed {
 			goBackPx := float64(constants.TileSize - g.leftForMove)
@@ -482,17 +485,11 @@ func (g *Game) drawGame(screen *ebiten.Image) {
 			continue
 		}
 		p.Draw(g.world.Image())
-		if g.sessionID == p.ID {
-			p.DrawPlayerHPMP(g.world.Image())
-		} else {
-			p.DrawNick(g.world.Image())
-		}
-		p.Effect.Draw(g.world.Image())
 	}
 	g.Render(g.world.Image(), screen)
 
 	ebitenutil.DebugPrint(screen,
-		fmt.Sprintf("TPS: %0.2f\nFPS: %v\nPing: %v\nMove (WASD)\nMelee (Space)", ebiten.ActualTPS(), int(ebiten.ActualFPS()), g.latency))
+		fmt.Sprintf("FPS: %v\nTPS: %v\nPing: %v", int(ebiten.ActualFPS()), math.Round(ebiten.ActualTPS()), g.latency))
 
 	g.combatKeys.ShowSpellPicker(screen)
 	g.stats.Draw(screen)

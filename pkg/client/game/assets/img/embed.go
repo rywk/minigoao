@@ -48,12 +48,18 @@ var (
 	SpellDesca_png []byte
 	//go:embed spell_inmo.png
 	SpellInmo_png []byte
+	//go:embed spell_paralize.png
+	SpellParalize_png []byte
 	//go:embed spell_inmo_rm.png
 	SpellInmoRm_png []byte
 	//go:embed spell_heal_wounds.png
 	SpellHealWounds_png []byte
+	//go:embed spell_heal_wounds_2.png
+	SpellHealWounds2_png []byte
 	//go:embed spell_revive.png
 	SpellRevive_png []byte
+	//go:embed last_trial_test_alpha.png
+	SpellLastTrial_png []byte
 
 	// Body
 

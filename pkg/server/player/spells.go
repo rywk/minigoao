@@ -44,8 +44,7 @@ func (s *Revive) Cast(from, to *Player) (bool, int) {
 		return false, 0
 	}
 	if to.Dead {
-		to.HP = to.MaxHP
-		to.Dead = false
+		to.RevivePlayer()
 		return true, 0
 	}
 	return false, 0
@@ -75,11 +74,8 @@ func (s *HealWounds) Cast(from, to *Player) (bool, int) {
 	}
 	if !to.Dead {
 		val := s.BaseHeal + rand.Intn(s.CritRange)
-		if to.HP+val >= to.MaxHP {
-			val = to.MaxHP - to.HP
-		}
-		to.HP = to.HP + val
-		return true, 0
+		to.HealPlayer(val)
+		return true, val
 	}
 	return false, 0
 }
@@ -102,8 +98,8 @@ func (s *InmoRm) Cast(from, to *Player) (bool, int) {
 	if !Mana(s, from, to) {
 		return false, 0
 	}
-	if to.Inmobilized {
-		to.Inmobilized = false
+	if to.IsInmobilized() {
+		to.ChangeInmobilized(false)
 		return true, 0
 	}
 	return false, 0
@@ -129,35 +125,35 @@ func (s *Inmo) Cast(from, to *Player) (bool, int) {
 	if !Mana(s, from, to) {
 		return false, 0
 	}
-	if to.Inmobilized {
+	if to.IsInmobilized() {
 		return false, 0
 	}
-	to.Inmobilized = true
+	to.ChangeInmobilized(true)
 	// go func() {
 	// 	<-time.NewTicker(s.Duration).C
 	// }()
 	return true, 0
 }
 
-type Apoca struct {
+type DamageSpell struct {
 	BaseSpell
 	BaseDamage int
 	CritRange  int
 }
 
-func NewApoca(manaCost, baseDamage, critRange int) *Apoca {
-	return &Apoca{
+func NewDamageSpell(manaCost, baseDamage, critRange int) *DamageSpell {
+	return &DamageSpell{
 		BaseSpell:  BaseSpell{ManaCost: manaCost},
 		BaseDamage: baseDamage,
 		CritRange:  critRange,
 	}
 }
 
-func (s *Apoca) CanSelfCast() bool { return false }
+func (s *DamageSpell) CanSelfCast() bool { return false }
 
-func (s *Apoca) ManaCost() int { return s.BaseSpell.ManaCost }
+func (s *DamageSpell) ManaCost() int { return s.BaseSpell.ManaCost }
 
-func (s *Apoca) Cast(from, to *Player) (bool, int) {
+func (s *DamageSpell) Cast(from, to *Player) (bool, int) {
 	if !Mana(s, from, to) {
 		return false, 0
 	}
@@ -165,44 +161,6 @@ func (s *Apoca) Cast(from, to *Player) (bool, int) {
 	if s.CritRange > 0 {
 		dmg += rand.Intn(s.CritRange)
 	}
-	to.HP = to.HP - dmg
-	if to.HP < 0 {
-		to.Dead = true
-		to.HP = 0
-	}
-	return true, dmg
-}
-
-type Desca struct {
-	BaseSpell
-	BaseDamage int
-	CritRange  int
-}
-
-func NewDesca(manaCost, baseDamage, critRange int) *Desca {
-	return &Desca{
-		BaseSpell:  BaseSpell{ManaCost: manaCost},
-		BaseDamage: baseDamage,
-		CritRange:  critRange,
-	}
-}
-
-func (s *Desca) CanSelfCast() bool { return false }
-
-func (s *Desca) ManaCost() int { return s.BaseSpell.ManaCost }
-
-func (s *Desca) Cast(from, to *Player) (bool, int) {
-	if !Mana(s, from, to) {
-		return false, 0
-	}
-	dmg := s.BaseDamage
-	if s.CritRange > 0 {
-		dmg += rand.Intn(s.CritRange)
-	}
-	to.HP = to.HP - dmg
-	if to.HP < 0 {
-		to.Dead = true
-		to.HP = 0
-	}
+	to.DamagePlayer(dmg)
 	return true, dmg
 }

@@ -43,56 +43,63 @@ func NewHandlers(c *net.Conn) *Handler {
 func (h *Handler) SetPlayer(p *Player) { h.p = p }
 
 func (h *Handler) Handle() {
+	defer func() {
+		// connection with client closed we need to delete from grid
+		t, _ := world.PlayerGrid.At(int16(h.p.X), int16(h.p.Y))
+		t.Despawn(h.p, h.p.ID, h.p.ToProto(actions.Despawn))
+		h.p.View.Close()
+		close(h.p.View.Inbox)
+		close(h.c.Send())
+		log.Printf("Client [%v, %v, %v] disconnected.\n", h.p.ID, h.p.Nick, h.c.Addr)
+	}()
 	// Handle connection for this player
-	for e := range h.c.Recive() {
-		h.h[e.Type](e)
-	}
-
-	// connection with client closed we need to delete from grid
-	t, _ := world.PlayerGrid.At(int16(h.p.X), int16(h.p.Y))
-	t.Despawn(h.p, h.p.ID, h.p.ToProto(actions.Despawn))
-	h.p.View.Close()
-	close(h.p.View.Inbox)
-	log.Printf("START despawn %v\n", h.p.Nick)
-}
-
-func (h *Handler) HandleMapEvents() {
-	for ev := range h.p.View.Inbox {
-		if ev.Emmiter == h.p.ID {
-			continue
-		}
-		switch m := ev.Data.(type) {
-		case *message.PlayerAction:
-			h.c.Send() <- &message.Event{
-				Id:   ev.Emmiter,
-				Type: events.PlayerAction,
-				E:    events.Bytes(m),
+	// The first message has to always be the registration
+	h.h[events.Register](<-h.c.Recive())
+	for {
+		select {
+		case e, ok := <-h.c.Recive():
+			if !ok {
+				return
 			}
-		case *message.MeleeHit:
-			if m.To != h.p.ID {
+			h.h[e.Type](e)
+		case ev := <-h.p.View.Inbox:
+			if ev.Emmiter == h.p.ID {
+				continue
+			}
+			switch m := ev.Data.(type) {
+			case *message.PlayerAction:
+				log.Println(m.Action)
+				if m.Action == actions.Revive {
+					log.Println("revive sent")
+				}
 				h.c.Send() <- &message.Event{
 					Id:   ev.Emmiter,
-					Type: events.MeleeHit,
+					Type: events.PlayerAction,
 					E:    events.Bytes(m),
 				}
-			}
-		case *message.SpellHit:
-			if m.To != h.p.ID {
-				h.c.Send() <- &message.Event{
-					Id:   ev.Emmiter,
-					Type: events.SpellHit,
-					E:    events.Bytes(m),
+			case *message.MeleeHit:
+				if m.To != h.p.ID {
+					h.c.Send() <- &message.Event{
+						Id:   ev.Emmiter,
+						Type: events.MeleeHit,
+						E:    events.Bytes(m),
+					}
+				}
+			case *message.SpellHit:
+				if m.To != h.p.ID {
+					h.c.Send() <- &message.Event{
+						Id:   ev.Emmiter,
+						Type: events.SpellHit,
+						E:    events.Bytes(m),
+					}
 				}
 			}
 		}
 	}
-	close(h.c.Send())
-	log.Printf("exited %v event reciver\n", h.p.Nick)
 }
 
 func (h *Handler) Register(e *message.Event) {
 	h.p.Nick = events.Proto(e.E, &message.Register{}).Nick
-	log.Printf("Client [%v, %v, %v] start to register\n", h.p.ID, h.p.Nick, h.c.Addr)
 	playersVisible := h.p.Spawn()
 	h.c.Send() <- events.New(events.RegisterOk, 0, events.Bytes(&message.RegisterOk{
 		Id:     h.c.ID,
@@ -105,32 +112,25 @@ func (h *Handler) Register(e *message.Event) {
 		Self:   h.p.ToProto(actions.Spawn),
 		Spawns: playersVisible,
 	}))
-	go h.HandleMapEvents()
-	log.Printf("Client [%v, %v, %v] finish register\n", h.p.ID, h.p.Nick, h.c.Addr)
+	log.Printf("Client [%v, %v, %v] connected.\n", h.p.ID, h.p.Nick, h.c.Addr)
 }
 
 func (h *Handler) Dir(e *message.Event) {
 	d := events.Proto(e.E, &message.Dir{}).Dir
-	h.p.Modify(func(p *Player) {
-		p.D = d
-	})
+	h.p.SetDir(d)
 	t, _ := world.PlayerGrid.At(int16(h.p.X), int16(h.p.Y))
 	t.ChangeDirection(d, h.p.ID, h.p.ToProto(actions.Dir))
 }
 
 func (h *Handler) Move(e *message.Event) {
-	h.p.WalkLock.Lock()
 	d := events.Proto(e.E, &message.Move{}).Dir
 	changeDir := h.p.D != d
 	moved := false
 	defer func() {
-		h.p.WalkLock.Unlock()
 		// If in the end the player changed direction but didnt move
 		// notify the direction change
 		if changeDir && !moved {
-			h.p.Modify(func(p *Player) {
-				p.D = d
-			})
+			h.p.SetDir(d)
 			t, _ := world.PlayerGrid.At(int16(h.p.X), int16(h.p.Y))
 			t.ChangeDirection(d, h.p.ID, h.p.ToProto(actions.Dir))
 		}
@@ -152,14 +152,9 @@ func (h *Handler) Move(e *message.Event) {
 		return
 	}
 	pt, _ := world.PlayerGrid.At(int16(h.p.X), int16(h.p.Y))
-	log.Println(h.p.Nick+":", h.p.X, h.p.Y, "-->", nx, ny)
+	log.Printf("%v: %v,%v --> %v,%v\n", h.p.Nick, h.p.X, h.p.Y, nx, ny)
 	if CanWalkTo(t) && !h.p.Inmobilized || h.p.Dead {
-		h.p.Modify(func(p *Player) {
-			p.X, p.Y = nx, ny
-			p.D = d
-			p.ViewRect = playerView(nx, ny)
-		})
-
+		h.p.MovePos(d, nx, ny)
 		moved = MovePlayer(h.p, pt, t)
 		h.c.Send() <- &message.Event{
 			Id:   e.Id,
@@ -209,7 +204,8 @@ func (h *Handler) CastMelee(e *message.Event) {
 		h.Send(events.CastMeleeOk, &message.CastMeleeOk{Ok: false})
 		return
 	}
-	nx, ny := h.p.X, h.p.Y
+	px, py := h.p.GetPos()
+	nx, ny := px, py
 	switch h.p.D {
 	case direction.Front:
 		ny++
@@ -220,7 +216,7 @@ func (h *Handler) CastMelee(e *message.Event) {
 	case direction.Right:
 		nx++
 	}
-	pt, _ := world.PlayerGrid.At(int16(h.p.X), int16(h.p.Y))
+	pt, _ := world.PlayerGrid.At(int16(px), int16(py))
 	t, ok := world.PlayerGrid.At(int16(nx), int16(ny))
 	if !ok {
 		h.Send(events.CastMeleeOk, &message.CastMeleeOk{Ok: false})
@@ -237,20 +233,13 @@ func (h *Handler) CastMelee(e *message.Event) {
 	if p != nil && !p.Dead {
 		// we hit someone alive
 		damage := 70 + rand.Intn(60)
-		p.Modify(func(pl *Player) {
-			pl.HP = pl.HP - damage
-			if pl.HP <= 0 {
-				pl.HP = 0
-				pl.Dead = true
-			}
-		})
+		hpLeft := p.DamagePlayer(damage)
 		h.Send(events.CastMeleeOk, &message.CastMeleeOk{Ok: true, Id: p.ID, Dmg: uint32(damage)})
-		p.Handler.Send(events.RecivedMelee, &message.RecivedMelee{Id: h.p.ID, Dmg: uint32(damage), Hp: uint32(p.HP)})
+		p.Handler.Send(events.RecivedMelee, &message.RecivedMelee{Id: h.p.ID, Dmg: uint32(damage), Hp: uint32(hpLeft)})
 		pt.TriggerEvent(h.p.ID, &message.MeleeHit{Ok: true, From: h.p.ID, To: p.ID})
-		if p.HP == 0 {
+		if p.IsDead() {
 			t.TriggerEvent(p.ID, p.ToProto(actions.Died))
 		}
-
 		return
 	}
 	// no one is there
@@ -258,9 +247,32 @@ func (h *Handler) CastMelee(e *message.Event) {
 	pt.TriggerEvent(h.p.ID, &message.MeleeHit{Ok: false, From: h.p.ID})
 }
 
+var (
+	spellConfig = map[spell.Spell]Spell{
+		spell.Revive:     NewRevive(1300),
+		spell.HealWounds: NewHealWounds(650, 40, 10),
+		spell.InmoRm:     NewInmoRm(370),
+		spell.Inmo:       NewInmo(300, time.Second*6),
+		spell.Apoca:      NewDamageSpell(1100, 170, 20),
+		spell.Desca:      NewDamageSpell(700, 90, 15),
+	}
+)
+
+func SpellHandle(s spell.Spell, caster, reciver *Player) (ok bool, dmg int) {
+	sp, ok := spellConfig[s]
+	if !ok {
+		return false, 0
+	}
+	if caster.ID == reciver.ID && !sp.CanSelfCast() {
+		return false, 0
+	}
+	return sp.Cast(caster, reciver)
+}
+
 func (h *Handler) CastSpell(e *message.Event) {
 	cs := events.Proto(e.E, &message.CastSpell{})
-	if h.p.Dead {
+	isDead := h.p.IsDead()
+	if isDead {
 		h.Send(events.CastSpellOk, &message.CastSpellOk{Ok: false})
 		return
 	}
@@ -278,7 +290,7 @@ func (h *Handler) CastSpell(e *message.Event) {
 		return nil
 	})
 	if p != nil {
-		if !p.Dead {
+		if !p.IsDead() {
 			// we hit someone alive, we had mana for the spell
 			if cs.Spell == spell.InmoRm && !p.Inmobilized {
 				h.Send(events.CastSpellOk, &message.CastSpellOk{Ok: false})
@@ -288,7 +300,7 @@ func (h *Handler) CastSpell(e *message.Event) {
 				h.Send(events.CastSpellOk, &message.CastSpellOk{Ok: true, Id: p.ID, Dmg: uint32(dmg), Mp: uint32(h.p.MP), Spell: cs.Spell})
 				p.Handler.Send(events.RecivedSpell, &message.RecivedSpell{Id: h.p.ID, Dmg: uint32(dmg), Hp: uint32(p.HP), Spell: cs.Spell})
 				t.TriggerEvent(h.p.ID, &message.SpellHit{From: h.p.ID, To: p.ID, Spell: cs.Spell})
-				if p.Dead {
+				if p.IsDead() {
 					t.TriggerEvent(p.ID, p.ToProto(actions.Died))
 				}
 				return
@@ -323,21 +335,15 @@ func (h *Handler) UsePotion(e *message.Event) {
 	switch pot.Type {
 	case potion.Red:
 		val := HealthPotionRestoreValue
-		if h.p.HP+val >= h.p.MaxHP {
-			val = h.p.MaxHP - h.p.HP
-		}
-		h.p.HP = h.p.HP + val
-		h.Send(events.UsePotionOk, &message.UsePotionOk{Ok: true, DeltaHP: uint32(val)})
+		h.p.HealPlayer(val)
+		h.Send(events.UsePotionOk, &message.UsePotionOk{Ok: true, NewHP: uint32(h.p.GetHP())})
 		if t, ok := world.PlayerGrid.At(int16(h.p.X), int16(h.p.Y)); ok {
 			t.TriggerEvent(h.p.ID, &message.PotionUsed{X: uint32(h.p.X), Y: uint32(h.p.Y)})
 		}
 	case potion.Blue:
 		val := int(float64(h.p.MaxMP) * ManaPotionRestoreValue)
-		if h.p.MP+val >= h.p.MaxMP {
-			val = h.p.MaxMP - h.p.MP
-		}
-		h.p.MP = h.p.MP + val
-		h.Send(events.UsePotionOk, &message.UsePotionOk{Ok: true, DeltaMP: uint32(val)})
+		h.p.AddMana(val)
+		h.Send(events.UsePotionOk, &message.UsePotionOk{Ok: true, NewMP: uint32(h.p.GetMP())})
 		if t, ok := world.PlayerGrid.At(int16(h.p.X), int16(h.p.Y)); ok {
 			t.TriggerEvent(h.p.ID, &message.PotionUsed{X: uint32(h.p.X), Y: uint32(h.p.Y)})
 		}
@@ -366,26 +372,4 @@ func (h *Handler) Send(e events.E, data protoreflect.ProtoMessage) {
 	h.c.Send() <- &message.Event{Type: e, Id: h.p.ID,
 		E: events.Bytes(data),
 	}
-}
-
-var (
-	spellConfig = map[spell.Spell]Spell{
-		spell.Revive:     NewRevive(1300),
-		spell.HealWounds: NewHealWounds(650, 40, 10),
-		spell.InmoRm:     NewInmoRm(370),
-		spell.Inmo:       NewInmo(300, time.Second*6),
-		spell.Apoca:      NewApoca(1100, 170, 20),
-		spell.Desca:      NewDesca(700, 90, 15),
-	}
-)
-
-func SpellHandle(s spell.Spell, caster, reciver *Player) (ok bool, dmg int) {
-	sp, ok := spellConfig[s]
-	if !ok {
-		return false, 0
-	}
-	if caster.ID == reciver.ID && !sp.CanSelfCast() {
-		return false, 0
-	}
-	return sp.Cast(caster, reciver)
 }

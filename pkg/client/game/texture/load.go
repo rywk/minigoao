@@ -61,6 +61,16 @@ var (
 			},
 			img: img.SpellApoca_png,
 		},
+		// asset.SpellApoca: {
+		// 	c: SpriteConfig{
+		// 		Width:  128,
+		// 		Height: 100,
+		// 		DirectionLength: map[direction.D]int{
+		// 			direction.Right: 11,
+		// 		},
+		// 	},
+		// 	img: img.SpellLastTrial_png,
+		// },
 		asset.SpellDesca: {
 			c: SpriteConfig{
 				Width:      127,
@@ -71,15 +81,25 @@ var (
 			},
 			img: img.SpellDesca_png,
 		},
+		// asset.SpellInmo: {
+		// 	c: SpriteConfig{
+		// 		Width:  128,
+		// 		Height: 128,
+		// 		DirectionLength: map[direction.D]int{
+		// 			direction.Right: 15,
+		// 		},
+		// 	},
+		// 	img: img.SpellInmo_png,
+		// },
 		asset.SpellInmo: {
 			c: SpriteConfig{
-				Width:  128,
-				Height: 128,
+				Width:  96,
+				Height: 132,
 				DirectionLength: map[direction.D]int{
-					direction.Right: 15,
+					direction.Right: 10,
 				},
 			},
-			img: img.SpellInmo_png,
+			img: img.SpellParalize_png,
 		},
 		asset.SpellInmoRm: {
 			c: SpriteConfig{
@@ -91,15 +111,25 @@ var (
 			},
 			img: img.SpellInmoRm_png,
 		},
+		// asset.SpellHealWounds: {
+		// 	c: SpriteConfig{
+		// 		Width:      68,
+		// 		Height:     68,
+		// 		GridW:      5,
+		// 		GridH:      4,
+		// 		FrameCount: 20,
+		// 	},
+		// 	img: img.SpellHealWounds_png,
+		// },
 		asset.SpellHealWounds: {
 			c: SpriteConfig{
-				Width:      68,
-				Height:     68,
-				GridW:      5,
-				GridH:      4,
-				FrameCount: 20,
+				Width:  100,
+				Height: 100,
+				DirectionLength: map[direction.D]int{
+					direction.Right: 10,
+				},
 			},
-			img: img.SpellHealWounds_png,
+			img: img.SpellHealWounds2_png,
 		},
 		asset.SpellRevive: {
 			c: SpriteConfig{

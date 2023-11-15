@@ -40,7 +40,6 @@ type P struct {
 	Direction                           direction.D
 
 	ActiveEffects []texture.Effect
-	Effects       chan texture.Effect
 	Effect        *PEffects
 
 	Client       *ClientP
@@ -63,8 +62,7 @@ type ClientP struct {
 	HP, MP       int
 	MaxHP, MaxMP int
 
-	// cooldowns and shit
-
+	// Server channels, used to ask permision and recive updates
 	Move   chan direction.D
 	MoveOk chan bool
 
@@ -163,7 +161,6 @@ func (p *P) Draw(screen *ebiten.Image) {
 		screen.DrawImage(p.DeadHead.Frame(), op)
 		return
 	}
-
 	if p.Direction == direction.Left || p.Direction == direction.Front {
 		if p.Armor != nil {
 			screen.DrawImage(p.Armor.Frame(), op)
@@ -192,7 +189,12 @@ func (p *P) Draw(screen *ebiten.Image) {
 		op.GeoM.Translate(-3, -6)
 		screen.DrawImage(p.Helmet.Frame(), op)
 	}
-
+	if p.local == nil {
+		p.DrawPlayerHPMP(screen)
+	} else {
+		p.DrawNick(screen)
+	}
+	p.Effect.Draw(screen)
 }
 
 func (p *P) DrawNick(screen *ebiten.Image) {
@@ -268,7 +270,6 @@ func (p *P) UpdateFrames(c int) {
 func (p *P) Process(a *message.PlayerAction) {
 	p.Dead = a.Dead
 	switch a.Action {
-	case actions.Spawn:
 	case actions.Despawn:
 		close(p.Kill)
 	case actions.Dir:
@@ -280,6 +281,7 @@ func (p *P) Process(a *message.PlayerAction) {
 	case actions.Died:
 		p.Dead = true
 	case actions.Revive:
+		log.Printf("revive!!\n")
 		p.Dead = false
 	}
 }
@@ -391,10 +393,6 @@ func actionToP(l *P, a *message.PlayerAction) *P {
 		movesBuffered:      make(chan *message.PlayerAction, 10),
 		directionsBuffered: make(chan *message.PlayerAction, 10),
 		Kill:               make(chan struct{}),
-		// actions & effects are buffered,
-		// we want to do them in order
-		// but we dont want to block whos sending
-		Effects: make(chan texture.Effect, 10),
 	}
 	p.Effect = &PEffects{
 		p:      p,
@@ -404,6 +402,10 @@ func actionToP(l *P, a *message.PlayerAction) *P {
 	return p
 }
 
+// maps.YSortable
+func (p *P) ValueY() float64 { return p.Pos[1] }
+
+// thing.Thing
 func (p *P) What() uint32       { return thing.Player }
 func (p *P) Who() uint32        { return p.ID }
 func (p *P) Blocking() bool     { return !p.Dead }
@@ -440,11 +442,11 @@ type SpellOffset struct {
 
 var spellOffsets = map[assets.Image]struct{ x, y int }{
 	assets.SpellApoca:      {-50, -80},
-	assets.SpellInmo:       {-45, -60},
+	assets.SpellInmo:       {-30, -55},
 	assets.SpellInmoRm:     {-20, -30},
 	assets.SpellDesca:      {-45, -70},
-	assets.SpellHealWounds: {-20, -30},
-	assets.SpellRevive:     {-30, -40},
+	assets.SpellHealWounds: {-22, -20},
+	assets.SpellRevive:     {-28, -40},
 }
 
 func NewSpellOffset(a assets.Image) *SpellOffset {
@@ -487,12 +489,8 @@ func (adt *AtkDmgFxTxt) EffectFrame() *ebiten.Image {
 }
 
 func (a *AtkDmgFxTxt) EffectOpt(op *ebiten.DrawImageOptions) *ebiten.DrawImageOptions {
-	op.GeoM.Translate(0, -25)
+	op.GeoM.Translate(4, -40)
 	return op
-}
-
-func (pfx *PEffects) PlayAttackDamageText(counter int) {
-
 }
 
 func (pfx *PEffects) Update(counter int) {

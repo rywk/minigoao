@@ -130,8 +130,8 @@ message UsePotion {
 // PotionOk is the response for a potion use
 message UsePotionOk {
   bool ok = 1;
-  uint32 deltaHP = 2;
-  uint32 deltaMP = 3;
+  uint32 newHP = 2;
+  uint32 newMP = 3;
 }
 // PotionUsed is the event for the the client to reproduce the potion sound
 // from the place it was sent, we dont need to know by who, just where

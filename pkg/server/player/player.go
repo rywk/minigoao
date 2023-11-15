@@ -32,6 +32,7 @@ const (
 )
 
 type Player struct {
+	*sync.RWMutex
 	Online bool
 	// Player stats and stuff..
 	// Player ID
@@ -57,9 +58,9 @@ type Player struct {
 	Weapon asset.Image
 	Shield asset.Image
 
-	PotionLock *sync.Mutex
-	WalkLock   *sync.Mutex
-	ModifyLock *sync.Mutex
+	PotionLock      *sync.Mutex
+	WalkLock        *sync.RWMutex
+	InmobilizedLock *sync.RWMutex
 
 	// Internal player
 	Handler  *Handler
@@ -69,22 +70,23 @@ type Player struct {
 
 func RunPlayer(c *net.Conn) {
 	p := &Player{
-		ID:         c.ID,
-		X:          StartX,
-		Y:          StartY,
-		D:          direction.Front,
-		HP:         StartHP,
-		MP:         StartMP,
-		MaxHP:      MaxHP,
-		MaxMP:      MaxMP,
-		Helmet:     DefaultHead,
-		Armor:      DefaultBody,
-		Weapon:     DefaultWeapon,
-		Shield:     DefaultShield,
-		Handler:    NewHandlers(c),
-		WalkLock:   &sync.Mutex{},
-		ModifyLock: &sync.Mutex{},
-		PotionLock: &sync.Mutex{},
+		RWMutex:         &sync.RWMutex{},
+		ID:              c.ID,
+		X:               StartX,
+		Y:               StartY,
+		D:               direction.Front,
+		HP:              StartHP,
+		MP:              StartMP,
+		MaxHP:           MaxHP,
+		MaxMP:           MaxMP,
+		Helmet:          DefaultHead,
+		Armor:           DefaultBody,
+		Weapon:          DefaultWeapon,
+		Shield:          DefaultShield,
+		Handler:         NewHandlers(c),
+		WalkLock:        &sync.RWMutex{},
+		InmobilizedLock: &sync.RWMutex{},
+		PotionLock:      &sync.Mutex{},
 	}
 	p.Handler.SetPlayer(p)
 	p.Handler.Handle()
@@ -160,6 +162,121 @@ func (p *Player) ToProto(a actions.A) *message.PlayerAction {
 	}
 }
 
+func TryMovePlayer(p *Player, pt, t tile.Tile[thing.Thing]) bool {
+	if CanWalkTo(t) {
+		return MovePlayer(p, pt, t)
+	}
+	return false
+}
+
+func CanWalkTo(t tile.Tile[thing.Thing]) bool {
+	return t.Range(func(th thing.Thing) error {
+		if th != nil && th.Blocking() {
+			return constants.Err{}
+		}
+		return nil
+	}) == nil
+}
+
+func MovePlayer(p *Player, pt, t tile.Tile[thing.Thing]) bool {
+	pt.MoveTo(t, p, p.ID, p.ToProto(actions.Move))
+	return true
+}
+
+func (p *Player) IsDead() bool {
+	p.RLock()
+	defer p.RUnlock()
+	return p.Dead
+}
+
+func (p *Player) SetDir(d direction.D) {
+	p.WalkLock.Lock()
+	p.D = d
+	p.WalkLock.Unlock()
+}
+
+func (p *Player) GetDir() direction.D {
+	p.WalkLock.RLock()
+	defer p.WalkLock.RUnlock()
+	return p.D
+}
+
+func (p *Player) GetPos() (int, int) {
+	p.WalkLock.RLock()
+	defer p.WalkLock.RUnlock()
+	return p.X, p.Y
+}
+
+func (p *Player) MovePos(d direction.D, nx, ny int) {
+	p.WalkLock.Lock()
+	p.X, p.Y = nx, ny
+	p.D = d
+	p.ViewRect = playerView(nx, ny)
+	p.WalkLock.Unlock()
+}
+
+func (p *Player) DamagePlayer(dmg int) int {
+	p.Lock()
+	defer p.Unlock()
+	p.HP = p.HP - dmg
+	if p.HP <= 0 {
+		p.HP = 0
+		p.Dead = true
+	}
+	return p.HP
+}
+
+func (p *Player) GetHP() int {
+	p.RLock()
+	defer p.RUnlock()
+	return p.HP
+}
+
+func (p *Player) GetMP() int {
+	p.RLock()
+	defer p.RUnlock()
+	return p.MP
+}
+
+func (p *Player) HealPlayer(heal int) int {
+	p.Lock()
+	defer p.Unlock()
+	p.HP = p.HP + heal
+	if p.HP > p.MaxHP {
+		p.HP = p.MaxHP
+	}
+	return p.HP
+}
+
+func (p *Player) AddMana(mana int) int {
+	p.Lock()
+	defer p.Unlock()
+	p.MP = p.MP + mana
+	if p.MP > p.MaxMP {
+		p.MP = p.MaxMP
+	}
+	return p.MP
+}
+
+func (p *Player) RevivePlayer() {
+	p.Lock()
+	defer p.Unlock()
+	p.HP = p.MaxHP
+	p.Dead = false
+}
+
+func (p *Player) IsInmobilized() bool {
+	p.InmobilizedLock.RLock()
+	defer p.InmobilizedLock.RUnlock()
+	return p.Inmobilized
+}
+
+func (p *Player) ChangeInmobilized(inmo bool) {
+	p.InmobilizedLock.Lock()
+	defer p.InmobilizedLock.Unlock()
+	p.Inmobilized = inmo
+}
+
 func playerView(x, y int) tile.Rect {
 	sx, sy := int16(x-DefaultScreenWidth),
 		int16(y-DefaultScreenHeight)
@@ -191,31 +308,4 @@ func playerView(x, y int) tile.Rect {
 	}
 	r := tile.NewRect(sx, sy, ex, ey)
 	return r
-}
-
-func TryMovePlayer(p *Player, pt, t tile.Tile[thing.Thing]) bool {
-	if CanWalkTo(t) {
-		return MovePlayer(p, pt, t)
-	}
-	return false
-}
-
-func CanWalkTo(t tile.Tile[thing.Thing]) bool {
-	return t.Range(func(th thing.Thing) error {
-		if th != nil && th.Blocking() {
-			return constants.Err{}
-		}
-		return nil
-	}) == nil
-}
-
-func MovePlayer(p *Player, pt, t tile.Tile[thing.Thing]) bool {
-	pt.MoveTo(t, p, p.ID, p.ToProto(actions.Move))
-	return true
-}
-
-func (p *Player) Modify(fn func(p *Player)) {
-	p.ModifyLock.Lock()
-	fn(p)
-	p.ModifyLock.Unlock()
 }

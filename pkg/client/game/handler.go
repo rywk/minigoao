@@ -179,5 +179,5 @@ func (h *Handler) SendPing() {
 
 func (h *Handler) Ping(e *message.Event) {
 	//log.Printf("ping response arrived %v", time.Since(h.ping).String())
-	h.g.latency = fmt.Sprintf("%v", time.Since(h.ping).String())
+	h.g.latency = fmt.Sprintf("%vms", time.Since(h.ping).Milliseconds())
 }
