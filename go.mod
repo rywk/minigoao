@@ -1,6 +1,6 @@
 module github.com/rywk/minigoao
 
-go 1.20
+go 1.23
 
 require (
 	github.com/gopxl/beep v1.2.1-0.20231109160934-624d2853e716
