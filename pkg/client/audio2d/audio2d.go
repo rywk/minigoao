@@ -15,7 +15,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/audio/vorbis"
 	wavv "github.com/hajimehoshi/ebiten/v2/audio/wav"
 	audiofile "github.com/rywk/minigoao/pkg/client/game/assets/audio"
-	"github.com/rywk/minigoao/proto/message/assets"
+	"github.com/rywk/minigoao/pkg/constants/assets"
 )
 
 const (

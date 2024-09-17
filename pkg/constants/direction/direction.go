@@ -1,6 +1,6 @@
 package direction
 
-type D = uint32
+type D = uint8
 
 const (
 	Still D = iota

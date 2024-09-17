@@ -1,10 +1,10 @@
 package potion
 
-type Potion = uint32
+type Potion = uint8
 
 const (
-	Red Potion = iota
-	Blue
+	Blue Potion = iota
+	Red
 
 	None
 )

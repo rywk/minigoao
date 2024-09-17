@@ -154,7 +154,7 @@ type CombatKeys struct {
 	spellPressed  map[ebiten.Key]bool
 	spellMap      map[ebiten.Key]spell.Spell
 	potionPressed map[ebiten.Key]bool
-	potionMap     map[ebiten.Key]spell.Spell
+	potionMap     map[ebiten.Key]potion.Potion
 
 	spellsX, spellsY     float64
 	stSpellsX, stSpellsY float64
@@ -185,10 +185,10 @@ func NewCombatKeys(cfg *KeyConfig) *CombatKeys {
 			cfg.PickHealWounds: false,
 		},
 		spellMap: map[ebiten.Key]spell.Spell{
-			cfg.PickApoca:      spell.Apoca,
-			cfg.PickInmo:       spell.Inmo,
-			cfg.PickInmoRm:     spell.InmoRm,
-			cfg.PickDesca:      spell.Desca,
+			cfg.PickApoca:      spell.Explode,
+			cfg.PickInmo:       spell.Paralize,
+			cfg.PickInmoRm:     spell.RemoveParalize,
+			cfg.PickDesca:      spell.ElectricDischarge,
 			cfg.PickResurrect:  spell.Revive,
 			cfg.PickHealWounds: spell.HealWounds,
 			-1:                 spell.None,
@@ -214,8 +214,8 @@ func NewCombatKeys(cfg *KeyConfig) *CombatKeys {
 func (ck *CombatKeys) MeleeHit() bool {
 	hit := false
 	if ebiten.IsKeyPressed(ck.cfg.Melee) &&
-		time.Since(ck.lastMelee) > ck.cfg.MeleeCooldown &&
-		time.Since(ck.lastCast) > ck.cfg.SwitchCooldown {
+		time.Since(ck.lastMelee) > ck.cfg.MeleeCooldown {
+		// &&time.Since(ck.lastCast) > ck.cfg.SwitchCooldown
 		ck.lastMelee = time.Now()
 		hit = true
 	}
@@ -297,8 +297,9 @@ func (ck *CombatKeys) CastSpell() (bool, spell.Spell, int, int) {
 	}
 
 	if ck.spell != spell.None && ebiten.IsMouseButtonPressed(ebiten.MouseButton0) &&
-		time.Since(ck.lastCast) > ck.cfg.SpellCooldown &&
-		time.Since(ck.lastMelee) > ck.cfg.SwitchCooldown {
+		time.Since(ck.lastCast) > ck.cfg.SpellCooldown {
+		//&&
+		//time.Since(ck.lastMelee) > ck.cfg.SwitchCooldown
 		ck.lastCast = time.Now()
 		x, y := ebiten.CursorPosition()
 		pspell := ck.spell
@@ -326,16 +327,16 @@ func (ck *CombatKeys) ShowSpellPicker(screen *ebiten.Image) {
 	case spell.HealWounds:
 		opselect.GeoM.Translate(float64(ck.spellsX+60), float64(ck.spellsY-8))
 		screen.DrawImage(ck.selectedImg, opselect)
-	case spell.InmoRm:
+	case spell.RemoveParalize:
 		opselect.GeoM.Translate(float64(ck.spellsX+115), float64(ck.spellsY-8))
 		screen.DrawImage(ck.selectedImg, opselect)
-	case spell.Inmo:
+	case spell.Paralize:
 		opselect.GeoM.Translate(float64(ck.spellsX+175), float64(ck.spellsY-8))
 		screen.DrawImage(ck.selectedImg, opselect)
-	case spell.Desca:
+	case spell.ElectricDischarge:
 		opselect.GeoM.Translate(float64(ck.spellsX+230), float64(ck.spellsY-8))
 		screen.DrawImage(ck.selectedImg, opselect)
-	case spell.Apoca:
+	case spell.Explode:
 		opselect.GeoM.Translate(float64(ck.spellsX+284), float64(ck.spellsY-8))
 		screen.DrawImage(ck.selectedImg, opselect)
 	}

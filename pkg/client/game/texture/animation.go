@@ -65,7 +65,7 @@ type (
 )
 
 func NewHeadStill(img *ebiten.Image, config SpriteConfig) *Still {
-	s := &Still{directionMap: make(map[uint32]*ebiten.Image), currentDir: direction.Front}
+	s := &Still{directionMap: make(map[direction.D]*ebiten.Image), currentDir: direction.Front}
 	x := config.X
 	for _, d := range []direction.D{
 		direction.Front,
@@ -145,7 +145,7 @@ func NewEffectGridAnimation(img *ebiten.Image, config SpriteConfig) *Animation {
 }
 
 func NewBodyAnimation(img *ebiten.Image, config SpriteConfig) *Animation {
-	a := &Animation{currentDir: direction.Front, directionMap: make(map[uint32]*Sprites)}
+	a := &Animation{currentDir: direction.Front, directionMap: make(map[direction.D]*Sprites)}
 	y := config.Y
 	for _, d := range direction.List {
 		frames := config.DirectionLength[d]
