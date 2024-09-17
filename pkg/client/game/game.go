@@ -585,7 +585,9 @@ func (g *Game) Draw(screen *ebiten.Image) {
 }
 
 func (g *Game) drawRegister(screen *ebiten.Image) {
-	ebitenutil.DebugPrintAt(screen, g.serverAddress, HalfScreenX, HalfScreenY/2)
+	ebitenutil.DebugPrintAt(screen, "Right click to paste an IP", HalfScreenX-80, HalfScreenY/2-30)
+	ebitenutil.DebugPrintAt(screen, g.serverAddress, HalfScreenX-40, HalfScreenY/2)
+	ebitenutil.DebugPrintAt(screen, "Type a nickname and press ENTER", HalfScreenX-80, HalfScreenY-30)
 	g.typer.Draw(screen, HalfScreenX, HalfScreenY)
 }
 
