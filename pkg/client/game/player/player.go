@@ -3,7 +3,6 @@ package player
 import (
 	"image"
 	"image/color"
-	"log"
 	"strconv"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -12,25 +11,24 @@ import (
 	"github.com/rywk/minigoao/pkg/client/game/texture"
 	"github.com/rywk/minigoao/pkg/conc"
 	"github.com/rywk/minigoao/pkg/constants"
+	"github.com/rywk/minigoao/pkg/constants/assets"
 	"github.com/rywk/minigoao/pkg/constants/direction"
 	"github.com/rywk/minigoao/pkg/constants/spell"
-	"github.com/rywk/minigoao/pkg/server/world/thing"
-	"github.com/rywk/minigoao/proto/message"
-	"github.com/rywk/minigoao/proto/message/actions"
-	"github.com/rywk/minigoao/proto/message/assets"
-	"github.com/rywk/tile"
+	"github.com/rywk/minigoao/pkg/grid"
+	"github.com/rywk/minigoao/pkg/msgs"
+	"github.com/rywk/minigoao/pkg/typ"
 	"golang.org/x/image/math/f64"
 )
 
 // Player
 type P struct {
-	local       *P
-	ID          uint32
-	Nick        string
-	X, Y        int
-	DX, DY      int
-	Pos         f64.Vec2
-	Tile        tile.Tile[thing.Thing]
+	local  *P
+	ID     uint32
+	Nick   string
+	X, Y   int
+	DX, DY int
+	Pos    f64.Vec2
+
 	Dead        bool
 	Inmobilized bool
 
@@ -44,13 +42,11 @@ type P struct {
 
 	Client       *ClientP
 	HPImg, MPImg *ebiten.Image
-
-	leftForMove float64
-	lastDir     direction.D
-
-	Kill               chan struct{}
-	movesBuffered      chan *message.PlayerAction
-	directionsBuffered chan *message.PlayerAction
+	HPMPBGImg    *ebiten.Image
+	MoveSpeed    float64
+	leftForMove  float64
+	lastDir      direction.D
+	steps        []Step
 
 	soundPrevWalk int
 	soundboard    *audio2d.SoundBoard
@@ -61,48 +57,10 @@ type ClientP struct {
 	// Stats
 	HP, MP       int
 	MaxHP, MaxMP int
-
-	// Server channels, used to ask permision and recive updates
-	Move   chan direction.D
-	MoveOk chan bool
-
-	Dir chan direction.D
-
-	UsePotion   chan *message.UsePotion
-	UsePotionOk chan *message.UsePotionOk
-	PotionUsed  chan *message.PotionUsed
-
-	CastMelee    chan struct{}
-	CastMeleeOk  chan *message.CastMeleeOk
-	RecivedMelee chan *message.RecivedMelee
-	MeleeHit     chan *message.MeleeHit
-
-	CastSpell    chan *message.CastSpell
-	CastSpellOk  chan *message.CastSpellOk
-	RecivedSpell chan *message.RecivedSpell
-	SpellHit     chan *message.SpellHit
 }
 
 func NewClientP() *ClientP {
-	return &ClientP{
-		Move:   make(chan direction.D),
-		Dir:    make(chan direction.D),
-		MoveOk: make(chan bool),
-
-		UsePotion:   make(chan *message.UsePotion),
-		UsePotionOk: make(chan *message.UsePotionOk),
-		PotionUsed:  make(chan *message.PotionUsed),
-
-		CastMelee:    make(chan struct{}),
-		CastMeleeOk:  make(chan *message.CastMeleeOk),
-		RecivedMelee: make(chan *message.RecivedMelee),
-		MeleeHit:     make(chan *message.MeleeHit),
-
-		CastSpell:    make(chan *message.CastSpell),
-		CastSpellOk:  make(chan *message.CastSpellOk),
-		RecivedSpell: make(chan *message.RecivedSpell),
-		SpellHit:     make(chan *message.SpellHit),
-	}
+	return &ClientP{}
 }
 
 func (p *ClientP) DirToNewPos(d direction.D) (int, int) {
@@ -121,7 +79,7 @@ func (p *ClientP) DirToNewPos(d direction.D) (int, int) {
 
 func (p *P) Nil() bool { return p == nil }
 
-func (p *P) Update(counter int, g *tile.Grid[thing.Thing]) {
+func (p *P) Update(counter int) {
 	if p.Dead {
 		p.DeadBody.Dir(p.Direction)
 		p.DeadHead.Dir(p.Direction)
@@ -143,9 +101,6 @@ func (p *P) Update(counter int, g *tile.Grid[thing.Thing]) {
 		}
 	}
 	p.UpdateFrames(counter)
-	if p.Client == nil {
-		p.Mover(g)
-	}
 }
 
 const PlayerDrawOffsetX, PlayerDrawOffsetY = 3, -14
@@ -159,6 +114,7 @@ func (p *P) Draw(screen *ebiten.Image) {
 		screen.DrawImage(p.DeadBody.Frame(), op)
 		op.GeoM.Translate(PlayerHeadDrawOffsetX, PlayerHeadDrawOffsetY)
 		screen.DrawImage(p.DeadHead.Frame(), op)
+		p.Effect.Draw(screen)
 		return
 	}
 	if p.Direction == direction.Left || p.Direction == direction.Front {
@@ -191,6 +147,7 @@ func (p *P) Draw(screen *ebiten.Image) {
 	}
 	if p.local == nil {
 		p.DrawPlayerHPMP(screen)
+
 	} else {
 		p.DrawNick(screen)
 	}
@@ -211,6 +168,9 @@ func (p *P) DrawPlayerHPMP(screen *ebiten.Image) {
 	hpx, mpx = p.Client.HP*hpx/p.Client.MaxHP, p.Client.MP*mpx/p.Client.MaxMP
 	hpRect := image.Rect(p.HPImg.Bounds().Min.X, p.HPImg.Bounds().Min.Y, hpx, p.HPImg.Bounds().Max.Y)
 	mpRect := image.Rect(p.MPImg.Bounds().Min.X, p.MPImg.Bounds().Min.Y, mpx, p.MPImg.Bounds().Max.Y)
+	op.GeoM.Translate(-2, -1)
+	screen.DrawImage(p.HPMPBGImg, op)
+	op.GeoM.Translate(2, 1)
 	screen.DrawImage(p.HPImg.SubImage(hpRect).(*ebiten.Image), op)
 	op.GeoM.Translate(0, 5)
 	screen.DrawImage(p.MPImg.SubImage(mpRect).(*ebiten.Image), op)
@@ -267,61 +227,18 @@ func (p *P) UpdateFrames(c int) {
 	}
 }
 
-func (p *P) Process(a *message.PlayerAction) {
-	p.Dead = a.Dead
-	switch a.Action {
-	case actions.Despawn:
-		close(p.Kill)
-	case actions.Dir:
-		log.Printf("change dir to %v\n", direction.S(a.D))
-		p.directionsBuffered <- a
-	case actions.Move:
-		log.Printf("new move update from %v!!\n", a.Nick)
-		p.movesBuffered <- a
-	case actions.Died:
-		p.Dead = true
-	case actions.Revive:
-		log.Printf("revive!!\n")
-		p.Dead = false
-	}
+func (p *P) SetSoundboard(sb *audio2d.SoundBoard) {
+	p.soundboard = sb
 }
 
-func (p *P) Mover(g *tile.Grid[thing.Thing]) {
-	if a, ok := conc.Check(p.directionsBuffered); ok {
-		p.Direction = a.D
-	}
-	if p.leftForMove == 0 {
-		if a, ok := conc.Check(p.movesBuffered); ok {
-			if !p.Dead {
-				if !p.Walking {
-					p.soundboard.PlayFrom(assets.Walk1, p.local.X, p.local.Y, p.X, p.Y)
-					p.soundPrevWalk = 1
-				} else {
-					if p.soundPrevWalk == 1 {
-						p.soundboard.PlayFrom(assets.Walk2, p.local.X, p.local.Y, p.X, p.Y)
-						p.soundPrevWalk = 2
-					} else {
-						p.soundboard.PlayFrom(assets.Walk1, p.local.X, p.local.Y, p.X, p.Y)
-						p.soundPrevWalk = 1
-					}
-				}
-			}
-			p.Direction = a.D
-			p.lastDir = a.D
-			p.leftForMove = constants.TileSize
-			p.Walking = true
-			p.Pos[0] = float64(p.X * constants.TileSize)
-			p.Pos[1] = float64(p.Y * constants.TileSize)
-			pt, _ := g.At(int16(p.X), int16(p.Y))
-			p.X, p.Y = int(a.X), int(a.Y)
-			t, _ := g.At(int16(p.X), int16(p.Y))
-			pt.SimpleMoveTo(t, p)
-		} else {
-			p.Walking = false
-		}
-	}
+type Step struct {
+	To  typ.P
+	Dir direction.D
+}
+
+func (p *P) WalkSteps(g *grid.Grid) {
 	if p.leftForMove > 0 {
-		vel := 3.0
+		vel := p.MoveSpeed
 		if p.leftForMove < vel {
 			vel = p.leftForMove
 		}
@@ -337,10 +254,52 @@ func (p *P) Mover(g *tile.Grid[thing.Thing]) {
 		}
 		p.leftForMove -= vel
 	}
+	if p.leftForMove != 0 {
+		return
+	}
+	if len(p.steps) == 0 {
+		p.Walking = false
+		return
+	}
+	step := p.steps[0]
+	p.steps = p.steps[1:]
+	if p.X == int(step.To.X) && p.Y == int(step.To.Y) {
+		p.Direction = step.Dir
+		return
+	}
+	if !p.Dead {
+		if !p.Walking {
+			p.soundboard.PlayFrom(assets.Walk1, p.local.X, p.local.Y, p.X, p.Y)
+			p.soundPrevWalk = 1
+		} else {
+			if p.soundPrevWalk == 1 {
+				p.soundboard.PlayFrom(assets.Walk2, p.local.X, p.local.Y, p.X, p.Y)
+				p.soundPrevWalk = 2
+			} else {
+				p.soundboard.PlayFrom(assets.Walk1, p.local.X, p.local.Y, p.X, p.Y)
+				p.soundPrevWalk = 1
+			}
+		}
+	}
+	p.Direction = step.Dir
+	p.lastDir = step.Dir
+	p.leftForMove = constants.TileSize
+	p.Walking = true
+	p.Pos[0] = float64(p.X * constants.TileSize)
+	p.Pos[1] = float64(p.Y * constants.TileSize)
+	g.Move(0, typ.P{X: int32(p.X), Y: int32(p.Y)}, step.To)
+	p.X, p.Y = int(step.To.X), int(step.To.Y)
 }
 
-func NewRegisterOk(e *message.RegisterOk) (*P, *ClientP) {
-	p := actionToP(nil, e.Self)
+func (p *P) AddStep(e *msgs.EventPlayerMoved) {
+	p.steps = append(p.steps, Step{
+		To:  e.Pos,
+		Dir: e.Dir,
+	})
+}
+
+func NewLogin(e *msgs.EventPlayerLogin) *P {
+	p := Create(e)
 	p.Client = NewClientP()
 	p.Client.MaxHP = int(e.MaxHP)
 	p.Client.MaxMP = int(e.MaxMP)
@@ -349,50 +308,93 @@ func NewRegisterOk(e *message.RegisterOk) (*P, *ClientP) {
 	p.Client.p = p
 	p.HPImg = ebiten.NewImage(30, 3)
 	p.MPImg = ebiten.NewImage(30, 3)
+	p.HPMPBGImg = ebiten.NewImage(34, 10)
 	p.HPImg.Fill(color.RGBA{250, 20, 20, 255})
 	p.MPImg.Fill(color.RGBA{40, 130, 250, 255})
-	return p, p.Client
-}
-
-func ProcessNew(l *P, pa *message.PlayerAction, sb *audio2d.SoundBoard) *P {
-	p := actionToP(l, pa)
-	p.soundboard = sb
-	p.Process(pa)
+	p.HPMPBGImg.Fill(color.RGBA{0, 0, 0, 200})
 	return p
 }
 
-func NewFromLogIn(l *P, e *message.RegisterOk, sb *audio2d.SoundBoard) map[uint32]*P {
-	r := map[uint32]*P{}
-	for _, s := range e.Spawns {
-		r[s.Id] = actionToP(l, s)
-		r[s.Id].soundboard = sb
+func Create(a *msgs.EventPlayerLogin) *P {
+	p := &P{
+		ID:        uint32(a.ID),
+		X:         int(a.Pos.X),
+		Y:         int(a.Pos.Y),
+		Direction: a.Dir,
+		Pos: f64.Vec2{ // pixel value of position
+			float64(a.Pos.X) * constants.TileSize,
+			float64(a.Pos.Y) * constants.TileSize},
+		Nick:      a.Nick,
+		Dead:      a.Dead,
+		MoveSpeed: float64(a.Speed),
+		Armor:     texture.LoadAnimation(assets.DarkArmour),
+		Helmet:    texture.LoadStill(assets.ProHat),
+		Weapon:    texture.LoadAnimation(assets.SpecialSword),
+		Shield:    texture.LoadAnimation(assets.SilverShield),
+		NakedBody: texture.LoadAnimation(assets.NakedBody),
+		Head:      texture.LoadStill(assets.Head),
+		DeadBody:  texture.LoadAnimation(assets.DeadBody),
+		DeadHead:  texture.LoadStill(assets.DeadHead),
 	}
-	return r
+	p.Effect = &PEffects{
+		p:      p,
+		active: make([]texture.Effect, 0),
+		Add:    make(chan texture.Effect, 10),
+	}
+	return p
 }
 
-func actionToP(l *P, a *message.PlayerAction) *P {
+func CreateFromLogin(local *P, a *msgs.EventNewPlayer) *P {
 	p := &P{
-		local:     l,
-		ID:        a.Id,
-		X:         int(a.X),
-		Y:         int(a.Y),
-		Direction: a.D,
+		local:     local,
+		ID:        uint32(a.ID),
+		X:         int(a.Pos.X),
+		Y:         int(a.Pos.Y),
+		Direction: a.Dir,
 		Pos: f64.Vec2{ // pixel value of position
-			float64(a.X) * constants.TileSize,
-			float64(a.Y) * constants.TileSize},
-		Nick:               a.Nick,
-		Dead:               a.Dead,
-		Armor:              texture.LoadAnimation(a.Armor),
-		Helmet:             texture.LoadStill(a.Helmet),
-		Weapon:             texture.LoadAnimation(a.Weapon),
-		Shield:             texture.LoadAnimation(a.Shield),
-		NakedBody:          texture.LoadAnimation(assets.NakedBody),
-		Head:               texture.LoadStill(assets.Head),
-		DeadBody:           texture.LoadAnimation(assets.DeadBody),
-		DeadHead:           texture.LoadStill(assets.DeadHead),
-		movesBuffered:      make(chan *message.PlayerAction, 10),
-		directionsBuffered: make(chan *message.PlayerAction, 10),
-		Kill:               make(chan struct{}),
+			float64(a.Pos.X) * constants.TileSize,
+			float64(a.Pos.Y) * constants.TileSize},
+		Nick:      a.Nick,
+		Dead:      a.Dead,
+		MoveSpeed: float64(a.Speed),
+		Armor:     texture.LoadAnimation(assets.DarkArmour),
+		Helmet:    texture.LoadStill(assets.ProHat),
+		Weapon:    texture.LoadAnimation(assets.SpecialSword),
+		Shield:    texture.LoadAnimation(assets.SilverShield),
+		NakedBody: texture.LoadAnimation(assets.NakedBody),
+		Head:      texture.LoadStill(assets.Head),
+		DeadBody:  texture.LoadAnimation(assets.DeadBody),
+		DeadHead:  texture.LoadStill(assets.DeadHead),
+	}
+	p.Effect = &PEffects{
+		p:      p,
+		active: make([]texture.Effect, 0),
+		Add:    make(chan texture.Effect, 10),
+	}
+	return p
+}
+
+func CreatePlayerSpawned(local *P, a *msgs.EventPlayerSpawned) *P {
+	p := &P{
+		local:     local,
+		ID:        uint32(a.ID),
+		X:         int(a.Pos.X),
+		Y:         int(a.Pos.Y),
+		Direction: a.Dir,
+		Pos: f64.Vec2{ // pixel value of position
+			float64(a.Pos.X) * constants.TileSize,
+			float64(a.Pos.Y) * constants.TileSize},
+		Nick:      a.Nick,
+		Dead:      a.Dead,
+		MoveSpeed: float64(a.Speed),
+		Armor:     texture.LoadAnimation(assets.DarkArmour),
+		Helmet:    texture.LoadStill(assets.ProHat),
+		Weapon:    texture.LoadAnimation(assets.SpecialSword),
+		Shield:    texture.LoadAnimation(assets.SilverShield),
+		NakedBody: texture.LoadAnimation(assets.NakedBody),
+		Head:      texture.LoadStill(assets.Head),
+		DeadBody:  texture.LoadAnimation(assets.DeadBody),
+		DeadHead:  texture.LoadStill(assets.DeadHead),
 	}
 	p.Effect = &PEffects{
 		p:      p,
@@ -404,13 +406,6 @@ func actionToP(l *P, a *message.PlayerAction) *P {
 
 // maps.YSortable
 func (p *P) ValueY() float64 { return p.Pos[1] }
-
-// thing.Thing
-func (p *P) What() uint32       { return thing.Player }
-func (p *P) Who() uint32        { return p.ID }
-func (p *P) Blocking() bool     { return !p.Dead }
-func (p *P) Is(id uint32) bool  { return id == p.ID }
-func (p *P) Player(uint32) bool { return false }
 
 type PEffects struct {
 	p      *P
@@ -441,12 +436,12 @@ type SpellOffset struct {
 }
 
 var spellOffsets = map[assets.Image]struct{ x, y int }{
-	assets.SpellApoca:      {-50, -80},
+	assets.SpellApoca:      {-50, -90},
 	assets.SpellInmo:       {-30, -55},
 	assets.SpellInmoRm:     {-20, -30},
 	assets.SpellDesca:      {-45, -70},
-	assets.SpellHealWounds: {-22, -20},
-	assets.SpellRevive:     {-28, -40},
+	assets.SpellHealWounds: {-36, -50},
+	assets.SpellRevive:     {-24, -36},
 }
 
 func NewSpellOffset(a assets.Image) *SpellOffset {
@@ -489,7 +484,7 @@ func (adt *AtkDmgFxTxt) EffectFrame() *ebiten.Image {
 }
 
 func (a *AtkDmgFxTxt) EffectOpt(op *ebiten.DrawImageOptions) *ebiten.DrawImageOptions {
-	op.GeoM.Translate(4, -40)
+	op.GeoM.Translate(6, -50)
 	return op
 }
 
@@ -497,7 +492,7 @@ func (pfx *PEffects) Update(counter int) {
 	if nfx, ok := conc.Check(pfx.Add); ok {
 		pfx.active = append(pfx.active, nfx)
 	}
-	if counter%3 == 0 {
+	if counter%2 == 0 {
 		i := 0
 		for _, fx := range pfx.active {
 			if fx.Play() {
@@ -513,9 +508,9 @@ func (pfx *PEffects) Update(counter int) {
 }
 
 func (pfx *PEffects) Draw(screen *ebiten.Image) {
-	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(pfx.p.Pos[0], pfx.p.Pos[1])
 	for _, fx := range pfx.active {
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Translate(pfx.p.Pos[0], pfx.p.Pos[1])
 		screen.DrawImage(fx.EffectFrame(), fx.EffectOpt(op))
 	}
 }

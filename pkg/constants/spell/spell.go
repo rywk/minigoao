@@ -1,27 +1,26 @@
 package spell
 
-type Spell = uint32
+type Spell uint8
 
 const (
-	Inmo Spell = iota
-	InmoRm
-	Apoca
-	Desca
+	Paralize Spell = iota
+	RemoveParalize
 	HealWounds
 	Revive
-
+	ElectricDischarge
+	Explode
 	None
 )
 
-var spells = [None + 1]string{
-	"Inmo",
-	"InmoRm",
-	"Apoca",
-	"Desca",
-
-	"None",
+var spells = [None]string{
+	"Paralize",
+	"RemoveParalize",
+	"HealWounds",
+	"Revive",
+	"ElectricDischarge",
+	"Explode",
 }
 
-func S(s Spell) string {
+func (s Spell) String() string {
 	return spells[s]
 }

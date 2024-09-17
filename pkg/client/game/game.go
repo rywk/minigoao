@@ -2,6 +2,8 @@ package game
 
 import (
 	_ "embed"
+	"encoding/binary"
+	"errors"
 	"fmt"
 	_ "image/png"
 	"log"
@@ -9,78 +11,25 @@ import (
 	"net"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/audio"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
-	"github.com/hajimehoshi/ebiten/v2/examples/resources/fonts"
 	"github.com/rywk/minigoao/pkg/client/audio2d"
 	"github.com/rywk/minigoao/pkg/client/game/player"
 	"github.com/rywk/minigoao/pkg/client/game/typing"
-	"github.com/rywk/minigoao/pkg/conc"
 	"github.com/rywk/minigoao/pkg/constants"
+	"github.com/rywk/minigoao/pkg/constants/assets"
 	"github.com/rywk/minigoao/pkg/constants/direction"
 	"github.com/rywk/minigoao/pkg/constants/potion"
 	"github.com/rywk/minigoao/pkg/constants/spell"
-	"github.com/rywk/minigoao/pkg/maps"
-	"github.com/rywk/minigoao/pkg/messenger"
-	"github.com/rywk/minigoao/pkg/server/world/thing"
-	"github.com/rywk/minigoao/proto/message"
-	"github.com/rywk/minigoao/proto/message/assets"
-	"github.com/rywk/minigoao/proto/message/events"
-	"golang.org/x/image/font"
-	"golang.org/x/image/font/opentype"
+	"github.com/rywk/minigoao/pkg/msgs"
+	"github.com/rywk/minigoao/pkg/server"
+	"github.com/rywk/minigoao/pkg/typ"
+	"golang.design/x/clipboard"
 	"golang.org/x/image/math/f64"
 )
-
-const (
-	titleFontSize = fontSize * 1.5
-	fontSize      = 24
-	smallFontSize = fontSize / 4
-
-	headOffset = -20
-
-	defaultServerAddress = "localhost"
-)
-
-var (
-	titleArcadeFont font.Face
-	arcadeFont      font.Face
-	smallArcadeFont font.Face
-)
-
-func init() {
-	tt, err := opentype.Parse(fonts.PressStart2P_ttf)
-	if err != nil {
-		log.Fatal(err)
-	}
-	const dpi = 72
-	titleArcadeFont, err = opentype.NewFace(tt, &opentype.FaceOptions{
-		Size:    titleFontSize,
-		DPI:     dpi,
-		Hinting: font.HintingFull,
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-	arcadeFont, err = opentype.NewFace(tt, &opentype.FaceOptions{
-		Size:    fontSize,
-		DPI:     dpi,
-		Hinting: font.HintingFull,
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-	smallArcadeFont, err = opentype.NewFace(tt, &opentype.FaceOptions{
-		Size:    smallFontSize,
-		DPI:     dpi,
-		Hinting: font.HintingFull,
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-}
 
 type Mode int
 
@@ -90,45 +39,27 @@ const (
 	ModeOptions
 )
 
+type YSortable interface {
+	ValueY() float64
+	Draw(*ebiten.Image)
+}
+
 type Game struct {
-	mode Mode
+	serverAddress string
+	mode          Mode
+	typer         *typing.Typer
+	latency       string
+	counter       int
+	ms            *msgs.M
+	world         *Map
+	sessionID     uint32
+	players       [constants.MaxConnCount]*player.P
+	playersY      []YSortable
+	player        *player.P
+	outQueue      chan *GameMsg
+	eventQueue    []*GameMsg
+	eventLock     sync.Mutex
 
-	camera *Camera
-
-	typer *typing.Typer
-
-	latency string
-
-	counter int
-
-	// Messaging api
-	m *messenger.M
-
-	// Event handlers
-	ehs     [events.Len]func([]byte)
-	handler *Handler
-
-	// World map info
-	world *Map
-
-	// Player session id given by server
-	sessionID uint32
-
-	// Player map
-	players [constants.MaxConnCount]*player.P
-	// player depth matrix (for drawing)
-	playersY           []maps.YSortable
-	playersYsyncHelper [constants.MaxConnCount]*player.P
-
-	player *player.P
-
-	// events channel
-	gameEvent chan *message.Event
-
-	clientReady chan struct{}
-
-	// Here we listen to what the client wants to do
-	// and return the result to the player
 	client *player.ClientP
 	stats  *Stats
 
@@ -139,18 +70,23 @@ type Game struct {
 	leftForMove       float64 // pixels left to complete tile change
 	lastDir           direction.D
 	lastMoveOkArrived bool
-	moveLatency       time.Time
+	moveStartedAt     time.Time
 	soundPrevWalk     int
+	startForStep      time.Time
 
-	audioContext *audio.Context
-
-	timeForStep  time.Duration
-	startForStep time.Time
-	SoundBoard   *audio2d.SoundBoard
+	SoundBoard *audio2d.SoundBoard
 
 	ViewPort   f64.Vec2
 	ZoomFactor float64
 	Rotation   int
+
+	LastPing    time.Time
+	WaitingPong bool
+}
+
+type GameMsg struct {
+	E    msgs.E
+	Data interface{}
 }
 
 const ScreenWidth, ScreenHeight = 1312, 928
@@ -166,50 +102,68 @@ func NewGame() *Game {
 }
 
 func (g *Game) init() {
-	g.SoundBoard = audio2d.NewSoundBoard()
 	g.mode = ModeRegister
 	g.typer = typing.NewTyper()
+	err := clipboard.Init()
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func (g *Game) StartGame(nick string, address string) {
+	g.SoundBoard = audio2d.NewSoundBoard()
 	g.lastMoveOkArrived = true
 	g.ViewPort = f64.Vec2{ScreenWidth, ScreenHeight}
 	g.ZoomFactor = 1
 	g.lastMove = time.Now()
 	g.keys = NewKeys(nil)
 	g.combatKeys = NewCombatKeys(nil)
-	// Only do map stuff after this
-	g.clientReady = make(chan struct{})
-	close(g.clientReady)
-}
 
-func (g *Game) StartGame(nick string) {
-	tcp, err := net.Dial("tcp4", defaultServerAddress+constants.Port)
+	tcp, err := net.Dial("tcp4", address)
 	if err != nil {
 		log.Fatal(err)
 	}
-	g.m = messenger.New(tcp, nil, nil)
-	g.handler = NewHandler(g)
-	g.gameEvent = make(chan *message.Event, 10)
-	// Start handler
-	go g.handler.TCP()
-	log.Println("Sending register nick")
-	g.handler.SendRegister(nick)
-	// Explicitly wait and process next event.
-	// It has to be the registration ok
-	// This creates the local player
-	g.handler.RegisterOk(<-g.handler.Events)
+
+	nickMsg := make([]byte, 2, len(nick)+2)
+	binary.BigEndian.PutUint16(nickMsg, uint16(len(nick)))
+	tcp.Write(append(nickMsg, []byte(nick)...))
+	log.Printf("sent nick %v\n", nick)
+	g.ms = msgs.New(tcp)
+	im, err := g.ms.Read()
+	if err != nil {
+		panic(err)
+	}
+	if im.Event != msgs.EPlayerLogin {
+		panic("not login response")
+	}
+	login := &msgs.EventPlayerLogin{}
+	msgs.DecodeMsgpack(im.Data, login)
+	g.Login(login)
 	g.playersY = append(g.playersY, g.player)
 	g.stats = NewStats(g, 15, ScreenHeight-95)
-	// After registration was handled
-	// start to consume everything
-	go g.handler.Start()
-	go g.handler.HandleClient()
-	go g.handler.SendPing()
-	g.mode = ModeGame
 
+	g.eventQueue = make([]*GameMsg, 0, 100)
+	g.outQueue = make(chan *GameMsg, 100)
+	g.eventLock = sync.Mutex{}
+
+	go g.WriteEventQueue()
+	go g.WriteToServer()
+
+	g.mode = ModeGame
 	g.SoundBoard.Play(assets.Spawn)
+	log.Printf("Logged in as %v with id [%v] to server %v", g.player.Nick, g.player.ID, address)
 }
 
-func (g *Game) Ready() {
-	<-g.clientReady
+func (g *Game) Login(e *msgs.EventPlayerLogin) {
+	g.sessionID = uint32(e.ID)
+	g.world = NewMap(MapConfigFromPlayerLogin(e))
+	g.player = player.NewLogin(e)
+	g.client = g.player.Client
+	for _, p := range e.VisiblePlayers {
+		g.players[p.ID] = player.CreateFromLogin(g.player, &p)
+		g.players[p.ID].SetSoundboard(g.SoundBoard)
+		g.playersY = append(g.playersY, g.players[p.ID])
+	}
 }
 
 func (g *Game) Update() error {
@@ -219,7 +173,6 @@ func (g *Game) Update() error {
 	case ModeGame:
 		g.updateGame()
 	case ModeOptions:
-
 	}
 	return nil
 }
@@ -227,37 +180,297 @@ func (g *Game) Update() error {
 func (g *Game) updateRegister() {
 	g.typer.Update()
 	text := g.typer.Text()
-	if strings.HasSuffix(text, "\n") {
-		g.StartGame(strings.Trim(text, "\n"))
+	if ebiten.IsMouseButtonPressed(ebiten.MouseButton2) {
+		g.serverAddress = string(clipboard.Read(clipboard.FmtText))
+	}
+	if strings.HasSuffix(text, "\n") && g.serverAddress != "" {
+		g.StartGame(strings.Trim(text, "\n"), g.serverAddress)
+	}
+}
+
+func (g *Game) WriteToServer() {
+	for m := range g.outQueue {
+		g.ms.EncodeAndWrite(m.E, m.Data)
+	}
+}
+
+func (g *Game) WriteEventQueue() {
+	for {
+		im, err := g.ms.Read()
+		if err != nil {
+			g.eventLock.Lock()
+			g.eventQueue = append(g.eventQueue, &GameMsg{E: msgs.EServerDisconnect})
+			g.eventLock.Unlock()
+			return
+		}
+		dim := GameMsg{E: im.Event}
+		switch im.Event {
+		case msgs.EPing:
+		case msgs.EMoveOk:
+			dim.Data = im.Data
+		case msgs.EMeleeOk:
+			dim.Data = msgs.DecodeEventMeleeOk(im.Data)
+		case msgs.ECastSpellOk:
+			dim.Data = msgs.DecodeEventCastSpellOk(im.Data)
+		case msgs.EUseItemOk:
+			dim.Data = msgs.DecodeEventUseItemOk(im.Data)
+		case msgs.EPlayerMoved:
+			dim.Data = msgs.DecodeEventPlayerMoved(im.Data)
+		case msgs.EPlayerMelee:
+			dim.Data = msgs.DecodeEventPlayerMelee(im.Data)
+		case msgs.EPlayerSpell:
+			dim.Data = msgs.DecodeEventPlayerSpell(im.Data)
+		case msgs.EPlayerMeleeRecieved:
+			dim.Data = msgs.DecodeEventPlayerMeleeRecieved(im.Data)
+		case msgs.EPlayerSpellRecieved:
+			dim.Data = msgs.DecodeEventPlayerSpellRecieved(im.Data)
+		case msgs.EPlayerSpawned:
+			msg := &msgs.EventPlayerSpawned{}
+			msgs.DecodeMsgpack(im.Data, msg)
+			dim.Data = msg
+		case msgs.EPlayerLeaveViewport:
+			dim.Data = binary.BigEndian.Uint16(im.Data)
+		case msgs.EPlayerEnterViewport:
+			msg := &msgs.EventPlayerSpawned{}
+			msgs.DecodeMsgpack(im.Data, msg)
+			dim.Data = msg
+		case msgs.EPlayerDespawned:
+			dim.Data = binary.BigEndian.Uint16(im.Data)
+		}
+		g.eventLock.Lock()
+		g.eventQueue = append(g.eventQueue, &dim)
+		g.eventLock.Unlock()
+	}
+}
+
+func (g *Game) Clear() {
+	g.sessionID = 0
+	g.player = nil
+	g.players = [50]*player.P{}
+	g.playersY = []YSortable{}
+}
+
+func (g *Game) ProcessEventQueue() error {
+	g.eventLock.Lock()
+	for _, ev := range g.eventQueue {
+		switch ev.E {
+		case msgs.EServerDisconnect:
+			log.Printf("Server disconnected\n")
+			return errors.New("server disconnected")
+		case msgs.EPing:
+			g.WaitingPong = false
+			g.latency = fmt.Sprintf("%dms", time.Since(g.LastPing).Milliseconds())
+		case msgs.EPlayerDespawned:
+			pid := ev.Data.(uint16)
+			g.DespawnPlayer(pid)
+			log.Printf("Player [%v] despawned\n", pid)
+		case msgs.EPlayerSpawned:
+			event := ev.Data.(*msgs.EventPlayerSpawned)
+			log.Printf("Player [%v] spawned %v\n", event.ID, event.Nick)
+			g.players[event.ID] = player.CreatePlayerSpawned(g.player, event)
+			g.players[event.ID].SetSoundboard(g.SoundBoard)
+			g.playersY = append(g.playersY, g.players[event.ID])
+		case msgs.EPlayerLeaveViewport:
+			pid := ev.Data.(uint16)
+			g.DespawnPlayer(pid)
+			log.Printf("Player [%v] left viewport\n", pid)
+		case msgs.EPlayerEnterViewport:
+			event := ev.Data.(*msgs.EventPlayerSpawned)
+			log.Printf("Player [%v] entered viewport %v\n", event.ID, event.Nick)
+			g.players[event.ID] = player.CreatePlayerSpawned(g.player, event)
+			g.players[event.ID].SetSoundboard(g.SoundBoard)
+			g.playersY = append(g.playersY, g.players[event.ID])
+		case msgs.EPlayerMoved:
+			event := ev.Data.(*msgs.EventPlayerMoved)
+			log.Printf("Player [%v] moved\n", event.ID)
+			g.players[event.ID].AddStep(event)
+		case msgs.EMoveOk:
+			data := ev.Data.([]byte)
+			allowed := data[0] != 0
+			g.player.Direction = direction.D(data[1])
+			log.Printf("Move: %v in %vms, dir: %v\n", allowed, time.Since(g.moveStartedAt).Milliseconds(), direction.S(g.lastDir))
+			g.lastMoveOkArrived = true
+			if allowed {
+				g.lastDir = direction.D(data[1])
+				fromx, fromy := g.player.X, g.player.Y
+				switch g.lastDir {
+				case direction.Front:
+					g.player.Y += 1
+				case direction.Back:
+					g.player.Y -= 1
+				case direction.Left:
+					g.player.X -= 1
+				case direction.Right:
+					g.player.X += 1
+				}
+				g.world.Space.Move(0,
+					typ.P{X: int32(fromx), Y: int32(fromy)},
+					typ.P{X: int32(g.player.X), Y: int32(g.player.Y)})
+				if g.player.Dead {
+					continue
+				}
+				if !g.player.Walking {
+					g.SoundBoard.Play(assets.Walk1)
+					g.soundPrevWalk = 1
+				} else {
+					if g.soundPrevWalk == 1 {
+						g.SoundBoard.Play(assets.Walk2)
+						g.soundPrevWalk = 2
+					} else {
+						g.SoundBoard.Play(assets.Walk1)
+						g.soundPrevWalk = 1
+					}
+				}
+			}
+			if !allowed && g.leftForMove != 0 {
+				goBackPx := float64(constants.TileSize - g.leftForMove)
+				log.Println("move not allowed, go back", goBackPx, "px")
+				switch g.lastDir {
+				case direction.Front:
+					g.player.Pos[1] -= goBackPx
+				case direction.Back:
+					g.player.Pos[1] += goBackPx
+				case direction.Left:
+					g.player.Pos[0] += goBackPx
+				case direction.Right:
+					g.player.Pos[0] -= goBackPx
+				}
+				g.player.Walking = false
+				g.leftForMove = 0
+			}
+
+		case msgs.EMeleeOk:
+			event := ev.Data.(*msgs.EventMeleeOk)
+			log.Printf("CastMeleeOk m: %#v\n", event)
+			if g.player.Dead {
+				break
+			}
+			if !event.Hit {
+				g.SoundBoard.Play(assets.MeleeAir)
+				break
+			}
+			g.SoundBoard.Play(assets.MeleeBlood)
+			g.player.Effect.NewAttackNumber(int(event.Damage))
+			g.players[event.ID].Effect.NewMeleeHit()
+			g.players[event.ID].Dead = event.Killed
+		case msgs.EPlayerMeleeRecieved:
+			event := ev.Data.(*msgs.EventPlayerMeleeRecieved)
+			g.SoundBoard.Play(assets.MeleeBlood)
+			g.player.Effect.NewMeleeHit()
+			log.Printf("RecivedMelee m: %#v\n", event)
+			g.players[event.ID].Effect.NewAttackNumber(int(event.Damage))
+			g.player.Client.HP = int(event.NewHP)
+			if g.player.Client.HP == 0 {
+				g.player.Dead = true
+			}
+		case msgs.EPlayerMelee:
+			event := ev.Data.(*msgs.EventPlayerMelee)
+			log.Printf("EPlayerMelee m: %#v\n", event)
+			if !event.Hit {
+				g.SoundBoard.PlayFrom(assets.MeleeAir, g.player.X, g.player.Y, g.players[event.From].X, g.players[event.From].Y)
+				break
+			}
+			g.SoundBoard.PlayFrom(assets.MeleeBlood, g.player.X, g.player.Y, g.players[event.ID].X, g.players[event.ID].Y)
+			g.players[event.ID].Effect.NewMeleeHit()
+			g.players[event.ID].Dead = event.Killed
+		case msgs.ECastSpellOk:
+			event := ev.Data.(*msgs.EventCastSpellOk)
+			log.Printf("CastSpellOk m: %#v\n", event)
+			g.player.Client.MP = int(event.NewMP)
+			if uint32(event.ID) != g.sessionID {
+				g.player.Effect.NewAttackNumber(int(event.Damage))
+				g.players[event.ID].Effect.NewSpellHit(event.Spell)
+				g.SoundBoard.PlayFrom(assets.SoundFromSpell(event.Spell), g.player.X, g.player.Y, g.players[event.ID].X, g.players[event.ID].Y)
+				g.players[event.ID].Dead = event.Killed
+			}
+		case msgs.EPlayerSpellRecieved:
+			event := ev.Data.(*msgs.EventPlayerSpellRecieved)
+			log.Printf("RecivedSpell m: %#v\n", event)
+			switch event.Spell {
+			case spell.Paralize:
+				g.player.Inmobilized = true
+			case spell.RemoveParalize:
+				g.player.Inmobilized = false
+			case spell.Revive:
+				g.player.Dead = false
+			}
+			caster := g.players[event.ID]
+			if event.ID == uint16(g.sessionID) {
+				caster = g.player
+			}
+			g.SoundBoard.Play(assets.SoundFromSpell(event.Spell))
+			caster.Effect.NewAttackNumber(int(event.Damage))
+			g.player.Effect.NewSpellHit(event.Spell)
+			g.player.Client.HP = int(event.NewHP)
+			if g.player.Client.HP == 0 {
+				g.player.Dead = true
+			}
+		case msgs.EPlayerSpell:
+			event := ev.Data.(*msgs.EventPlayerSpell)
+			log.Printf("SpellHit m: %#v\n", event)
+			g.SoundBoard.PlayFrom(assets.SoundFromSpell(event.Spell), g.player.X, g.player.Y, g.players[event.ID].X, g.players[event.ID].Y)
+			g.players[event.ID].Effect.NewSpellHit(event.Spell)
+			g.players[event.ID].Dead = event.Killed
+		case msgs.EUseItemOk:
+			event := ev.Data.(*msgs.EventUseItemOk)
+			log.Printf("UsePotionOk m: %#v\n", event)
+			switch event.Item {
+			case msgs.Item(server.ItemManaPotion):
+				g.player.Client.MP = int(event.Change)
+			case msgs.Item(server.ItemHealthPotion):
+				g.player.Client.HP = int(event.Change)
+			}
+			g.SoundBoard.Play(assets.Potion)
+		}
+	}
+	g.eventQueue = g.eventQueue[:0]
+	g.eventLock.Unlock()
+	return nil
+}
+
+func (g *Game) pingServer() {
+	if g.counter%120 != 0 || g.WaitingPong {
+		return
+	}
+	g.outQueue <- &GameMsg{E: msgs.EPing}
+	g.WaitingPong = true
+	g.LastPing = time.Now()
+}
+
+func (g *Game) DespawnPlayer(pid uint16) {
+	p := g.players[pid]
+	g.players[pid] = nil
+	if !p.Dead {
+		g.world.Space.Set(0, typ.P{X: int32(p.X), Y: int32(p.Y)}, 0)
+	}
+	for iy, ys := range g.playersY {
+		if py, ok := ys.(*player.P); ok && pid == uint16(py.ID) {
+			g.playersY[iy] = g.playersY[len(g.playersY)-1]
+			g.playersY = g.playersY[:len(g.playersY)-1]
+			break
+		}
 	}
 }
 
 func (g *Game) updateGame() error {
+	if err := g.ProcessEventQueue(); err != nil {
+		g.Clear()
+		g.typer = typing.NewTyper()
+		g.mode = ModeRegister
+		return err
+	}
+	g.pingServer()
 	g.ProcessMovement()
 	g.ProcessCombat()
 	g.world.Update()
-	g.player.Update(g.counter, LocalGrid)
+	g.player.Update(g.counter)
 	g.player.Effect.Update(g.counter)
-	for i, p := range g.players {
+	for _, p := range g.players {
 		if p == nil {
 			continue
 		}
-		if _, ok := conc.Check(p.Kill); ok {
-			log.Printf("despawn player %v\n", p.Nick)
-			g.players[i] = nil
-			if !p.Dead {
-				MustAt(p.X, p.Y).SimpleDespawn(p)
-			}
-			for iy, ys := range g.playersY {
-				if py, ok := ys.(*player.P); ok && i == int(py.ID) {
-					g.playersY[iy] = g.playersY[len(g.playersY)-1]
-					g.playersY = g.playersY[:len(g.playersY)-1]
-					break
-				}
-			}
-			continue
-		}
-		p.Update(g.counter, LocalGrid)
+		p.WalkSteps(g.world.Space)
+		p.Update(g.counter)
 		p.Effect.Update(g.counter)
 	}
 	sort.Slice(g.playersY, func(i, j int) bool {
@@ -269,142 +482,46 @@ func (g *Game) updateGame() error {
 		g.Reset()
 	}
 	g.counter++
+
 	return nil
 }
 
 func (g *Game) ProcessCombat() {
 	if g.combatKeys.MeleeHit() {
-		g.client.CastMelee <- struct{}{}
+		g.outQueue <- &GameMsg{E: msgs.EMelee}
 	}
 	if ok, spellType, x, y := g.combatKeys.CastSpell(); ok {
-		log.Printf("casted spell: %v\n", spell.S(spellType))
 		worldX, worldY := g.ScreenToWorld(x, y)
-		g.client.CastSpell <- &message.CastSpell{
-			X:     uint32(worldX / constants.TileSize),
-			Y:     uint32(worldY / constants.TileSize),
-			Spell: spellType}
+		g.outQueue <- &GameMsg{E: msgs.ECastSpell, Data: &msgs.EventCastSpell{
+			PX:    uint32(worldX),
+			PY:    uint32(worldY),
+			Spell: spellType,
+		}}
 	}
 	if pressedPotion := g.combatKeys.PressedPotion(); pressedPotion != potion.None {
-		g.client.UsePotion <- &message.UsePotion{Type: pressedPotion}
-	}
-	select {
-	case m := <-g.client.CastMeleeOk:
-		log.Printf("CastMeleeOk m: %#v\n", m)
-		if !m.Ok {
-			g.SoundBoard.Play(assets.MeleeAir)
-			break
-		}
-		g.SoundBoard.Play(assets.MeleeBlood)
-		g.player.Effect.NewAttackNumber(int(m.Dmg))
-		g.players[m.Id].Effect.NewMeleeHit()
-	case m := <-g.client.RecivedMelee:
-		g.SoundBoard.Play(assets.MeleeBlood)
-		g.player.Effect.NewMeleeHit()
-		log.Printf("RecivedMelee m: %#v\n", m)
-		g.players[m.Id].Effect.NewAttackNumber(int(m.Dmg))
-		g.player.Client.HP = int(m.Hp)
-		if g.player.Client.HP == 0 {
-			g.player.Dead = true
-		}
-	case m := <-g.client.MeleeHit:
-		log.Printf("MeleeHit m: %#v\n", m)
-		if !m.Ok {
-			g.SoundBoard.PlayFrom(assets.MeleeAir, g.player.X, g.player.Y, g.players[m.From].X, g.players[m.From].Y)
-			break
-		}
-		g.SoundBoard.PlayFrom(assets.MeleeBlood, g.player.X, g.player.Y, g.players[m.To].X, g.players[m.To].Y)
-		g.players[m.To].Effect.NewMeleeHit()
-	case m := <-g.client.CastSpellOk:
-		log.Printf("CastSpellOk m: %#v\n", m)
-		if !m.Ok {
-			break
-		}
-		g.player.Client.MP = int(m.Mp)
-		g.player.Effect.NewAttackNumber(int(m.Dmg))
-		if m.Id == g.sessionID {
-			g.player.Effect.NewSpellHit(m.Spell)
-			g.SoundBoard.Play(assets.SoundFromSpell(m.Spell))
-		} else {
-			g.players[m.Id].Effect.NewSpellHit(m.Spell)
-			g.SoundBoard.PlayFrom(assets.SoundFromSpell(m.Spell), g.player.X, g.player.Y, g.players[m.Id].X, g.players[m.Id].Y)
-		}
-
-	case m := <-g.client.RecivedSpell:
-		log.Printf("RecivedSpell m: %#v\n", m)
-		switch m.Spell {
-		case spell.Inmo:
-			g.player.Inmobilized = true
-		case spell.InmoRm:
-			g.player.Inmobilized = false
-		case spell.Revive:
-			g.player.Dead = false
-		}
-		if m.Id == g.sessionID {
-			break
-		}
-		g.SoundBoard.Play(assets.SoundFromSpell(m.Spell))
-		g.player.Effect.NewSpellHit(m.Spell)
-		g.players[m.Id].Effect.NewAttackNumber(int(m.Dmg))
-		g.player.Client.HP = int(m.Hp)
-		if g.player.Client.HP == 0 {
-			g.player.Dead = true
-		}
-	case m := <-g.client.SpellHit:
-		log.Printf("SpellHit m: %#v\n", m)
-		g.SoundBoard.PlayFrom(assets.SoundFromSpell(m.Spell), g.player.X, g.player.Y, g.players[m.To].X, g.players[m.To].Y)
-		g.players[m.To].Effect.NewSpellHit(m.Spell)
-	case m := <-g.client.UsePotionOk:
-		log.Printf("UsePotionOk m: %#v\n", m)
-		if m.Ok {
-			if m.NewHP != 0 {
-				g.player.Client.HP = int(m.NewHP)
-			} else {
-				g.player.Client.MP = int(m.NewMP)
-			}
-			g.SoundBoard.Play(assets.Potion)
-		}
-	case m := <-g.client.PotionUsed:
-		log.Printf("PotionUsed m: %#v\n", m)
-		g.SoundBoard.PlayFrom(assets.Potion, g.player.X, g.player.Y, int(m.X), int(m.Y))
-	default:
+		g.outQueue <- &GameMsg{E: msgs.EUseItem, Data: pressedPotion}
 	}
 }
 
-func (g *Game) ProcessMovement() {
-	if allowed, ok := conc.Check(g.client.MoveOk); ok {
-		log.Printf("Move: %v in %vms, dir: %v\n", allowed, time.Since(g.moveLatency).Milliseconds(), direction.S(g.lastDir))
-		g.lastMoveOkArrived = true
-		if !allowed {
-			goBackPx := float64(constants.TileSize - g.leftForMove)
-			log.Println("move not allowed, go back", goBackPx, "px")
-			switch g.lastDir {
-			case direction.Front:
-				g.player.Pos[1] -= goBackPx
-			case direction.Back:
-				g.player.Pos[1] += goBackPx
-			case direction.Left:
-				g.player.Pos[0] += goBackPx
-			case direction.Right:
-				g.player.Pos[0] -= goBackPx
-			}
-			g.player.Walking = false
-			g.leftForMove = 0
-		} else {
-			switch g.lastDir {
-			case direction.Front:
-				g.player.Y += 1
-			case direction.Back:
-				g.player.Y -= 1
-			case direction.Left:
-				g.player.X -= 1
-			case direction.Right:
-				g.player.X += 1
-			}
-		}
+func DirToNewPos(p *player.P, d direction.D) (int, int) {
+	switch d {
+	case direction.Front:
+		return p.X, p.Y + 1
+	case direction.Back:
+		return p.X, p.Y - 1
+	case direction.Left:
+		return p.X - 1, p.Y
+	case direction.Right:
+		return p.X + 1, p.Y
 	}
+	return 0, 0
+}
+
+func (g *Game) ProcessMovement() {
+	//if g.counter%2 == 0 {
 	if g.leftForMove > 0 {
-		vel := 3.0
-		if g.leftForMove < vel {
+		vel := g.player.MoveSpeed
+		if g.leftForMove <= vel {
 			vel = g.leftForMove
 		}
 		switch g.lastDir {
@@ -421,42 +538,35 @@ func (g *Game) ProcessMovement() {
 	} else {
 		g.player.Walking = false
 	}
+	//}
+
 	g.keys.ListenMovement()
 	d := g.keys.MovingTo()
-	if g.leftForMove == 0 && g.lastMoveOkArrived && d != direction.Still && time.Since(g.startForStep).Milliseconds() > 90 {
+
+	if g.leftForMove == 0 && g.lastMoveOkArrived && d != direction.Still && time.Since(g.startForStep).Milliseconds() > 50 {
 		g.startForStep = time.Now()
 		g.player.Direction = d
-		x, y := g.client.DirToNewPos(d)
-		t, ok := LocalGrid.At(int16(x), int16(y))
-		if !ok || t.Range(func(u thing.Thing) error {
-			if u != nil && u.Blocking() {
-				return constants.Err{}
-			}
-			return nil
-		}) != nil {
-			g.client.Dir <- d
+		x, y := DirToNewPos(g.player, d)
+		if x < 0 || x >= constants.WorldX || y < 0 || y >= constants.WorldY {
 			return
 		}
+		stuffLayer := g.world.Space.GetSlot(1, typ.P{X: int32(x), Y: int32(y)})
+		if stuffLayer != 0 {
+			if g.player.Direction != g.lastDir {
+				g.moveStartedAt = time.Now()
+				g.outQueue <- &GameMsg{E: msgs.EMove, Data: d}
+			}
+			return
+		}
+
 		if g.player.Inmobilized {
-			g.client.Dir <- d
+			g.moveStartedAt = time.Now()
+			g.outQueue <- &GameMsg{E: msgs.EMove, Data: d}
 			return
 		}
-		if !g.player.Dead {
-			if !g.player.Walking {
-				g.SoundBoard.Play(assets.Walk1)
-				g.soundPrevWalk = 1
-			} else {
-				if g.soundPrevWalk == 1 {
-					g.SoundBoard.Play(assets.Walk2)
-					g.soundPrevWalk = 2
-				} else {
-					g.SoundBoard.Play(assets.Walk1)
-					g.soundPrevWalk = 1
-				}
-			}
-		}
-		g.moveLatency = time.Now()
-		g.client.Move <- d
+
+		g.moveStartedAt = time.Now()
+		g.outQueue <- &GameMsg{E: msgs.EMove, Data: d}
 		g.lastDir = d
 		g.lastMoveOkArrived = false
 		g.leftForMove = constants.TileSize
@@ -475,6 +585,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 }
 
 func (g *Game) drawRegister(screen *ebiten.Image) {
+	ebitenutil.DebugPrintAt(screen, g.serverAddress, HalfScreenX, HalfScreenY/2)
 	g.typer.Draw(screen, HalfScreenX, HalfScreenY)
 }
 
@@ -493,9 +604,6 @@ func (g *Game) drawGame(screen *ebiten.Image) {
 
 	g.combatKeys.ShowSpellPicker(screen)
 	g.stats.Draw(screen)
-}
-
-type Camera struct {
 }
 
 func (g *Game) String() string {

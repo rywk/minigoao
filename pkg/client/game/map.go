@@ -7,21 +7,11 @@ import (
 	"github.com/rywk/minigoao/pkg/client/game/player"
 	"github.com/rywk/minigoao/pkg/client/game/texture"
 	"github.com/rywk/minigoao/pkg/constants"
-	"github.com/rywk/minigoao/pkg/maps"
-	"github.com/rywk/minigoao/pkg/server/world/thing"
-	"github.com/rywk/minigoao/proto/message"
-	"github.com/rywk/minigoao/proto/message/assets"
-	"github.com/rywk/tile"
+	"github.com/rywk/minigoao/pkg/constants/assets"
+	"github.com/rywk/minigoao/pkg/grid"
+	"github.com/rywk/minigoao/pkg/msgs"
+	"github.com/rywk/minigoao/pkg/typ"
 )
-
-// Hmmm, this will be heavy on ram but i think it will make the game way more fluid
-// like for example, dont ask the server to move if you are seeing you cant move..
-var LocalGrid = tile.NewGridOf[thing.Thing](constants.WorldX, constants.WorldY)
-
-func MustAt(x, y int) tile.Tile[thing.Thing] {
-	t, _ := LocalGrid.At(int16(x), int16(y))
-	return t
-}
 
 type MapConfig struct {
 	Width, Height         int
@@ -31,14 +21,14 @@ type MapConfig struct {
 	StuffMapTextures      [][]assets.Image
 }
 
-func MapConfigFromRegisterOk(rok *message.RegisterOk) *MapConfig {
+func MapConfigFromPlayerLogin(p *msgs.EventPlayerLogin) *MapConfig {
 	mc := MapConfig{}
-	log.Println(rok.Id)
+	log.Println(p.ID)
 	mc.Width, mc.Height = constants.PixelWorldX, constants.PixelWorldY
-	mc.StartX, mc.StartY = int(rok.Self.X)*constants.TileSize, int(rok.Self.Y)*constants.TileSize
-	mc.ViewWidth, mc.ViewHeight = int(rok.FovX), int(rok.FovY)
-	mc.GroundMapTextures = maps.MapLayers[maps.Ground]
-	mc.StuffMapTextures = maps.MapLayers[maps.Stuff]
+	mc.StartX, mc.StartY = int(p.Pos.X)*constants.TileSize, int(p.Pos.Y)*constants.TileSize
+	mc.ViewWidth, mc.ViewHeight = int(constants.GridViewportX), int(constants.GridViewportX)
+	mc.GroundMapTextures = MapLayers[Ground]
+	mc.StuffMapTextures = MapLayers[Stuff]
 	return &mc
 }
 
@@ -46,10 +36,13 @@ type Map struct {
 	world      *ebiten.Image
 	floorTiles [][]texture.T
 	stuffTiles [][]texture.T
+	Space      *grid.Grid
 }
 
 func NewMap(c *MapConfig) *Map {
-	m := &Map{}
+	m := &Map{
+		Space: grid.NewGrid(int32(constants.WorldX), int32(constants.WorldY), 3),
+	}
 	// Use config to load textures for floor tiles
 	m.floorTiles = make([][]texture.T, constants.PixelWorldX/texture.GrassTextureSize)
 	for i := range m.floorTiles {
@@ -69,8 +62,7 @@ func NewMap(c *MapConfig) *Map {
 		for j, t := range y {
 			m.stuffTiles[i][j] = texture.LoadTexture(t)
 			if assets.IsSolid(t) {
-				tl, _ := LocalGrid.At(int16(j), int16(i))
-				tl.Add(&thing.Solid{})
+				m.Space.Set(1, typ.P{X: int32(j), Y: int32(i)}, uint16(t))
 			}
 		}
 	}
@@ -110,3 +102,62 @@ func MapSoundToPlayer(p *player.P, x, y int) (float64, float64) {
 	diffX, diffY := p.X-x, p.Y-y
 	return float64(diffX) * 0.08, float64(diffY) * 0.08
 }
+
+// Map Layers
+// - Ground
+// - Stuff
+type Layer uint8
+
+const (
+	Ground Layer = iota
+	Stuff
+	layerTypes
+)
+
+var MapLayers = [layerTypes][][]assets.Image{
+	FillLayer(constants.WorldX, constants.WorldY, assets.Grass),
+	RandomShroomLayer(constants.WorldX, constants.WorldY),
+}
+
+func RandomShroomLayer(width, height int) [][]assets.Image {
+	layer := make([][]assets.Image, height)
+	for y := 0; y < height; y++ {
+		layer[y] = make([]assets.Image, width)
+		// layer[y][30] = assets.Shroom
+		// layer[y][270] = assets.Shroom
+	}
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			// layer[30][x] = assets.Shroom
+			// layer[270][x] = assets.Shroom
+			if x%25 == 0 && y%25 == 0 {
+				layer[y][x] = assets.Shroom
+			}
+
+		}
+	}
+	return layer
+}
+
+func FillLayer(width, height int, a assets.Image) [][]assets.Image {
+	layer := make([][]assets.Image, height)
+	for y := 0; y < height; y++ {
+		layer[y] = make([]assets.Image, width)
+		for x := 0; x < width; x++ {
+			layer[y][x] = a
+		}
+	}
+	return layer
+}
+
+// func FillBlockers(aa [][]assets.Image, g *tile.Grid[thing.Thing]) {
+// 	for y := 0; y < len(aa); y++ {
+// 		for x := 0; x < len(aa[y]); x++ {
+// 			if assets.IsSolid(aa[y][x]) {
+// 				t, _ := g.At(int16(x), int16(y))
+// 				// we dont care about this pointer because it should never be deleted
+// 				t.Add(&thing.Solid{})
+// 			}
+// 		}
+// 	}
+// }

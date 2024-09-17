@@ -44,7 +44,7 @@ var (
 	MeleeHit_png []byte
 	//go:embed spell_apoca.png
 	SpellApoca_png []byte
-	//go:embed spell_desca.png
+	//go:embed spell_desca2.png
 	SpellDesca_png []byte
 	//go:embed spell_inmo.png
 	SpellInmo_png []byte
@@ -54,7 +54,7 @@ var (
 	SpellInmoRm_png []byte
 	//go:embed spell_heal_wounds.png
 	SpellHealWounds_png []byte
-	//go:embed spell_heal_wounds_2.png
+	//go:embed spell_heal_wounds_3.png
 	SpellHealWounds2_png []byte
 	//go:embed spell_revive.png
 	SpellRevive_png []byte

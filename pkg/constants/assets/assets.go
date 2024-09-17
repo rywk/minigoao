@@ -75,13 +75,13 @@ const (
 
 func SoundFromSpell(s spell.Spell) Sound {
 	switch s {
-	case spell.Apoca:
+	case spell.Explode:
 		return SpellApocaSound
-	case spell.Inmo:
+	case spell.Paralize:
 		return SpellInmoSound
-	case spell.InmoRm:
+	case spell.RemoveParalize:
 		return SpellInmoRmSound
-	case spell.Desca:
+	case spell.ElectricDischarge:
 		return SpellDescaSound
 	case spell.HealWounds:
 		return SpellHealWoundsSound

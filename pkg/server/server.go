@@ -1,10 +1,552 @@
 package server
 
 import (
-	"github.com/rywk/minigoao/pkg/server/game"
+	"encoding/binary"
+	"errors"
+	"fmt"
+	"log"
+	"net"
+	"sync/atomic"
+	"time"
+
+	"github.com/rywk/minigoao/pkg/constants"
+	"github.com/rywk/minigoao/pkg/constants/assets"
+	"github.com/rywk/minigoao/pkg/constants/direction"
+	"github.com/rywk/minigoao/pkg/grid"
+	"github.com/rywk/minigoao/pkg/msgs"
+	"github.com/rywk/minigoao/pkg/typ"
 )
 
-func Run() error {
-	g := game.New()
-	return g.Exit()
+type Server struct {
+	tcp       net.Listener
+	port      int
+	connCount atomic.Int32
+	newConn   chan net.Conn
+	game      *Game
 }
+
+func NewServer(port int) *Server {
+	return &Server{
+		port:    port,
+		newConn: make(chan net.Conn, 10),
+	}
+}
+
+func (s *Server) AcceptConnections() {
+	log.Printf("Accepting connections at %v.\n", s.tcp.Addr().String())
+	for {
+		conn, err := s.tcp.Accept()
+		if err != nil {
+			return
+		}
+		log.Printf("accepted conn\n")
+		s.connCount.Add(1)
+		s.newConn <- conn
+	}
+}
+
+func (s *Server) Start() error {
+	var err error
+	s.tcp, err = net.Listen("tcp4", fmt.Sprintf("127.0.0.1:%d", s.port))
+	if err != nil {
+		return err
+	}
+
+	s.game = &Game{
+		newConn:      s.newConn,
+		players:      []*Player{{id: 0}}, // no 0 id
+		playersIndex: make([]uint16, 0),
+		space:        grid.NewGrid(constants.WorldX, constants.WorldY, 2),
+		incomingData: make(chan IncomingMsg, 100),
+	}
+
+	go s.AcceptConnections()
+
+	s.game.Run()
+
+	return nil
+}
+
+type Game struct {
+	newConn      chan net.Conn
+	players      []*Player
+	playersIndex []uint16
+	space        *grid.Grid
+	incomingData chan IncomingMsg
+}
+
+type IncomingMsg struct {
+	ID    uint16
+	Event msgs.E
+	Data  interface{}
+}
+
+func (g *Game) AddPlayer(p *Player) {
+	g.players = append(g.players, p)
+	p.id = uint16(len(g.players) - 1)
+	g.playersIndex = append(g.playersIndex, p.id)
+}
+
+func (g *Game) RemovePlayer(pid uint16) {
+	index := -1
+	for i, id := range g.playersIndex {
+		if pid == id {
+			index = i
+			break
+		}
+	}
+	if index == -1 {
+		return
+	}
+	g.players[pid] = nil
+	g.playersIndex[index] = g.playersIndex[len(g.playersIndex)-1]
+	g.playersIndex = g.playersIndex[:len(g.playersIndex)-1]
+}
+
+func getNick(c net.Conn) (string, error) {
+	strLen := make([]byte, 2)
+	_, err := c.Read(strLen)
+	if err != nil {
+		return "", err
+	}
+	nick := make([]byte, binary.BigEndian.Uint16(strLen))
+	_, err = c.Read(nick)
+	if err != nil {
+		return "", err
+	}
+	return string(nick), nil
+}
+
+func GetNick(c net.Conn) (nick string, err error) {
+	timeout := time.NewTicker(time.Second).C
+	done := make(chan struct{})
+	go func() {
+		nick, err = getNick(c)
+		done <- struct{}{}
+	}()
+	select {
+	case <-timeout:
+		return "", errors.New("nick timeout")
+	case <-done:
+		return nick, err
+	}
+}
+
+func (g *Game) HandleLogin() {
+	log.Printf("Login handler started.\n")
+	for conn := range g.newConn {
+		log.Printf("waiting nick\n")
+		nick, err := GetNick(conn)
+		if err != nil {
+			log.Printf("Get nick error: %v\n", err)
+			conn.Close()
+			continue
+		}
+		log.Printf("got nick [%v]\n", nick)
+		p := &Player{
+			g:             g,
+			m:             msgs.New(conn),
+			pos:           typ.P{X: 50, Y: 50},
+			Send:          make(chan OutMsg, 100),
+			nick:          nick,
+			dir:           direction.Front,
+			speedPxXFrame: 3,
+			speedXTile:    (constants.TileSize / 3) * AverageGameFrame,
+			hp:            333,
+			maxHp:         333,
+			mp:            3333,
+			maxMp:         3333,
+		}
+		g.incomingData <- IncomingMsg{
+			Event: msgs.EPlayerConnect,
+			Data:  p,
+		}
+	}
+}
+
+func (g *Game) AddObjectsToSpace() {
+	for y := 0; y < constants.WorldY; y++ {
+		// g.space.Set(1, typ.P{X: int32(30), Y: int32(y)}, uint16(assets.Shroom))
+		// g.space.Set(1, typ.P{X: int32(270), Y: int32(y)}, uint16(assets.Shroom))
+		for x := 0; x < constants.WorldX; x++ {
+			// g.space.Set(1, typ.P{X: int32(x), Y: int32(30)}, uint16(assets.Shroom))
+			// g.space.Set(1, typ.P{X: int32(x), Y: int32(270)}, uint16(assets.Shroom))
+			if x%25 == 0 && y%25 == 0 {
+				g.space.Set(1, typ.P{X: int32(x), Y: int32(y)}, uint16(assets.Shroom))
+			}
+		}
+	}
+}
+
+func (g *Game) Run() {
+	g.AddObjectsToSpace()
+	go g.HandleLogin()
+	g.consumeIncomingData()
+}
+
+func (g *Game) consumeIncomingData() {
+	log.Printf("Game started.\n")
+	for incomingData := range g.incomingData {
+		player := g.players[incomingData.ID]
+		switch incomingData.Event {
+		case msgs.EPlayerConnect:
+			player = incomingData.Data.(*Player)
+			g.AddPlayer(player)
+			player.Login()
+			log.Printf("LOG IN: %v  [%v] [%v]\n", player.m.IP(), player.nick, player.id)
+		case msgs.EPing:
+			player.Send <- OutMsg{Event: incomingData.Event}
+		case msgs.EPlayerLogout:
+			g.RemovePlayer(player.id)
+			player.Logout()
+			log.Printf("LOG OUT: %v  [%v] [%v]\n", player.m.IP(), player.nick, player.id)
+		case msgs.EMove:
+			g.playerMove(player, incomingData)
+		case msgs.ECastSpell:
+			g.playerCastSpell(player, incomingData)
+		case msgs.EMelee:
+			g.playerMelee(player)
+		case msgs.EUseItem:
+			item := ItemType(incomingData.Data.(msgs.Item))
+			log.Printf("[%v][%v] USE ITEM %v\n", player.id, player.nick, item)
+			changed := UseItem(item, player)
+			player.Send <- OutMsg{Event: msgs.EUseItemOk, Data: &msgs.EventUseItemOk{
+				Item:   msgs.Item(item),
+				Change: changed,
+			}}
+		}
+	}
+}
+
+const AverageGameFrame = time.Duration((time.Millisecond * 16) + (6 * (time.Millisecond / 10)))
+
+func (g *Game) playerMove(player *Player, incomingData IncomingMsg) {
+	player.dir = incomingData.Data.(direction.D)
+	np := player.pos
+	switch player.dir {
+	case direction.Front:
+		np.Y++
+	case direction.Back:
+		np.Y--
+	case direction.Left:
+		np.X--
+	case direction.Right:
+		np.X++
+	}
+	var err error
+	if player.paralized {
+		err = errors.New("player paralized")
+	} else if block := g.space.GetSlot(1, np); block != 0 {
+		err = errors.New("map object blocking")
+	} else {
+		err = g.space.Move(0, player.pos, np)
+	}
+	if err != nil {
+		player.Send <- OutMsg{Event: msgs.EMoveOk, Data: []byte{msgs.BoolByte(false), player.dir}}
+		g.space.Notify(np, msgs.EPlayerMoved, &msgs.EventPlayerMoved{
+			ID:  player.id,
+			Pos: player.pos,
+			Dir: player.dir,
+		}, player.id)
+		log.Printf("[%v] %v -X-> %v: %v\n", player.nick, player.pos, np, err)
+		return
+	}
+	player.lastMove = time.Now()
+	log.Printf("[%v][%v] MOVE %v->%v\n", player.id, player.nick, player.pos, np)
+	player.obs.MoveOne(player.dir, func(x, y int32) {
+		newPlayerInSight := g.space.GetSlot(0, typ.P{X: x, Y: y})
+		if newPlayerInSight == 0 {
+			return
+		}
+		newPlayer := g.players[newPlayerInSight]
+		newPlayer.Send <- OutMsg{Event: msgs.EPlayerEnterViewport, Data: &msgs.EventPlayerEnterViewport{
+			ID:    player.id,
+			Nick:  player.nick,
+			Pos:   player.pos,
+			Dir:   player.dir,
+			Dead:  player.dead,
+			Speed: uint8(player.speedPxXFrame),
+		}}
+		player.Send <- OutMsg{Event: msgs.EPlayerEnterViewport, Data: &msgs.EventPlayerEnterViewport{
+			ID:    uint16(newPlayer.id),
+			Nick:  newPlayer.nick,
+			Pos:   newPlayer.pos,
+			Dir:   newPlayer.dir,
+			Dead:  newPlayer.dead,
+			Speed: uint8(newPlayer.speedPxXFrame),
+		}}
+	}, func(x, y int32) {
+		newPlayerOutSight := g.space.GetSlot(0, typ.P{X: x, Y: y})
+		if newPlayerOutSight == 0 {
+			return
+		}
+		newPlayerOut := g.players[newPlayerOutSight]
+		newPlayerOut.Send <- OutMsg{Event: msgs.EPlayerLeaveViewport, Data: player.id}
+		player.Send <- OutMsg{Event: msgs.EPlayerLeaveViewport, Data: uint16(newPlayerOut.id)}
+	})
+	g.space.Notify(np, msgs.EPlayerMoved, &msgs.EventPlayerMoved{
+		ID:  player.id,
+		Pos: np,
+		Dir: player.dir,
+	}, player.id)
+	player.pos = np
+	player.Send <- OutMsg{Event: msgs.EMoveOk, Data: []byte{msgs.BoolByte(true), player.dir}}
+}
+
+func (g *Game) playerCastSpell(player *Player, incomingData IncomingMsg) {
+	ev := incomingData.Data.(*msgs.EventCastSpell)
+	log.Printf("[%v][%v] SPELL %v at [%v %v]\n", player.id, player.nick, ev.Spell.String(), ev.PX, ev.PY)
+	hitPlayer := g.CheckSpellTargets(typ.P{X: int32(ev.PX), Y: int32(ev.PY)})
+	if hitPlayer == 0 {
+		log.Printf("missed all hitboxs\n")
+		return
+	}
+	targetPlayer := g.players[hitPlayer]
+	dmg, err := Cast(GetSpellProp(ev.Spell), player, targetPlayer)
+	if err != nil {
+		return
+	}
+	if dmg < 0 {
+		dmg = -dmg
+	}
+	g.space.Notify(targetPlayer.pos, msgs.EPlayerSpell, &msgs.EventPlayerSpell{
+		ID:     uint16(hitPlayer),
+		Spell:  ev.Spell,
+		Killed: targetPlayer.dead,
+	}, player.id, uint16(targetPlayer.id))
+	player.Send <- OutMsg{Event: msgs.ECastSpellOk, Data: &msgs.EventCastSpellOk{
+		ID:     uint16(hitPlayer),
+		Damage: uint32(dmg),
+		NewMP:  uint32(player.mp),
+		Spell:  ev.Spell,
+		Killed: targetPlayer.dead,
+	}}
+	targetPlayer.Send <- OutMsg{Event: msgs.EPlayerSpellRecieved, Data: &msgs.EventPlayerSpellRecieved{
+		ID:     player.id,
+		Spell:  ev.Spell,
+		Damage: uint32(dmg),
+		NewHP:  uint32(targetPlayer.hp),
+	}}
+}
+
+func (g *Game) playerMelee(player *Player) {
+	np := player.pos
+	switch player.dir {
+	case direction.Front:
+		np.Y++
+	case direction.Back:
+		np.Y--
+	case direction.Left:
+		np.X--
+	case direction.Right:
+		np.X++
+	}
+	log.Printf("[%v][%v] MELEE at %v to %v\n", player.id, player.nick, player.pos, np)
+	if player.dead {
+		player.Send <- OutMsg{Event: msgs.EMeleeOk, Data: &msgs.EventMeleeOk{}}
+		return
+	}
+	targetId := g.space.GetSlot(0, np)
+	dmg := int32(0)
+	killed := false
+	if targetId != 0 {
+		targetPlayer := g.players[targetId]
+		if !targetPlayer.dead {
+			dmg = Melee(player, targetPlayer)
+			targetPlayer.Send <- OutMsg{Event: msgs.EPlayerMeleeRecieved, Data: &msgs.EventPlayerMeleeRecieved{
+				ID:     player.id,
+				Damage: uint32(dmg),
+				NewHP:  uint32(targetPlayer.hp),
+			}}
+		} else {
+			targetId = 0
+		}
+		killed = targetPlayer.dead
+	}
+	g.space.Notify(player.pos, msgs.EPlayerMelee, &msgs.EventPlayerMelee{
+		From:   player.id,
+		ID:     targetId,
+		Hit:    targetId != 0,
+		Killed: killed,
+	}, player.id, targetId)
+	player.Send <- OutMsg{Event: msgs.EMeleeOk, Data: &msgs.EventMeleeOk{
+		ID:     targetId,
+		Damage: uint32(dmg),
+		Hit:    targetId != 0,
+		Killed: killed,
+	}}
+}
+
+type Player struct {
+	g    *Game
+	obs  *grid.Obs
+	m    *msgs.M
+	Send chan OutMsg
+	id   uint16
+	nick string
+	pos  typ.P
+	dir  direction.D
+
+	lastMove      time.Time
+	speedXTile    time.Duration
+	speedPxXFrame int32
+
+	paralized bool
+	dead      bool
+	hp        int32
+	maxHp     int32
+	mp        int32
+	maxMp     int32
+
+	spellCD Cooldown
+	meleeCD Cooldown
+	itemCD  Cooldown
+}
+
+type OutMsg struct {
+	Event msgs.E
+	Data  interface{}
+}
+
+func (p *Player) HandleOutgoingMessages() {
+	for {
+		select {
+		case m := <-p.Send:
+			p.m.EncodeAndWrite(m.Event, m.Data)
+		case ev, ok := <-p.obs.Events:
+			if !ok {
+				return
+			}
+			if ev.HasID(uint16(p.id)) {
+				continue
+			}
+			p.m.EncodeAndWrite(ev.E, ev.Data)
+		}
+	}
+}
+
+func (p *Player) HandleIncomingMessages() {
+	for {
+
+		im, err := p.m.Read()
+		if err != nil {
+			p.g.incomingData <- IncomingMsg{
+				ID:    uint16(p.id),
+				Event: msgs.EPlayerLogout,
+			}
+			return
+		}
+		msg := IncomingMsg{
+			ID:    uint16(p.id),
+			Event: im.Event,
+		}
+		//log.Printf("recieved %v from %v", im.Event.String(), p.nick)
+		switch im.Event {
+		case msgs.EPing:
+		case msgs.EMove:
+			msg.Data = direction.D(im.Data[0])
+		case msgs.ECastSpell:
+			msg.Data = msgs.DecodeEventCastSpell(im.Data)
+		case msgs.EMelee:
+		case msgs.EUseItem:
+			msg.Data = msgs.Item(im.Data[0])
+		default:
+			log.Printf("HandleIncomingMessages unknown event\n")
+			continue
+		}
+		p.g.incomingData <- msg
+	}
+}
+
+var playerHitbox = typ.Rect{Min: typ.P{X: -13, Y: -40}, Max: typ.P{X: 13, Y: 16}}
+
+func (p *Player) CalcHitbox() typ.Rect {
+	tilePxCenter := typ.P{
+		X: (p.pos.X * constants.TileSize) + (constants.TileSize / 2),
+		Y: (p.pos.Y * constants.TileSize) + (constants.TileSize / 2),
+	}
+	sinceMoved := time.Since(p.lastMove)
+	if sinceMoved >= p.speedXTile {
+		return playerHitbox.OnPoint(tilePxCenter)
+	}
+	off := constants.TileSize - int32((sinceMoved/AverageGameFrame))*p.speedPxXFrame
+	switch p.dir {
+	case direction.Back:
+		tilePxCenter.Y = tilePxCenter.Y + off
+	case direction.Front:
+		tilePxCenter.Y = tilePxCenter.Y - off
+	case direction.Left:
+		tilePxCenter.X = tilePxCenter.X + off
+	case direction.Right:
+		tilePxCenter.X = tilePxCenter.X - off
+	}
+	return playerHitbox.OnPoint(tilePxCenter)
+}
+
+func checkSpawn(g *grid.Grid, spawn typ.P) typ.P {
+	empty := func(p typ.P) bool {
+		return g.GetSlot(0, p)+g.GetSlot(1, p) == 0
+	}
+	sign := int32(1)
+	for {
+		if empty(spawn) {
+			return spawn
+		}
+		spawn.X += sign
+		if spawn.X >= g.Rect.Max.X || spawn.X < 0 {
+			spawn.X += -sign
+			spawn.Y++
+			sign = -sign
+		}
+	}
+}
+
+func (p *Player) Login() {
+	p.pos = checkSpawn(p.g.space, p.pos)
+	loginEvent := &msgs.EventPlayerLogin{
+		ID:    uint16(p.id),
+		Nick:  p.nick,
+		Pos:   p.pos,
+		Dir:   p.dir,
+		HP:    p.hp,
+		MaxHP: p.maxHp,
+		MP:    p.mp,
+		MaxMP: p.maxMp,
+		Speed: uint8(p.speedPxXFrame),
+	}
+	p.obs = grid.NewObserverRange(p.g.space, p.pos,
+		constants.GridViewportX, constants.GridViewportY,
+		func(t *grid.Tile) {
+			if t.Layers[0] != 0 {
+				log.Print(t.Layers[0])
+				vp := p.g.players[t.Layers[0]]
+				loginEvent.VisiblePlayers = append(loginEvent.VisiblePlayers, msgs.EventNewPlayer{
+					ID:    uint16(vp.id),
+					Nick:  vp.nick,
+					Pos:   vp.pos,
+					Dir:   vp.dir,
+					Speed: uint8(vp.speedPxXFrame),
+				})
+			}
+		},
+	)
+	p.g.space.Set(0, p.pos, uint16(p.id))
+	go p.HandleIncomingMessages()
+	go p.HandleOutgoingMessages()
+	p.m.WriteWithLen(msgs.EPlayerLogin, msgs.EncodeMsgpack(loginEvent))
+	p.g.space.Notify(p.pos, msgs.EPlayerSpawned, &msgs.EventPlayerSpawned{
+		ID:    uint16(p.id),
+		Nick:  p.nick,
+		Pos:   p.pos,
+		Dir:   p.dir,
+		Speed: uint8(p.speedPxXFrame),
+	}, uint16(p.id))
+}
+
+func (p *Player) Logout() {
+	p.obs.Nuke()
+	p.g.space.Unset(0, p.pos)
+	p.g.space.Notify(p.pos, msgs.EPlayerDespawned, uint16(p.id), uint16(p.id))
+}
+
+// Attacks

@@ -8,9 +8,9 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/rywk/minigoao/pkg/client/game/assets/img"
+	asset "github.com/rywk/minigoao/pkg/constants/assets"
 	"github.com/rywk/minigoao/pkg/constants/direction"
 	"github.com/rywk/minigoao/pkg/constants/spell"
-	asset "github.com/rywk/minigoao/proto/message/assets"
 )
 
 const GrassTextureSize = 128
@@ -391,13 +391,13 @@ func Decode(bs []byte) *ebiten.Image {
 
 func AssetFromSpell(s spell.Spell) asset.Image {
 	switch s {
-	case spell.Apoca:
+	case spell.Explode:
 		return asset.SpellApoca
-	case spell.Inmo:
+	case spell.Paralize:
 		return asset.SpellInmo
-	case spell.InmoRm:
+	case spell.RemoveParalize:
 		return asset.SpellInmoRm
-	case spell.Desca:
+	case spell.ElectricDischarge:
 		return asset.SpellDesca
 	case spell.Revive:
 		return asset.SpellRevive
