@@ -3,119 +3,195 @@ package game
 import (
 	"fmt"
 	"image"
+	"image/color"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/rywk/minigoao/pkg/client/game/assets/img"
 	"github.com/rywk/minigoao/pkg/client/game/texture"
+	"github.com/rywk/minigoao/pkg/constants/spell"
+	"github.com/rywk/minigoao/pkg/typ"
 )
 
-type Stats struct {
-	modeBig      bool
-	x, y         float64
-	moving       bool
-	moveX, moveY float64
-	g            *Game
+type Checkbox struct {
+	Pos           typ.P
+	W, H          int32
+	LastPressed   time.Time
+	Cooldown      time.Duration
+	ImgOn, ImgOff *ebiten.Image
+	On            bool
+}
+
+func NewCheckbox(pos typ.P, on, off *ebiten.Image) *Checkbox {
+	return &Checkbox{
+		Pos:         pos,
+		W:           int32(on.Bounds().Dx()),
+		H:           int32(on.Bounds().Dy()),
+		LastPressed: time.Now(),
+		Cooldown:    time.Millisecond * 700,
+		ImgOn:       on,
+		ImgOff:      off,
+		On:          false,
+	}
+}
+
+func (b *Checkbox) Draw(screen *ebiten.Image) {
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(float64(b.Pos.X), float64(b.Pos.Y))
+	if b.On {
+		screen.DrawImage(b.ImgOn, op)
+	} else {
+		screen.DrawImage(b.ImgOff, op)
+	}
+}
+
+func (b *Checkbox) Update() {
+	cx, cy := ebiten.CursorPosition()
+	if cx > int(b.Pos.X) && cx < int(b.Pos.X+b.W) && cy > int(b.Pos.Y) && cy < int(b.Pos.Y+b.H) {
+		if ebiten.IsMouseButtonPressed(ebiten.MouseButton0) && time.Since(b.LastPressed) > b.Cooldown {
+			b.LastPressed = time.Now()
+			b.On = !b.On
+		}
+	}
+}
+
+type Hud struct {
+	x, y float64
+	g    *Game
 
 	modeSwitchCooldown time.Duration
 	lastSwitch         time.Time
 
-	bigBarOffsetStart, bigBarOffsetEnd int
-	bigStatsPlaceholder                *ebiten.Image
-	bigHpBar, bigMpBar                 *ebiten.Image
-	bigHpBarRect, bigMpBarRect         image.Rectangle
+	barOffsetStart, barOffsetEnd int
+	hpBar, mpBar                 *ebiten.Image
+	hpBarRect, mpBarRect         image.Rectangle
 
-	miniBarOffsetStart, miniBarOffsetEnd int
-	miniStatsPlaceholder                 *ebiten.Image
-	miniHpBar, miniMpBar                 *ebiten.Image
-	miniHpBarRect, miniMpBarRect         image.Rectangle
+	hudBg *ebiten.Image
+
+	spellIconImgs    *ebiten.Image
+	selectedSpellImg *ebiten.Image
+
+	bluePotionImg, redPotionImg *ebiten.Image
+
+	potionSignal          time.Duration
+	manaPotionSignalImg   *ebiten.Image
+	healthPotionSignalImg *ebiten.Image
+	potionAlpha           uint8
 }
 
-func NewStats(g *Game, x, y float64) *Stats {
-	return &Stats{
-		modeBig:             true,
-		modeSwitchCooldown:  time.Millisecond * 700,
-		lastSwitch:          time.Now(),
-		x:                   x,
-		y:                   y,
-		g:                   g,
-		bigBarOffsetStart:   32,
-		bigBarOffsetEnd:     6,
-		bigStatsPlaceholder: texture.Decode(img.PlaceholderStats_png),
-		bigHpBar:            texture.Decode(img.BigHPBar_png),
-		bigMpBar:            texture.Decode(img.BigMPBar_png),
+func NewHud(g *Game) *Hud {
+	s := &Hud{
+		g:                  g,
+		lastSwitch:         time.Now(),
+		modeSwitchCooldown: time.Millisecond * 700,
+		barOffsetStart:     32,
+		barOffsetEnd:       6,
 
-		miniBarOffsetStart:   14,
-		miniBarOffsetEnd:     4,
-		miniStatsPlaceholder: texture.Decode(img.MiniPlaceholderStats_png),
-		miniHpBar:            texture.Decode(img.MiniHPBar_png),
-		miniMpBar:            texture.Decode(img.MiniMPBar_png),
+		hpBar: texture.Decode(img.HpBar_png),
+		mpBar: texture.Decode(img.MpBar_png),
+
+		hudBg:            texture.Decode(img.HudBg_png),
+		spellIconImgs:    texture.Decode(img.SpellbarIcons2_png),
+		selectedSpellImg: texture.Decode(img.SpellSelector_png),
+		bluePotionImg:    texture.Decode(img.BluePotion_png),
+		redPotionImg:     texture.Decode(img.RedPotion_png),
+
+		potionSignal:          time.Millisecond * 300,
+		manaPotionSignalImg:   ebiten.NewImage(32, 32),
+		healthPotionSignalImg: ebiten.NewImage(32, 32),
+		potionAlpha:           0,
 	}
+	s.x = 0
+	s.y = float64(ScreenHeight - s.hudBg.Bounds().Dy())
+	return s
 }
 
-func (s *Stats) Update() {
-	s.Move()
-	if s.modeBig {
-		hp := mapValue(float64(s.g.client.HP), 0, float64(s.g.client.MaxHP), float64(s.bigBarOffsetStart), float64(s.bigHpBar.Bounds().Max.X-s.bigBarOffsetEnd))
-		s.bigHpBarRect = image.Rect(s.bigHpBar.Bounds().Min.X, s.bigHpBar.Bounds().Min.Y, int(hp), s.bigHpBar.Bounds().Max.Y)
+func RedAlpha(a uint8) color.Color {
+	return color.RGBA{174, 0, 18, a}
+}
+func BlueAlpha(a uint8) color.Color {
+	return color.RGBA{0, 18, 174, a}
+}
 
-		mp := mapValue(float64(s.g.client.MP), 0, float64(s.g.client.MaxMP), float64(s.bigBarOffsetStart), float64(s.bigMpBar.Bounds().Max.X-s.bigBarOffsetEnd))
-		s.bigMpBarRect = image.Rect(s.bigMpBar.Bounds().Min.X, s.bigMpBar.Bounds().Min.Y, int(mp), s.bigMpBar.Bounds().Max.Y)
-	} else {
-		hp := mapValue(float64(s.g.client.HP), 0, float64(s.g.client.MaxHP), float64(s.miniBarOffsetStart), float64(s.miniHpBar.Bounds().Max.X-s.miniBarOffsetEnd))
-		s.miniHpBarRect = image.Rect(s.miniHpBar.Bounds().Min.X, s.miniHpBar.Bounds().Min.Y, int(hp), s.miniHpBar.Bounds().Max.Y)
+func (s *Hud) Update() {
 
-		mp := mapValue(float64(s.g.client.MP), 0, float64(s.g.client.MaxMP), float64(s.miniBarOffsetStart), float64(s.miniMpBar.Bounds().Max.X-s.miniBarOffsetEnd))
-		s.miniMpBarRect = image.Rect(s.miniMpBar.Bounds().Min.X, s.miniMpBar.Bounds().Min.Y, int(mp), s.miniMpBar.Bounds().Max.Y)
+	if s.potionAlpha > 0 {
+		s.potionAlpha -= 2
 	}
+	hp := mapValue(float64(s.g.client.HP), 0, float64(s.g.client.MaxHP), float64(s.barOffsetStart), float64(s.hpBar.Bounds().Max.X-s.barOffsetEnd))
+	s.hpBarRect = image.Rect(s.hpBar.Bounds().Min.X, s.hpBar.Bounds().Min.Y, int(hp), s.hpBar.Bounds().Max.Y)
+
+	mp := mapValue(float64(s.g.client.MP), 0, float64(s.g.client.MaxMP), float64(s.barOffsetStart), float64(s.mpBar.Bounds().Max.X-s.barOffsetEnd))
+	s.mpBarRect = image.Rect(s.mpBar.Bounds().Min.X, s.mpBar.Bounds().Min.Y, int(mp), s.mpBar.Bounds().Max.Y)
+
 }
 
-func (s *Stats) Draw(screen *ebiten.Image) {
+func (s *Hud) Draw(screen *ebiten.Image) {
 	op := &ebiten.DrawImageOptions{}
-	if s.modeBig {
-		op.GeoM.Translate(s.x, s.y)
-		screen.DrawImage(s.bigStatsPlaceholder, op)
-		screen.DrawImage(s.bigHpBar.SubImage(s.bigHpBarRect).(*ebiten.Image), op)
-		screen.DrawImage(s.bigMpBar.SubImage(s.bigMpBarRect).(*ebiten.Image), op)
-		ebitenutil.DebugPrintAt(screen, fmt.Sprintf("%v", s.g.client.HP), int(s.x)+250, int(s.y)+13)
-		ebitenutil.DebugPrintAt(screen, fmt.Sprintf("%v", s.g.client.MP), int(s.x)+250, int(s.y)+50)
-		ebitenutil.DebugPrintAt(screen, fmt.Sprintf("%v", s.g.player.X), int(s.x)+6, int(s.y)+24)
-		ebitenutil.DebugPrintAt(screen, fmt.Sprintf("%v", s.g.player.Y), int(s.x)+6, int(s.y)+44)
-	} else {
-		op.GeoM.Translate(s.x, s.y)
-		screen.DrawImage(s.miniStatsPlaceholder, op)
-		screen.DrawImage(s.miniHpBar.SubImage(s.miniHpBarRect).(*ebiten.Image), op)
-		screen.DrawImage(s.miniMpBar.SubImage(s.miniMpBarRect).(*ebiten.Image), op)
-	}
+	op.GeoM.Translate(s.x, s.y)
+	screen.DrawImage(s.hudBg, op)
+	op = &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(s.x, s.y)
+	screen.DrawImage(s.hpBar.SubImage(s.hpBarRect).(*ebiten.Image), op)
+	screen.DrawImage(s.mpBar.SubImage(s.mpBarRect).(*ebiten.Image), op)
+	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("%v", s.g.client.HP), int(s.x)+250, int(s.y)+10)
+	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("%v", s.g.client.MP), int(s.x)+250, int(s.y)+38)
+	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("%v", s.g.player.X), int(s.x)+7, int(s.y)+12)
+	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("%v", s.g.player.Y), int(s.x)+7, int(s.y)+35)
+	s.ShowSpellPicker(screen)
+	// if s.potionAlpha != 0 {
+	// 	if s.g.lastPotionUsed == msgs.Item(potion.Blue) {
+	// 		s.manaPotionSignalImg.Clear()
+	// 		s.manaPotionSignalImg.Fill(BlueAlpha(uint8(s.potionAlpha)))
+	// 		op := &ebiten.DrawImageOptions{}
+	// 		op.GeoM.Translate(s.x+304, s.y+32)
+	// 		screen.DrawImage(s.manaPotionSignalImg, op)
+	// 	} else if s.g.lastPotionUsed == msgs.Item(potion.Red) {
+	// 		s.healthPotionSignalImg.Clear()
+	// 		s.healthPotionSignalImg.Fill()
+	// 		s.healthPotionSignalImg.Fill(RedAlpha(uint8(s.potionAlpha)))
+	// 		op := &ebiten.DrawImageOptions{}
+	// 		op.GeoM.Translate(s.x+304, s.y)
+	// 		screen.DrawImage(s.healthPotionSignalImg, op)
+	// 	}
+	// }
+	op = &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(s.x+304, s.y)
+	screen.DrawImage(s.redPotionImg, op)
+	op = &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(s.x+304, s.y+32)
+	screen.DrawImage(s.bluePotionImg, op)
+
 }
 
-func (s *Stats) Move() {
-	cx, cy := ebiten.CursorPosition()
-	if cx > int(s.x)+2 && cx < int(s.x)+10 && cy > int(s.y)+2 && cy < int(s.y)+10 {
-		if ebiten.IsMouseButtonPressed(ebiten.MouseButton0) && time.Since(s.lastSwitch) > s.modeSwitchCooldown {
-			s.modeBig = !s.modeBig
-			s.lastSwitch = time.Now()
-		}
+func (s *Hud) ShowSpellPicker(screen *ebiten.Image) {
+	op := &ebiten.DrawImageOptions{}
+	spellsX, spellsY := float64(ScreenWidth-340), s.y
+	op.GeoM.Translate(spellsX, spellsY)
+	spellsX -= 10
+	opselect := &ebiten.DrawImageOptions{}
+	switch s.g.combatKeys.spell {
+	case spell.Resurrect:
+		opselect.GeoM.Translate(float64(spellsX+22), float64(spellsY))
+		screen.DrawImage(s.selectedSpellImg, opselect)
+	case spell.HealWounds:
+		opselect.GeoM.Translate(float64(spellsX+77), float64(spellsY))
+		screen.DrawImage(s.selectedSpellImg, opselect)
+	case spell.RemoveParalize:
+		opselect.GeoM.Translate(float64(spellsX+132), float64(spellsY))
+		screen.DrawImage(s.selectedSpellImg, opselect)
+	case spell.Paralize:
+		opselect.GeoM.Translate(float64(spellsX+184), float64(spellsY))
+		screen.DrawImage(s.selectedSpellImg, opselect)
+	case spell.ElectricDischarge:
+		opselect.GeoM.Translate(float64(spellsX+234), float64(spellsY))
+		screen.DrawImage(s.selectedSpellImg, opselect)
+	case spell.Explode:
+		opselect.GeoM.Translate(float64(spellsX+288), float64(spellsY))
+		screen.DrawImage(s.selectedSpellImg, opselect)
 	}
-	var rect image.Rectangle
-	if s.modeBig {
-		rect = s.bigStatsPlaceholder.Bounds()
-	} else {
-		rect = s.miniStatsPlaceholder.Bounds()
-	}
-	if cx > int(s.x)+rect.Min.X && cx < int(s.x)+rect.Max.X && cy > int(s.y)+rect.Min.Y && cy < int(s.y)+rect.Max.Y || s.moving {
-		if ebiten.IsMouseButtonPressed(ebiten.MouseButton0) {
-			if !s.moving {
-				s.moveX = float64(cx) - s.x
-				s.moveY = float64(cy) - s.y
-			}
-			s.moving = true
-			s.x, s.y = float64(cx)-s.moveX, float64(cy)-s.moveY
-		} else {
-			s.moving = false
-		}
-	}
+	screen.DrawImage(s.spellIconImgs, op)
 }
 
 func mapValue(v, start1, stop1, start2, stop2 float64) float64 {

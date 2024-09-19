@@ -2,6 +2,7 @@ package msgs
 
 import (
 	"encoding/binary"
+	"fmt"
 	"log"
 	"net"
 	"unsafe"
@@ -41,6 +42,10 @@ var (
 	// second 4 bytes reserved for event type
 	eventTypeLen = 1
 )
+
+func (m *M) Close() {
+	m.c.Close()
+}
 
 // Read blocks until a new event is read from the tcp byte stream.
 func (m *M) Read() (*IncomingData, error) {
@@ -118,6 +123,7 @@ type E uint8
 
 const (
 	EPing E = iota
+	ERegister
 	EServerDisconnect
 	EMove
 	ECastSpell
@@ -150,6 +156,7 @@ const mapCoordinateSize = int(unsafe.Sizeof(uint32(0)))
 
 var eventLen = [ELen]int{
 	1,       // EPing
+	-1,      // ERegister
 	0,       // EServerDisconnect
 	1,       // EMove - 1 byte (uint8) to define the direction.
 	1 + 4*2, // ECastSpell - 1 byte (uint8) to define the spell picked in the client side. x, y map coords are 2 uint32
@@ -178,6 +185,8 @@ var eventLen = [ELen]int{
 
 var eventString = [ELen]string{
 	"EPing",
+	"ERegister",
+	"EServerDisconnect",
 	"EMove",
 	"ECastSpell",
 	"EMelee",
@@ -203,6 +212,10 @@ var eventString = [ELen]string{
 	"EPlayerMeleeRecieved",
 }
 
+func (e E) Valid() bool {
+	return e < ELen
+}
+
 func (e E) Len() int {
 	return eventLen[e]
 }
@@ -211,47 +224,50 @@ func (e E) String() string {
 	return eventString[e]
 }
 
-func (m *M) EncodeAndWrite(e E, msg interface{}) {
+func (m *M) EncodeAndWrite(e E, msg interface{}) error {
 	switch e {
 	case EPing:
-		m.Write(e, nil)
+		return m.Write(e, nil)
+	case ERegister:
+		return m.WriteWithLen(e, EncodeMsgpack(msg.(*EventRegister)))
 	case EMove:
-		m.Write(e, []byte{msg.(uint8)})
+		return m.Write(e, []byte{msg.(uint8)})
 	case ECastSpell:
-		m.Write(e, EncodeEventCastSpell(msg.(*EventCastSpell)))
+		return m.Write(e, EncodeEventCastSpell(msg.(*EventCastSpell)))
 	case EMelee:
 		log.Print("writing melee")
-		m.Write(e, make([]byte, EMelee.Len()))
+		return m.Write(e, make([]byte, EMelee.Len()))
 	case EUseItem:
-		m.Write(e, []byte{msg.(uint8)})
+		return m.Write(e, []byte{msg.(uint8)})
 	case EMoveOk:
-		m.Write(e, msg.([]byte))
+		return m.Write(e, msg.([]byte))
 	case ECastSpellOk:
-		m.Write(e, EncodeEventCastSpellOk(msg.(*EventCastSpellOk)))
+		return m.Write(e, EncodeEventCastSpellOk(msg.(*EventCastSpellOk)))
 	case EMeleeOk:
-		m.Write(e, EncodeEventMeleeOk(msg.(*EventMeleeOk)))
+		return m.Write(e, EncodeEventMeleeOk(msg.(*EventMeleeOk)))
 	case EUseItemOk:
-		m.Write(e, EncodeEventUseItemOk(msg.(*EventUseItemOk)))
+		return m.Write(e, EncodeEventUseItemOk(msg.(*EventUseItemOk)))
 	case EPlayerSpawned:
-		m.WriteWithLen(e, EncodeMsgpack(msg.(*EventPlayerSpawned)))
+		return m.WriteWithLen(e, EncodeMsgpack(msg.(*EventPlayerSpawned)))
 	case EPlayerDespawned:
-		m.Write(e, binary.BigEndian.AppendUint16(make([]byte, 0, 2), msg.(uint16)))
+		return m.Write(e, binary.BigEndian.AppendUint16(make([]byte, 0, 2), msg.(uint16)))
 	case EPlayerEnterViewport:
-		m.WriteWithLen(e, EncodeMsgpack(msg.(*EventPlayerEnterViewport)))
+		return m.WriteWithLen(e, EncodeMsgpack(msg.(*EventPlayerEnterViewport)))
 	case EPlayerLeaveViewport:
-		m.Write(e, binary.BigEndian.AppendUint16(make([]byte, 0, 2), msg.(uint16)))
+		return m.Write(e, binary.BigEndian.AppendUint16(make([]byte, 0, 2), msg.(uint16)))
 	case EPlayerMoved:
-		m.Write(e, EncodeEventPlayerMoved(msg.(*EventPlayerMoved)))
+		return m.Write(e, EncodeEventPlayerMoved(msg.(*EventPlayerMoved)))
 	case EPlayerSpell:
-		m.Write(e, EncodeEventPlayerSpell(msg.(*EventPlayerSpell)))
+		return m.Write(e, EncodeEventPlayerSpell(msg.(*EventPlayerSpell)))
 	case EPlayerSpellRecieved:
-		m.Write(e, EncodeEventPlayerSpellRecieved(msg.(*EventPlayerSpellRecieved)))
+		return m.Write(e, EncodeEventPlayerSpellRecieved(msg.(*EventPlayerSpellRecieved)))
 	case EPlayerMelee:
-		m.Write(e, EncodeEventPlayerMelee(msg.(*EventPlayerMelee)))
+		return m.Write(e, EncodeEventPlayerMelee(msg.(*EventPlayerMelee)))
 	case EPlayerMeleeRecieved:
-		m.Write(e, EncodeEventPlayerMeleeRecieved(msg.(*EventPlayerMeleeRecieved)))
+		return m.Write(e, EncodeEventPlayerMeleeRecieved(msg.(*EventPlayerMeleeRecieved)))
 	default:
 		log.Printf("unknown event %v\n", e.String())
+		return fmt.Errorf("unknown event %v", e.String())
 	}
 }
 
@@ -260,6 +276,10 @@ func BoolByte(b bool) byte {
 		return 1
 	}
 	return 0
+}
+
+type EventRegister struct {
+	Nick string
 }
 
 // msgpack
@@ -277,8 +297,9 @@ type EventPlayerLogin struct {
 	VisiblePlayers []EventNewPlayer
 }
 
-func DecodeMsgpack[T any](data []byte, to *T) {
+func DecodeMsgpack[T any](data []byte, to *T) *T {
 	msgpack.Unmarshal(data, to)
+	return to
 }
 
 func EncodeMsgpack[T any](t *T) []byte {

@@ -1,0 +1,1 @@
+go build -o minigoao.exe ./cmd/run-client/main.go

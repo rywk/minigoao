@@ -6,7 +6,7 @@ const (
 	Paralize Spell = iota
 	RemoveParalize
 	HealWounds
-	Revive
+	Resurrect
 	ElectricDischarge
 	Explode
 	None
@@ -16,7 +16,7 @@ var spells = [None]string{
 	"Paralize",
 	"RemoveParalize",
 	"HealWounds",
-	"Revive",
+	"Resurrect",
 	"ElectricDischarge",
 	"Explode",
 }

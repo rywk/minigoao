@@ -103,9 +103,7 @@ func (ge GridError) Error() string {
 }
 
 func (g *Grid) GetSlot(layer int, p typ.P) uint16 {
-	t, unlock := g.Get(p)
-	defer unlock()
-	return t.Layers[layer]
+	return g.grid[p.X][p.Y].Layers[layer]
 }
 
 func (g *Grid) Move(layer int, p typ.P, np typ.P) error {

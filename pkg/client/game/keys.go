@@ -4,8 +4,6 @@ import (
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/rywk/minigoao/pkg/client/game/assets/img"
-	"github.com/rywk/minigoao/pkg/client/game/texture"
 	"github.com/rywk/minigoao/pkg/constants/direction"
 	"github.com/rywk/minigoao/pkg/constants/potion"
 	"github.com/rywk/minigoao/pkg/constants/spell"
@@ -23,12 +21,12 @@ type KeyConfig struct {
 	Melee ebiten.Key
 
 	// Spell picker
-	PickInmo       ebiten.Key
-	PickInmoRm     ebiten.Key
-	PickApoca      ebiten.Key
-	PickDesca      ebiten.Key
-	PickResurrect  ebiten.Key
-	PickHealWounds ebiten.Key
+	PickParalize          ebiten.Key
+	PickParalizeRm        ebiten.Key
+	PickExplode           ebiten.Key
+	PickElectricDischarge ebiten.Key
+	PickResurrect         ebiten.Key
+	PickHealWounds        ebiten.Key
 
 	MeleeCooldown  time.Duration
 	SpellCooldown  time.Duration
@@ -42,12 +40,12 @@ var DefaultConfig = KeyConfig{
 	Left:  ebiten.KeyA,
 	Right: ebiten.KeyD,
 
-	PickInmo:       ebiten.Key3,
-	PickInmoRm:     ebiten.KeyShiftLeft,
-	PickApoca:      ebiten.Key2,
-	PickDesca:      ebiten.Key1,
-	PickHealWounds: ebiten.KeyControlLeft,
-	PickResurrect:  ebiten.KeyR,
+	PickParalize:          ebiten.Key3,
+	PickParalizeRm:        ebiten.KeyShiftLeft,
+	PickExplode:           ebiten.Key2,
+	PickElectricDischarge: ebiten.Key1,
+	PickHealWounds:        ebiten.KeyControlLeft,
+	PickResurrect:         ebiten.KeyR,
 
 	PotionHP: ebiten.KeyQ,
 	PotionMP: ebiten.KeyF,
@@ -103,7 +101,6 @@ func (k *Keys) ListenMovement() {
 		k.last = k.cfg.Front
 	} else if !front && k.pressed[k.cfg.Front] {
 		k.pressed[k.cfg.Front] = false
-
 	}
 
 	if back && !k.pressed[k.cfg.Back] {
@@ -145,6 +142,7 @@ func (k *Keys) MovingTo() direction.D {
 type CombatKeys struct {
 	cfg           *KeyConfig
 	spell         spell.Spell
+	lastSpellCast spell.Spell
 	potion        potion.Potion
 	lastSpellKey  ebiten.Key
 	lastPotionKey ebiten.Key
@@ -155,13 +153,6 @@ type CombatKeys struct {
 	spellMap      map[ebiten.Key]spell.Spell
 	potionPressed map[ebiten.Key]bool
 	potionMap     map[ebiten.Key]potion.Potion
-
-	spellsX, spellsY     float64
-	stSpellsX, stSpellsY float64
-	movingSpells         bool
-	placeholder          *ebiten.Image
-	iconImg              *ebiten.Image
-	selectedImg          *ebiten.Image
 
 	cursorMode ebiten.CursorShapeType
 }
@@ -177,21 +168,21 @@ func NewCombatKeys(cfg *KeyConfig) *CombatKeys {
 		lastCast:   time.Now(),
 		lastPotion: time.Now(),
 		spellPressed: map[ebiten.Key]bool{
-			cfg.PickApoca:      false,
-			cfg.PickInmo:       false,
-			cfg.PickInmoRm:     false,
-			cfg.PickDesca:      false,
-			cfg.PickResurrect:  false,
-			cfg.PickHealWounds: false,
+			cfg.PickExplode:           false,
+			cfg.PickParalize:          false,
+			cfg.PickParalizeRm:        false,
+			cfg.PickElectricDischarge: false,
+			cfg.PickResurrect:         false,
+			cfg.PickHealWounds:        false,
 		},
 		spellMap: map[ebiten.Key]spell.Spell{
-			cfg.PickApoca:      spell.Explode,
-			cfg.PickInmo:       spell.Paralize,
-			cfg.PickInmoRm:     spell.RemoveParalize,
-			cfg.PickDesca:      spell.ElectricDischarge,
-			cfg.PickResurrect:  spell.Revive,
-			cfg.PickHealWounds: spell.HealWounds,
-			-1:                 spell.None,
+			cfg.PickExplode:           spell.Explode,
+			cfg.PickParalize:          spell.Paralize,
+			cfg.PickParalizeRm:        spell.RemoveParalize,
+			cfg.PickElectricDischarge: spell.ElectricDischarge,
+			cfg.PickResurrect:         spell.Resurrect,
+			cfg.PickHealWounds:        spell.HealWounds,
+			-1:                        spell.None,
 		},
 		potionPressed: map[ebiten.Key]bool{
 			cfg.PotionHP: false,
@@ -202,11 +193,6 @@ func NewCombatKeys(cfg *KeyConfig) *CombatKeys {
 			cfg.PotionMP: potion.Blue,
 			-1:           potion.None,
 		},
-		placeholder: texture.Decode(img.PlaceholderSpellbar_png),
-		iconImg:     texture.Decode(img.SpellbarIcons_png),
-		selectedImg: texture.Decode(img.SpellSelector_png),
-		spellsX:     ScreenWidth - 386,
-		spellsY:     ScreenHeight - 100,
 	}
 	return ck
 }
@@ -223,54 +209,43 @@ func (ck *CombatKeys) MeleeHit() bool {
 }
 
 func (ck *CombatKeys) SetSpell() {
-	apoca, inmo, inmoRm, desca, healWounds, resurrect := ebiten.IsKeyPressed(ck.cfg.PickApoca),
-		ebiten.IsKeyPressed(ck.cfg.PickInmo),
-		ebiten.IsKeyPressed(ck.cfg.PickInmoRm),
-		ebiten.IsKeyPressed(ck.cfg.PickDesca),
+	apoca, inmo, inmoRm, desca, healWounds, resurrect := ebiten.IsKeyPressed(ck.cfg.PickExplode),
+		ebiten.IsKeyPressed(ck.cfg.PickParalize),
+		ebiten.IsKeyPressed(ck.cfg.PickParalizeRm),
+		ebiten.IsKeyPressed(ck.cfg.PickElectricDischarge),
 		ebiten.IsKeyPressed(ck.cfg.PickHealWounds),
 		ebiten.IsKeyPressed(ck.cfg.PickResurrect)
 
-	if apoca && !ck.spellPressed[ck.cfg.PickApoca] {
-		ck.spellPressed[ck.cfg.PickApoca] = true
-		ck.lastSpellKey = ck.cfg.PickApoca
-	} else if apoca && !ck.spellPressed[ck.lastSpellKey] {
-		ck.lastSpellKey = ck.cfg.PickApoca
-	} else if !apoca && ck.spellPressed[ck.cfg.PickApoca] {
-		ck.spellPressed[ck.cfg.PickApoca] = false
-
+	if apoca && !ck.spellPressed[ck.cfg.PickExplode] {
+		ck.spellPressed[ck.cfg.PickExplode] = true
+		ck.lastSpellKey = ck.cfg.PickExplode
+	} else if !apoca && ck.spellPressed[ck.cfg.PickExplode] {
+		ck.spellPressed[ck.cfg.PickExplode] = false
 	}
 
-	if inmo && !ck.spellPressed[ck.cfg.PickInmo] {
-		ck.spellPressed[ck.cfg.PickInmo] = true
-		ck.lastSpellKey = ck.cfg.PickInmo
-	} else if inmo && !ck.spellPressed[ck.lastSpellKey] {
-		ck.lastSpellKey = ck.cfg.PickInmo
-	} else if !inmo && ck.spellPressed[ck.cfg.PickInmo] {
-		ck.spellPressed[ck.cfg.PickInmo] = false
+	if inmo && !ck.spellPressed[ck.cfg.PickParalize] {
+		ck.spellPressed[ck.cfg.PickParalize] = true
+		ck.lastSpellKey = ck.cfg.PickParalize
+	} else if !inmo && ck.spellPressed[ck.cfg.PickParalize] {
+		ck.spellPressed[ck.cfg.PickParalize] = false
 	}
 
-	if inmoRm && !ck.spellPressed[ck.cfg.PickInmoRm] {
-		ck.spellPressed[ck.cfg.PickInmoRm] = true
-		ck.lastSpellKey = ck.cfg.PickInmoRm
-	} else if inmoRm && !ck.spellPressed[ck.lastSpellKey] {
-		ck.lastSpellKey = ck.cfg.PickInmoRm
-	} else if !inmoRm && ck.spellPressed[ck.cfg.PickInmoRm] {
-		ck.spellPressed[ck.cfg.PickInmoRm] = false
+	if inmoRm && !ck.spellPressed[ck.cfg.PickParalizeRm] {
+		ck.spellPressed[ck.cfg.PickParalizeRm] = true
+		ck.lastSpellKey = ck.cfg.PickParalizeRm
+	} else if !inmoRm && ck.spellPressed[ck.cfg.PickParalizeRm] {
+		ck.spellPressed[ck.cfg.PickParalizeRm] = false
 	}
 
-	if desca && !ck.spellPressed[ck.cfg.PickDesca] {
-		ck.spellPressed[ck.cfg.PickDesca] = true
-		ck.lastSpellKey = ck.cfg.PickDesca
-	} else if desca && !ck.spellPressed[ck.lastSpellKey] {
-		ck.lastSpellKey = ck.cfg.PickDesca
-	} else if !desca && ck.spellPressed[ck.cfg.PickDesca] {
-		ck.spellPressed[ck.cfg.PickDesca] = false
+	if desca && !ck.spellPressed[ck.cfg.PickElectricDischarge] {
+		ck.spellPressed[ck.cfg.PickElectricDischarge] = true
+		ck.lastSpellKey = ck.cfg.PickElectricDischarge
+	} else if !desca && ck.spellPressed[ck.cfg.PickElectricDischarge] {
+		ck.spellPressed[ck.cfg.PickElectricDischarge] = false
 	}
 
 	if healWounds && !ck.spellPressed[ck.cfg.PickHealWounds] {
 		ck.spellPressed[ck.cfg.PickHealWounds] = true
-		ck.lastSpellKey = ck.cfg.PickHealWounds
-	} else if healWounds && !ck.spellPressed[ck.lastSpellKey] {
 		ck.lastSpellKey = ck.cfg.PickHealWounds
 	} else if !healWounds && ck.spellPressed[ck.cfg.PickHealWounds] {
 		ck.spellPressed[ck.cfg.PickHealWounds] = false
@@ -278,8 +253,6 @@ func (ck *CombatKeys) SetSpell() {
 
 	if resurrect && !ck.spellPressed[ck.cfg.PickResurrect] {
 		ck.spellPressed[ck.cfg.PickResurrect] = true
-		ck.lastSpellKey = ck.cfg.PickResurrect
-	} else if resurrect && !ck.spellPressed[ck.lastSpellKey] {
 		ck.lastSpellKey = ck.cfg.PickResurrect
 	} else if !resurrect && ck.spellPressed[ck.cfg.PickResurrect] {
 		ck.spellPressed[ck.cfg.PickResurrect] = false
@@ -305,6 +278,7 @@ func (ck *CombatKeys) CastSpell() (bool, spell.Spell, int, int) {
 		pspell := ck.spell
 		ck.spell = spell.None
 		ck.lastSpellKey = -1
+		ck.lastSpellCast = pspell
 		return true, pspell, x, y
 	}
 
@@ -313,51 +287,6 @@ func (ck *CombatKeys) CastSpell() (bool, spell.Spell, int, int) {
 		ck.cursorMode = ebiten.CursorShapeDefault
 	}
 	return false, spell.None, 0, 0
-}
-
-func (ck *CombatKeys) ShowSpellPicker(screen *ebiten.Image) {
-	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(float64(ck.spellsX), float64(ck.spellsY))
-	screen.DrawImage(ck.placeholder, op)
-	opselect := &ebiten.DrawImageOptions{}
-	switch ck.spell {
-	case spell.Revive:
-		opselect.GeoM.Translate(float64(ck.spellsX+5), float64(ck.spellsY-8))
-		screen.DrawImage(ck.selectedImg, opselect)
-	case spell.HealWounds:
-		opselect.GeoM.Translate(float64(ck.spellsX+60), float64(ck.spellsY-8))
-		screen.DrawImage(ck.selectedImg, opselect)
-	case spell.RemoveParalize:
-		opselect.GeoM.Translate(float64(ck.spellsX+115), float64(ck.spellsY-8))
-		screen.DrawImage(ck.selectedImg, opselect)
-	case spell.Paralize:
-		opselect.GeoM.Translate(float64(ck.spellsX+175), float64(ck.spellsY-8))
-		screen.DrawImage(ck.selectedImg, opselect)
-	case spell.ElectricDischarge:
-		opselect.GeoM.Translate(float64(ck.spellsX+230), float64(ck.spellsY-8))
-		screen.DrawImage(ck.selectedImg, opselect)
-	case spell.Explode:
-		opselect.GeoM.Translate(float64(ck.spellsX+284), float64(ck.spellsY-8))
-		screen.DrawImage(ck.selectedImg, opselect)
-	}
-	screen.DrawImage(ck.iconImg, op)
-}
-
-func (ck *CombatKeys) MoveSpellPicker() {
-	cx, cy := ebiten.CursorPosition()
-	rect := ck.placeholder.Bounds()
-	if cx > int(ck.spellsX)+rect.Min.X && cx < int(ck.spellsX)+rect.Max.X && cy > int(ck.spellsY)+rect.Min.Y && cy < int(ck.spellsY)+rect.Max.Y || ck.movingSpells {
-		if ebiten.IsMouseButtonPressed(ebiten.MouseButton0) {
-			if !ck.movingSpells {
-				ck.stSpellsX = float64(cx) - ck.spellsX
-				ck.stSpellsY = float64(cy) - ck.spellsY
-			}
-			ck.movingSpells = true
-			ck.spellsX, ck.spellsY = float64(cx)-ck.stSpellsX, float64(cy)-ck.stSpellsY
-		} else {
-			ck.movingSpells = false
-		}
-	}
 }
 
 func (ck *CombatKeys) PressedPotion() potion.Potion {

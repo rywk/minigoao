@@ -17,7 +17,10 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/rywk/minigoao/pkg/client/audio2d"
+	"github.com/rywk/minigoao/pkg/client/game/assets/img"
 	"github.com/rywk/minigoao/pkg/client/game/player"
+	"github.com/rywk/minigoao/pkg/client/game/text"
+	"github.com/rywk/minigoao/pkg/client/game/texture"
 	"github.com/rywk/minigoao/pkg/client/game/typing"
 	"github.com/rywk/minigoao/pkg/constants"
 	"github.com/rywk/minigoao/pkg/constants/assets"
@@ -45,34 +48,43 @@ type YSortable interface {
 }
 
 type Game struct {
+	mode Mode
+	// register stuff
 	serverAddress string
-	mode          Mode
 	typer         *typing.Typer
-	latency       string
-	counter       int
-	ms            *msgs.M
-	world         *Map
-	sessionID     uint32
-	players       [constants.MaxConnCount]*player.P
-	playersY      []YSortable
-	player        *player.P
-	outQueue      chan *GameMsg
-	eventQueue    []*GameMsg
-	eventLock     sync.Mutex
+	fsBtn         *Checkbox
+	inputBox      *ebiten.Image
+	fullscreen    bool
+
+	// game
+	latency    string
+	counter    int
+	ms         *msgs.M
+	world      *Map
+	sessionID  uint32
+	players    [constants.MaxConnCount]*player.P
+	playersY   []YSortable
+	player     *player.P
+	outQueue   chan *GameMsg
+	eventQueue []*GameMsg
+	eventLock  sync.Mutex
 
 	client *player.ClientP
-	stats  *Stats
+	stats  *Hud
 
 	keys       *Keys
 	combatKeys *CombatKeys
 
-	lastMove          time.Time
-	leftForMove       float64 // pixels left to complete tile change
-	lastDir           direction.D
-	lastMoveOkArrived bool
-	moveStartedAt     time.Time
-	soundPrevWalk     int
-	startForStep      time.Time
+	lastMove      time.Time
+	leftForMove   float64 // pixels left to complete tile change
+	lastDir       direction.D
+	soundPrevWalk int
+	startForStep  time.Time
+
+	lastPotion     time.Time
+	lastPotionUsed msgs.Item
+
+	steps []player.Step
 
 	SoundBoard *audio2d.SoundBoard
 
@@ -89,7 +101,7 @@ type GameMsg struct {
 	Data interface{}
 }
 
-const ScreenWidth, ScreenHeight = 1312, 928
+const ScreenWidth, ScreenHeight = 1280, 720
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 	return ScreenWidth, ScreenHeight
@@ -108,11 +120,90 @@ func (g *Game) init() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	g.fsBtn = NewCheckbox(typ.P{X: HalfScreenX + 30, Y: ScreenHeight - ScreenHeight/6},
+		texture.Decode(img.CheckboxOn_png), texture.Decode(img.CheckboxOff_png))
+	g.inputBox = texture.Decode(img.InputBox_png)
+}
+
+func (g *Game) Update() error {
+	switch g.mode {
+	case ModeRegister:
+		g.updateRegister()
+	case ModeGame:
+		g.updateGame()
+	case ModeOptions:
+	}
+	return nil
+}
+
+func (g *Game) Draw(screen *ebiten.Image) {
+	switch g.mode {
+	case ModeRegister:
+		g.drawRegister(screen)
+	case ModeGame:
+		g.drawGame(screen)
+	case ModeOptions:
+	}
+}
+
+func (g *Game) updateRegister() {
+	g.fsBtn.Update()
+	g.fullscreen = g.fsBtn.On
+	g.typer.Update()
+	text := g.typer.Text()
+	if ebiten.IsMouseButtonPressed(ebiten.MouseButton2) {
+		g.serverAddress = string(clipboard.Read(clipboard.FmtText))
+	}
+	if !strings.HasSuffix(text, "\n") {
+		return
+	}
+	if g.serverAddress == "" {
+		g.typer = typing.NewTyper(text[:len(text)-1])
+		return
+	}
+	nick := strings.Trim(strings.Trim(text, "\n"), " ")
+	if nick == "" {
+		g.typer = typing.NewTyper(text[:len(text)-1])
+		return
+	}
+	g.StartGame(nick, g.serverAddress)
+}
+
+func (g *Game) drawRegister(screen *ebiten.Image) {
+	text.PrintBigAt(screen, "Right click to paste an IP", HalfScreenX-150, HalfScreenY/2-40)
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(HalfScreenX-150, HalfScreenY/2-5)
+	screen.DrawImage(g.inputBox, op)
+	text.PrintBigAt(screen, g.serverAddress, HalfScreenX-130, HalfScreenY/2+7)
+	text.PrintBigAt(screen, "Type a nickname and press ENTER", HalfScreenX-180, HalfScreenY-45)
+	op = &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(HalfScreenX-150, HalfScreenY-5)
+	screen.DrawImage(g.inputBox, op)
+	g.typer.Draw(screen, HalfScreenX-130, HalfScreenY+7)
+
+	text.PrintBigAt(screen, "Fullscreen", HalfScreenX-110, ScreenHeight-ScreenHeight/6)
+	g.fsBtn.Draw(screen)
+}
+
+func (g *Game) drawGame(screen *ebiten.Image) {
+	g.world.Draw()
+	for _, p := range g.playersY {
+		if p == nil {
+			continue
+		}
+		p.Draw(g.world.Image())
+	}
+	g.Render(g.world.Image(), screen)
+
+	ebitenutil.DebugPrint(screen,
+		fmt.Sprintf("FPS: %v\nTPS: %v\nPing: %v", int(ebiten.ActualFPS()), math.Round(ebiten.ActualTPS()), g.latency))
+
+	g.stats.Draw(screen)
 }
 
 func (g *Game) StartGame(nick string, address string) {
+	ebiten.SetFullscreen(g.fullscreen)
 	g.SoundBoard = audio2d.NewSoundBoard()
-	g.lastMoveOkArrived = true
 	g.ViewPort = f64.Vec2{ScreenWidth, ScreenHeight}
 	g.ZoomFactor = 1
 	g.lastMove = time.Now()
@@ -123,12 +214,14 @@ func (g *Game) StartGame(nick string, address string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	nickMsg := make([]byte, 2, len(nick)+2)
-	binary.BigEndian.PutUint16(nickMsg, uint16(len(nick)))
-	tcp.Write(append(nickMsg, []byte(nick)...))
-	log.Printf("sent nick %v\n", nick)
 	g.ms = msgs.New(tcp)
+	register := &msgs.EventRegister{
+		Nick: nick,
+	}
+	err = g.ms.EncodeAndWrite(msgs.ERegister, register)
+	if err != nil {
+		panic(err)
+	}
 	im, err := g.ms.Read()
 	if err != nil {
 		panic(err)
@@ -140,7 +233,7 @@ func (g *Game) StartGame(nick string, address string) {
 	msgs.DecodeMsgpack(im.Data, login)
 	g.Login(login)
 	g.playersY = append(g.playersY, g.player)
-	g.stats = NewStats(g, 15, ScreenHeight-95)
+	g.stats = NewHud(g)
 
 	g.eventQueue = make([]*GameMsg, 0, 100)
 	g.outQueue = make(chan *GameMsg, 100)
@@ -160,31 +253,7 @@ func (g *Game) Login(e *msgs.EventPlayerLogin) {
 	g.player = player.NewLogin(e)
 	g.client = g.player.Client
 	for _, p := range e.VisiblePlayers {
-		g.players[p.ID] = player.CreateFromLogin(g.player, &p)
-		g.players[p.ID].SetSoundboard(g.SoundBoard)
-		g.playersY = append(g.playersY, g.players[p.ID])
-	}
-}
-
-func (g *Game) Update() error {
-	switch g.mode {
-	case ModeRegister:
-		g.updateRegister()
-	case ModeGame:
-		g.updateGame()
-	case ModeOptions:
-	}
-	return nil
-}
-
-func (g *Game) updateRegister() {
-	g.typer.Update()
-	text := g.typer.Text()
-	if ebiten.IsMouseButtonPressed(ebiten.MouseButton2) {
-		g.serverAddress = string(clipboard.Read(clipboard.FmtText))
-	}
-	if strings.HasSuffix(text, "\n") && g.serverAddress != "" {
-		g.StartGame(strings.Trim(text, "\n"), g.serverAddress)
+		g.AddToGame(&p)
 	}
 }
 
@@ -250,6 +319,13 @@ func (g *Game) Clear() {
 	g.playersY = []YSortable{}
 }
 
+func (g *Game) AddToGame(event *msgs.EventNewPlayer) {
+	g.world.Space.Set(0, event.Pos, event.ID)
+	g.players[event.ID] = player.CreatePlayerSpawned(g.player, event)
+	g.players[event.ID].SetSoundboard(g.SoundBoard)
+	g.playersY = append(g.playersY, g.players[event.ID])
+}
+
 func (g *Game) ProcessEventQueue() error {
 	g.eventLock.Lock()
 	for _, ev := range g.eventQueue {
@@ -267,9 +343,7 @@ func (g *Game) ProcessEventQueue() error {
 		case msgs.EPlayerSpawned:
 			event := ev.Data.(*msgs.EventPlayerSpawned)
 			log.Printf("Player [%v] spawned %v\n", event.ID, event.Nick)
-			g.players[event.ID] = player.CreatePlayerSpawned(g.player, event)
-			g.players[event.ID].SetSoundboard(g.SoundBoard)
-			g.playersY = append(g.playersY, g.players[event.ID])
+			g.AddToGame(event)
 		case msgs.EPlayerLeaveViewport:
 			pid := ev.Data.(uint16)
 			g.DespawnPlayer(pid)
@@ -277,68 +351,13 @@ func (g *Game) ProcessEventQueue() error {
 		case msgs.EPlayerEnterViewport:
 			event := ev.Data.(*msgs.EventPlayerSpawned)
 			log.Printf("Player [%v] entered viewport %v\n", event.ID, event.Nick)
-			g.players[event.ID] = player.CreatePlayerSpawned(g.player, event)
-			g.players[event.ID].SetSoundboard(g.SoundBoard)
-			g.playersY = append(g.playersY, g.players[event.ID])
+			g.AddToGame(event)
 		case msgs.EPlayerMoved:
 			event := ev.Data.(*msgs.EventPlayerMoved)
 			log.Printf("Player [%v] moved\n", event.ID)
 			g.players[event.ID].AddStep(event)
 		case msgs.EMoveOk:
-			data := ev.Data.([]byte)
-			allowed := data[0] != 0
-			g.player.Direction = direction.D(data[1])
-			log.Printf("Move: %v in %vms, dir: %v\n", allowed, time.Since(g.moveStartedAt).Milliseconds(), direction.S(g.lastDir))
-			g.lastMoveOkArrived = true
-			if allowed {
-				g.lastDir = direction.D(data[1])
-				fromx, fromy := g.player.X, g.player.Y
-				switch g.lastDir {
-				case direction.Front:
-					g.player.Y += 1
-				case direction.Back:
-					g.player.Y -= 1
-				case direction.Left:
-					g.player.X -= 1
-				case direction.Right:
-					g.player.X += 1
-				}
-				g.world.Space.Move(0,
-					typ.P{X: int32(fromx), Y: int32(fromy)},
-					typ.P{X: int32(g.player.X), Y: int32(g.player.Y)})
-				if g.player.Dead {
-					continue
-				}
-				if !g.player.Walking {
-					g.SoundBoard.Play(assets.Walk1)
-					g.soundPrevWalk = 1
-				} else {
-					if g.soundPrevWalk == 1 {
-						g.SoundBoard.Play(assets.Walk2)
-						g.soundPrevWalk = 2
-					} else {
-						g.SoundBoard.Play(assets.Walk1)
-						g.soundPrevWalk = 1
-					}
-				}
-			}
-			if !allowed && g.leftForMove != 0 {
-				goBackPx := float64(constants.TileSize - g.leftForMove)
-				log.Println("move not allowed, go back", goBackPx, "px")
-				switch g.lastDir {
-				case direction.Front:
-					g.player.Pos[1] -= goBackPx
-				case direction.Back:
-					g.player.Pos[1] += goBackPx
-				case direction.Left:
-					g.player.Pos[0] += goBackPx
-				case direction.Right:
-					g.player.Pos[0] -= goBackPx
-				}
-				g.player.Walking = false
-				g.leftForMove = 0
-			}
-
+			g.MovementResponse(ev.Data.([]byte))
 		case msgs.EMeleeOk:
 			event := ev.Data.(*msgs.EventMeleeOk)
 			log.Printf("CastMeleeOk m: %#v\n", event)
@@ -391,7 +410,7 @@ func (g *Game) ProcessEventQueue() error {
 				g.player.Inmobilized = true
 			case spell.RemoveParalize:
 				g.player.Inmobilized = false
-			case spell.Revive:
+			case spell.Resurrect:
 				g.player.Dead = false
 			}
 			caster := g.players[event.ID]
@@ -403,6 +422,7 @@ func (g *Game) ProcessEventQueue() error {
 			g.player.Effect.NewSpellHit(event.Spell)
 			g.player.Client.HP = int(event.NewHP)
 			if g.player.Client.HP == 0 {
+				g.player.Inmobilized = false
 				g.player.Dead = true
 			}
 		case msgs.EPlayerSpell:
@@ -420,6 +440,8 @@ func (g *Game) ProcessEventQueue() error {
 			case msgs.Item(server.ItemHealthPotion):
 				g.player.Client.HP = int(event.Change)
 			}
+			g.stats.potionAlpha = 190
+			g.lastPotionUsed = event.Item
 			g.SoundBoard.Play(assets.Potion)
 		}
 	}
@@ -453,10 +475,19 @@ func (g *Game) DespawnPlayer(pid uint16) {
 }
 
 func (g *Game) updateGame() error {
+	if ebiten.IsKeyPressed(ebiten.KeyEscape) {
+		g.Clear()
+		g.typer = typing.NewTyper()
+		g.mode = ModeRegister
+		ebiten.SetFullscreen(false)
+		g.ms.Close()
+		return errors.New("esc exit")
+	}
 	if err := g.ProcessEventQueue(); err != nil {
 		g.Clear()
 		g.typer = typing.NewTyper()
 		g.mode = ModeRegister
+		ebiten.SetFullscreen(false)
 		return err
 	}
 	g.pingServer()
@@ -477,10 +508,9 @@ func (g *Game) updateGame() error {
 		return g.playersY[i].ValueY() < g.playersY[j].ValueY()
 	})
 	g.stats.Update()
-	g.combatKeys.MoveSpellPicker()
-	if ebiten.IsKeyPressed(ebiten.KeyZ) {
-		g.Reset()
-	}
+	// if ebiten.IsKeyPressed(ebiten.KeyZ) {
+	// 	g.Reset()
+	// }
 	g.counter++
 
 	return nil
@@ -503,22 +533,124 @@ func (g *Game) ProcessCombat() {
 	}
 }
 
-func DirToNewPos(p *player.P, d direction.D) (int, int) {
+func DirToNewPos(p *player.P, d direction.D) typ.P {
 	switch d {
 	case direction.Front:
-		return p.X, p.Y + 1
+		return typ.P{X: p.X, Y: p.Y + 1}
 	case direction.Back:
-		return p.X, p.Y - 1
+		return typ.P{X: p.X, Y: p.Y - 1}
 	case direction.Left:
-		return p.X - 1, p.Y
+		return typ.P{X: p.X - 1, Y: p.Y}
 	case direction.Right:
-		return p.X + 1, p.Y
+		return typ.P{X: p.X + 1, Y: p.Y}
 	}
-	return 0, 0
+	return typ.P{X: p.X, Y: p.Y}
+}
+
+func (g *Game) MovementResponse(data []byte) {
+	allowed := data[0] != 0
+	dir := direction.D(data[1])
+	if len(g.steps) == 0 {
+		g.player.Walking = false
+		log.Printf("move ok arrived without having a step sent\n")
+		return
+	}
+	step := g.steps[0]
+	g.steps = g.steps[1:]
+	log.Printf("MOVE:[%v][%v] %v %vms\n", allowed, step.Expect, direction.S(g.player.Direction), time.Since(g.startForStep).Milliseconds())
+
+	if allowed == step.Expect {
+		// if it was expected, we already did it
+		return
+	}
+	if !allowed && step.Expect {
+		// if it wasnt expected to fail we need to go back
+		goBackPx := float64(constants.TileSize - g.leftForMove)
+		log.Println("move not allowed, go back", goBackPx, "px", *g.player)
+		switch dir {
+		case direction.Front:
+			g.player.Y--
+			g.player.Pos[1] -= goBackPx
+		case direction.Back:
+			g.player.Y++
+			g.player.Pos[1] += goBackPx
+		case direction.Left:
+			g.player.X++
+			g.player.Pos[0] += goBackPx
+		case direction.Right:
+			g.player.X--
+			g.player.Pos[0] -= goBackPx
+		}
+		g.player.Walking = false
+		g.leftForMove = 0
+		return
+	}
+
+	if allowed && !step.Expect {
+		g.player.Inmobilized = false // if were allowed to move then we can change this already in any case
+		g.lastDir = dir
+		g.Move(dir, step.To)
+		return
+	}
+
+}
+
+func (g *Game) TryMove(d direction.D, np typ.P, confident bool) {
+	g.lastDir = d
+	g.outQueue <- &GameMsg{E: msgs.EMove, Data: d}
+	g.steps = append(g.steps, player.Step{
+		To:     np,
+		Dir:    d,
+		Expect: confident,
+	})
+	if confident {
+		g.Move(d, np)
+	}
+}
+
+func (g *Game) Move(d direction.D, np typ.P) {
+	g.leftForMove = constants.TileSize
+	g.player.Walking = true
+	g.player.X = np.X
+	g.player.Y = np.Y
+	if g.player.Dead {
+		return
+	}
+	if !g.player.Walking {
+		g.SoundBoard.Play(assets.Walk1)
+		g.soundPrevWalk = 1
+	} else {
+		if g.soundPrevWalk == 1 {
+			g.SoundBoard.Play(assets.Walk2)
+			g.soundPrevWalk = 2
+		} else {
+			g.SoundBoard.Play(assets.Walk1)
+			g.soundPrevWalk = 1
+		}
+	}
+}
+
+func (g *Game) AddGameStep(d direction.D) {
+	g.startForStep = time.Now()
+	g.player.Direction = d
+	np := DirToNewPos(g.player, d)
+	outWorld := np.Out(g.world.Space.Rect)
+	if outWorld && d == g.lastDir {
+		return
+	}
+	stuff := g.world.Space.GetSlot(1, np)
+	if stuff != 0 && d == g.lastDir {
+		return
+	}
+
+	playerLayer := g.world.Space.GetSlot(0, np)
+
+	confident := !outWorld && !g.player.Inmobilized && playerLayer == 0 && stuff == 0
+
+	g.TryMove(d, np, confident)
 }
 
 func (g *Game) ProcessMovement() {
-	//if g.counter%2 == 0 {
 	if g.leftForMove > 0 {
 		vel := g.player.MoveSpeed
 		if g.leftForMove <= vel {
@@ -538,74 +670,11 @@ func (g *Game) ProcessMovement() {
 	} else {
 		g.player.Walking = false
 	}
-	//}
-
 	g.keys.ListenMovement()
 	d := g.keys.MovingTo()
-
-	if g.leftForMove == 0 && g.lastMoveOkArrived && d != direction.Still && time.Since(g.startForStep).Milliseconds() > 50 {
-		g.startForStep = time.Now()
-		g.player.Direction = d
-		x, y := DirToNewPos(g.player, d)
-		if x < 0 || x >= constants.WorldX || y < 0 || y >= constants.WorldY {
-			return
-		}
-		stuffLayer := g.world.Space.GetSlot(1, typ.P{X: int32(x), Y: int32(y)})
-		if stuffLayer != 0 {
-			if g.player.Direction != g.lastDir {
-				g.moveStartedAt = time.Now()
-				g.outQueue <- &GameMsg{E: msgs.EMove, Data: d}
-			}
-			return
-		}
-
-		if g.player.Inmobilized {
-			g.moveStartedAt = time.Now()
-			g.outQueue <- &GameMsg{E: msgs.EMove, Data: d}
-			return
-		}
-
-		g.moveStartedAt = time.Now()
-		g.outQueue <- &GameMsg{E: msgs.EMove, Data: d}
-		g.lastDir = d
-		g.lastMoveOkArrived = false
-		g.leftForMove = constants.TileSize
-		g.player.Walking = true
+	if g.leftForMove == 0 && d != direction.Still && time.Since(g.startForStep).Milliseconds() > 50 {
+		g.AddGameStep(d)
 	}
-}
-
-func (g *Game) Draw(screen *ebiten.Image) {
-	switch g.mode {
-	case ModeRegister:
-		g.drawRegister(screen)
-	case ModeGame:
-		g.drawGame(screen)
-	case ModeOptions:
-	}
-}
-
-func (g *Game) drawRegister(screen *ebiten.Image) {
-	ebitenutil.DebugPrintAt(screen, "Right click to paste an IP", HalfScreenX-80, HalfScreenY/2-30)
-	ebitenutil.DebugPrintAt(screen, g.serverAddress, HalfScreenX-40, HalfScreenY/2)
-	ebitenutil.DebugPrintAt(screen, "Type a nickname and press ENTER", HalfScreenX-80, HalfScreenY-30)
-	g.typer.Draw(screen, HalfScreenX, HalfScreenY)
-}
-
-func (g *Game) drawGame(screen *ebiten.Image) {
-	g.world.Draw()
-	for _, p := range g.playersY {
-		if p == nil {
-			continue
-		}
-		p.Draw(g.world.Image())
-	}
-	g.Render(g.world.Image(), screen)
-
-	ebitenutil.DebugPrint(screen,
-		fmt.Sprintf("FPS: %v\nTPS: %v\nPing: %v", int(ebiten.ActualFPS()), math.Round(ebiten.ActualTPS()), g.latency))
-
-	g.combatKeys.ShowSpellPicker(screen)
-	g.stats.Draw(screen)
 }
 
 func (g *Game) String() string {
@@ -627,7 +696,7 @@ const HalfScreenX, HalfScreenY = ScreenWidth / 2, ScreenHeight / 2
 
 func (g *Game) worldMatrix() ebiten.GeoM {
 	m := ebiten.GeoM{}
-	m.Translate(-g.player.Pos[0]+HalfScreenX-16, -g.player.Pos[1]+HalfScreenY-16)
+	m.Translate(-g.player.Pos[0]+HalfScreenX-16, -g.player.Pos[1]+HalfScreenY-48)
 	// We want to scale and rotate around center of image / screen
 	m.Translate(-g.viewportCenter()[0], -g.viewportCenter()[1])
 	m.Scale(

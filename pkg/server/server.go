@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"log"
@@ -45,9 +44,13 @@ func (s *Server) AcceptConnections() {
 	}
 }
 
-func (s *Server) Start() error {
+func (s *Server) Start(exposed bool) error {
+	address := fmt.Sprintf("127.0.0.1:%d", s.port)
+	if exposed {
+		address = fmt.Sprintf("0.0.0.0:%d", s.port)
+	}
 	var err error
-	s.tcp, err = net.Listen("tcp4", fmt.Sprintf("127.0.0.1:%d", s.port))
+	s.tcp, err = net.Listen("tcp4", address)
 	if err != nil {
 		return err
 	}
@@ -103,25 +106,24 @@ func (g *Game) RemovePlayer(pid uint16) {
 	g.playersIndex = g.playersIndex[:len(g.playersIndex)-1]
 }
 
-func getNick(c net.Conn) (string, error) {
-	strLen := make([]byte, 2)
-	_, err := c.Read(strLen)
+func getNick(m *msgs.M) (string, error) {
+	im, err := m.Read()
 	if err != nil {
 		return "", err
 	}
-	nick := make([]byte, binary.BigEndian.Uint16(strLen))
-	_, err = c.Read(nick)
-	if err != nil {
-		return "", err
+	if im.Event != msgs.ERegister {
+		return "", errors.New("bad message")
 	}
-	return string(nick), nil
+	reg := &msgs.EventRegister{}
+	msgs.DecodeMsgpack(im.Data, reg)
+	return reg.Nick, nil
 }
 
-func GetNick(c net.Conn) (nick string, err error) {
+func GetNick(m *msgs.M) (nick string, err error) {
 	timeout := time.NewTicker(time.Second).C
 	done := make(chan struct{})
 	go func() {
-		nick, err = getNick(c)
+		nick, err = getNick(m)
 		done <- struct{}{}
 	}()
 	select {
@@ -135,20 +137,12 @@ func GetNick(c net.Conn) (nick string, err error) {
 func (g *Game) HandleLogin() {
 	log.Printf("Login handler started.\n")
 	for conn := range g.newConn {
-		log.Printf("waiting nick\n")
-		nick, err := GetNick(conn)
-		if err != nil {
-			log.Printf("Get nick error: %v\n", err)
-			conn.Close()
-			continue
-		}
-		log.Printf("got nick [%v]\n", nick)
+
 		p := &Player{
 			g:             g,
 			m:             msgs.New(conn),
 			pos:           typ.P{X: 50, Y: 50},
 			Send:          make(chan OutMsg, 100),
-			nick:          nick,
 			dir:           direction.Front,
 			speedPxXFrame: 3,
 			speedXTile:    (constants.TileSize / 3) * AverageGameFrame,
@@ -157,6 +151,16 @@ func (g *Game) HandleLogin() {
 			mp:            3333,
 			maxMp:         3333,
 		}
+
+		log.Printf("waiting nick\n")
+		nick, err := GetNick(p.m)
+		if err != nil {
+			log.Printf("Get nick error: %v\n", err)
+			conn.Close()
+			continue
+		}
+		log.Printf("got nick [%v]\n", nick)
+		p.nick = nick
 		g.incomingData <- IncomingMsg{
 			Event: msgs.EPlayerConnect,
 			Data:  p,
@@ -234,7 +238,9 @@ func (g *Game) playerMove(player *Player, incomingData IncomingMsg) {
 		np.X++
 	}
 	var err error
-	if player.paralized {
+	if np.Out(g.space.Rect) {
+		err = errors.New("map edge")
+	} else if player.paralized {
 		err = errors.New("player paralized")
 	} else if block := g.space.GetSlot(1, np); block != 0 {
 		err = errors.New("map object blocking")
@@ -243,7 +249,7 @@ func (g *Game) playerMove(player *Player, incomingData IncomingMsg) {
 	}
 	if err != nil {
 		player.Send <- OutMsg{Event: msgs.EMoveOk, Data: []byte{msgs.BoolByte(false), player.dir}}
-		g.space.Notify(np, msgs.EPlayerMoved, &msgs.EventPlayerMoved{
+		g.space.Notify(player.pos, msgs.EPlayerMoved, &msgs.EventPlayerMoved{
 			ID:  player.id,
 			Pos: player.pos,
 			Dir: player.dir,
@@ -549,4 +555,18 @@ func (p *Player) Logout() {
 	p.g.space.Notify(p.pos, msgs.EPlayerDespawned, uint16(p.id), uint16(p.id))
 }
 
-// Attacks
+func (p *Player) TakeDamage(dmg int32) {
+	p.hp = p.hp - dmg
+	if p.hp <= 0 {
+		p.hp = 0
+		p.dead = true
+		p.paralized = false
+	}
+}
+
+func (p *Player) Heal(heal int32) {
+	p.hp = p.hp + heal
+	if p.hp > p.maxHp {
+		p.hp = p.maxHp
+	}
+}

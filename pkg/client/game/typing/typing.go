@@ -4,8 +4,8 @@ import (
 	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
+	"github.com/rywk/minigoao/pkg/client/game/text"
 )
 
 // repeatingKeyPressed return true when key is pressed considering the repeat state.
@@ -30,8 +30,8 @@ type Typer struct {
 	counter int
 }
 
-func NewTyper() *Typer {
-	return &Typer{runes: make([]rune, 0)}
+func NewTyper(s ...string) *Typer {
+	return &Typer{runes: make([]rune, 0), text: strings.Join(s, "")}
 }
 
 func (g *Typer) Update() error {
@@ -73,5 +73,5 @@ func (g *Typer) Draw(screen *ebiten.Image, x, y int) {
 	if g.counter%60 < 30 {
 		t += "_"
 	}
-	ebitenutil.DebugPrintAt(screen, t, x, y)
+	text.PrintBigAt(screen, t, x, y)
 }

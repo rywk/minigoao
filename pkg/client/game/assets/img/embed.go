@@ -20,23 +20,10 @@ var (
 	PlaceholderSpellbar_png []byte
 	//go:embed spellbar_icons.png
 	SpellbarIcons_png []byte
+	//go:embed spellbar_icons_2.png
+	SpellbarIcons2_png []byte
 	//go:embed spell_selector.png
 	SpellSelector_png []byte
-
-	// Stats
-
-	//go:embed hp_bar_stats_big.png
-	BigHPBar_png []byte
-	//go:embed mp_bar_stats_big.png
-	BigMPBar_png []byte
-	//go:embed placeholder_stats.png
-	PlaceholderStats_png []byte
-	//go:embed hp_bar_stats_mini.png
-	MiniHPBar_png []byte
-	//go:embed mp_bar_stats_mini.png
-	MiniMPBar_png []byte
-	//go:embed mini_placeholder_stats.png
-	MiniPlaceholderStats_png []byte
 
 	// Effects
 
@@ -56,8 +43,10 @@ var (
 	SpellHealWounds_png []byte
 	//go:embed spell_heal_wounds_3.png
 	SpellHealWounds2_png []byte
-	//go:embed spell_revive.png
-	SpellRevive_png []byte
+	//go:embed heal_wounds_new.png
+	SpellHealWoundsNew_png []byte
+	//go:embed spell_resurrect.png
+	SpellResurrect_png []byte
 	//go:embed last_trial_test_alpha.png
 	SpellLastTrial_png []byte
 
@@ -95,4 +84,27 @@ var (
 	ShieldTower_png []byte
 	//go:embed shield_silver.png
 	ShieldSilver_png []byte
+
+	//go:embed checkbox-off.png
+	CheckboxOff_png []byte
+	//go:embed checkbox-on.png
+	CheckboxOn_png []byte
+
+	//go:embed input_box.png
+	InputBox_png []byte
+
+	//go:embed text.png
+	Text_png []byte
+
+	//go:embed hud_bg.png
+	HudBg_png []byte
+	//go:embed hp_bar.png
+	HpBar_png []byte
+	//go:embed mp_bar.png
+	MpBar_png []byte
+
+	//go:embed blue_potion.png
+	BluePotion_png []byte
+	//go:embed red_potion.png
+	RedPotion_png []byte
 )

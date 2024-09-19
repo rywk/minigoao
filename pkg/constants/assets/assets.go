@@ -33,7 +33,7 @@ const (
 	SpellApoca
 	SpellDesca
 	SpellHealWounds
-	SpellRevive
+	SpellResurrect
 	Tiletest
 
 	// Mark
@@ -65,7 +65,7 @@ const (
 	Potion
 	MeleeAir
 	MeleeBlood
-	SpellReviveSound
+	SpellResurrectSound
 	SpellHealWoundsSound
 	SpellInmoSound
 	SpellInmoRmSound
@@ -85,8 +85,8 @@ func SoundFromSpell(s spell.Spell) Sound {
 		return SpellDescaSound
 	case spell.HealWounds:
 		return SpellHealWoundsSound
-	case spell.Revive:
-		return SpellReviveSound
+	case spell.Resurrect:
+		return SpellResurrectSound
 
 	}
 	return 0

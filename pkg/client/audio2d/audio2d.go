@@ -92,7 +92,7 @@ func NewSoundBoard() *SoundBoard {
 		assets.SpellDescaSound:      NewSound(audiofile.SpellDesca_wav),
 		assets.SpellInmoSound:       NewSound(audiofile.SpellInmo_wav),
 		assets.SpellHealWoundsSound: NewSound(audiofile.SpellHealWounds_wav),
-		assets.SpellReviveSound:     NewSound(audiofile.SpellRevive_wav),
+		assets.SpellResurrectSound:  NewSound(audiofile.SpellResurrect_wav),
 		assets.SpellInmoRmSound:     NewSound(audiofile.SpellInmoRm_wav),
 		assets.Potion:               NewSound(audiofile.Potion_wav),
 	}
@@ -103,8 +103,8 @@ func (sb *SoundBoard) Play(s assets.Sound) {
 	sb.sounds[s].Play()
 }
 
-func (sb *SoundBoard) PlayFrom(s assets.Sound, x, y, sx, sy int) {
-	sb.sounds[s].PlayFrom(x, y, sx, sy)
+func (sb *SoundBoard) PlayFrom(s assets.Sound, x, y, sx, sy int32) {
+	sb.sounds[s].PlayFrom(int(x), int(y), int(sx), int(sy))
 }
 
 func multiplyChannels(left, right float64, s beep.Streamer) beep.Streamer {

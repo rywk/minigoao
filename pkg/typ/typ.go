@@ -16,10 +16,7 @@ func (p *P) In(r Rect) bool {
 	return false
 }
 func (p *P) Out(r Rect) bool {
-	if p.X < r.Min.X || p.Y < r.Min.Y || p.X > r.Max.X || p.Y > r.Max.Y {
-		return true
-	}
-	return false
+	return !p.In(r)
 }
 
 type Rect struct {

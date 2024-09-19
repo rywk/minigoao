@@ -121,17 +121,27 @@ var (
 		// 	},
 		// 	img: img.SpellHealWounds_png,
 		// },
+		// asset.SpellHealWounds: {
+		// 	c: SpriteConfig{
+		// 		Width:  100,
+		// 		Height: 100,
+		// 		DirectionLength: map[direction.D]int{
+		// 			direction.Right: 10,
+		// 		},
+		// 	},
+		// 	img: img.SpellHealWounds2_png,
+		// },
 		asset.SpellHealWounds: {
 			c: SpriteConfig{
-				Width:  100,
-				Height: 100,
+				Width:  95,
+				Height: 95,
 				DirectionLength: map[direction.D]int{
 					direction.Right: 10,
 				},
 			},
-			img: img.SpellHealWounds2_png,
+			img: img.SpellHealWoundsNew_png,
 		},
-		asset.SpellRevive: {
+		asset.SpellResurrect: {
 			c: SpriteConfig{
 				Width:      76,
 				Height:     76,
@@ -139,7 +149,7 @@ var (
 				GridH:      6,
 				FrameCount: 30,
 			},
-			img: img.SpellRevive_png,
+			img: img.SpellResurrect_png,
 		},
 		asset.NakedBody: {
 			c: SpriteConfig{
@@ -399,8 +409,8 @@ func AssetFromSpell(s spell.Spell) asset.Image {
 		return asset.SpellInmoRm
 	case spell.ElectricDischarge:
 		return asset.SpellDesca
-	case spell.Revive:
-		return asset.SpellRevive
+	case spell.Resurrect:
+		return asset.SpellResurrect
 	case spell.HealWounds:
 		return asset.SpellHealWounds
 	}

@@ -99,7 +99,7 @@ func (m *Map) Image() *ebiten.Image {
 }
 
 func MapSoundToPlayer(p *player.P, x, y int) (float64, float64) {
-	diffX, diffY := p.X-x, p.Y-y
+	diffX, diffY := p.X-int32(x), p.Y-int32(y)
 	return float64(diffX) * 0.08, float64(diffY) * 0.08
 }
 

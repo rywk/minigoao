@@ -16,25 +16,33 @@ type SpellProp struct {
 	BaseDamage int32
 	RNGRange   int32
 	ManaCost   int32
-	Cast       func(from, to *Player, calc int32)
+	Cast       func(from, to *Player, calc int32) error
 }
 
 var ErrorNoMana = errors.New("no mana")
 var ErrorTargetDead = errors.New("target dead")
+var ErrorTargetAlive = errors.New("target alive")
+var ErrorCasterDead = errors.New("caster dead")
+var ErrorSelfCast = errors.New("cant self cast")
 
 var spellProps = [spell.None]SpellProp{
 	{
 		Spell:    spell.Paralize,
 		ManaCost: 200,
-		Cast: func(from, to *Player, calc int32) {
+		Cast: func(from, to *Player, calc int32) error {
+			if from == to {
+				return ErrorSelfCast
+			}
 			to.paralized = true
+			return nil
 		},
 	},
 	{
 		Spell:    spell.RemoveParalize,
 		ManaCost: 300,
-		Cast: func(from, to *Player, calc int32) {
+		Cast: func(from, to *Player, calc int32) error {
 			to.paralized = false
+			return nil
 		},
 	},
 	{
@@ -42,24 +50,23 @@ var spellProps = [spell.None]SpellProp{
 		ManaCost:   400,
 		BaseDamage: 50,
 		RNGRange:   10,
-		Cast: func(from, to *Player, calc int32) {
-			to.hp = to.hp + calc
-			if to.hp > to.maxHp {
-				to.hp = to.maxHp
-			}
+		Cast: func(_, to *Player, calc int32) error {
+			to.Heal(calc)
+			return nil
 		},
 	},
 	{
-		Spell:      spell.Revive,
+		Spell:      spell.Resurrect,
 		ManaCost:   700,
 		BaseDamage: 0,
 		RNGRange:   0,
-		Cast: func(from, to *Player, calc int32) {
+		Cast: func(from, to *Player, calc int32) error {
 			if !to.dead {
-				return
+				return ErrorTargetAlive
 			}
 			to.dead = false
 			to.hp = to.maxHp
+			return nil
 		},
 	},
 	{
@@ -67,12 +74,12 @@ var spellProps = [spell.None]SpellProp{
 		ManaCost:   500,
 		BaseDamage: 60,
 		RNGRange:   10,
-		Cast: func(from, to *Player, calc int32) {
-			to.hp = to.hp - calc
-			if to.hp <= 0 {
-				to.hp = 0
-				to.dead = true
+		Cast: func(from, to *Player, calc int32) error {
+			if from == to {
+				return ErrorSelfCast
 			}
+			to.TakeDamage(calc)
+			return nil
 		},
 	},
 	{
@@ -80,18 +87,21 @@ var spellProps = [spell.None]SpellProp{
 		ManaCost:   1000,
 		BaseDamage: 170,
 		RNGRange:   10,
-		Cast: func(from, to *Player, calc int32) {
-			to.hp = to.hp - calc
-			if to.hp <= 0 {
-				to.hp = 0
-				to.dead = true
+		Cast: func(from, to *Player, calc int32) error {
+			if from == to {
+				return ErrorSelfCast
 			}
+			to.TakeDamage(calc)
+			return nil
 		},
 	},
 }
 
 func Cast(s *SpellProp, from, to *Player) (int32, error) {
-	if to.dead && s.Spell != spell.Revive {
+	if from.dead && s.Spell != spell.Resurrect {
+		return 0, ErrorCasterDead
+	}
+	if to.dead && s.Spell != spell.Resurrect {
 		return 0, ErrorTargetDead
 	}
 	if from.mp < s.ManaCost {
@@ -102,7 +112,11 @@ func Cast(s *SpellProp, from, to *Player) (int32, error) {
 	if s.RNGRange != 0 {
 		calc = calc + int32(rand.Intn(int(s.RNGRange)))
 	}
-	s.Cast(from, to, calc)
+	err := s.Cast(from, to, calc)
+	if err != nil {
+		from.mp = from.mp + s.ManaCost
+		return 0, err
+	}
 	return calc, nil
 }
 

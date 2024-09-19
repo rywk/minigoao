@@ -29,8 +29,8 @@ var (
 	SpellInmoRm_wav []byte
 	//go:embed spell_desca.wav
 	SpellDesca_wav []byte
-	//go:embed spell_revive.wav
-	SpellRevive_wav []byte
+	//go:embed spell_resurrect.wav
+	SpellResurrect_wav []byte
 	//go:embed spell_heal_wounds.wav
 	SpellHealWounds_wav []byte
 )

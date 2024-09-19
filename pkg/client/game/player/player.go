@@ -25,7 +25,7 @@ type P struct {
 	local  *P
 	ID     uint32
 	Nick   string
-	X, Y   int
+	X, Y   int32
 	DX, DY int
 	Pos    f64.Vec2
 
@@ -66,13 +66,13 @@ func NewClientP() *ClientP {
 func (p *ClientP) DirToNewPos(d direction.D) (int, int) {
 	switch d {
 	case direction.Front:
-		return p.p.X, p.p.Y + 1
+		return int(p.p.X), int(p.p.Y + 1)
 	case direction.Back:
-		return p.p.X, p.p.Y - 1
+		return int(p.p.X), int(p.p.Y - 1)
 	case direction.Left:
-		return p.p.X - 1, p.p.Y
+		return int(p.p.X - 1), int(p.p.Y)
 	case direction.Right:
-		return p.p.X + 1, p.p.Y
+		return int(p.p.X + 1), int(p.p.Y)
 	}
 	return 0, 0
 }
@@ -168,9 +168,9 @@ func (p *P) DrawPlayerHPMP(screen *ebiten.Image) {
 	hpx, mpx = p.Client.HP*hpx/p.Client.MaxHP, p.Client.MP*mpx/p.Client.MaxMP
 	hpRect := image.Rect(p.HPImg.Bounds().Min.X, p.HPImg.Bounds().Min.Y, hpx, p.HPImg.Bounds().Max.Y)
 	mpRect := image.Rect(p.MPImg.Bounds().Min.X, p.MPImg.Bounds().Min.Y, mpx, p.MPImg.Bounds().Max.Y)
-	op.GeoM.Translate(-2, -1)
+	op.GeoM.Translate(-1, -1)
 	screen.DrawImage(p.HPMPBGImg, op)
-	op.GeoM.Translate(2, 1)
+	op.GeoM.Translate(1, 1)
 	screen.DrawImage(p.HPImg.SubImage(hpRect).(*ebiten.Image), op)
 	op.GeoM.Translate(0, 5)
 	screen.DrawImage(p.MPImg.SubImage(mpRect).(*ebiten.Image), op)
@@ -232,8 +232,9 @@ func (p *P) SetSoundboard(sb *audio2d.SoundBoard) {
 }
 
 type Step struct {
-	To  typ.P
-	Dir direction.D
+	To     typ.P
+	Dir    direction.D
+	Expect bool
 }
 
 func (p *P) WalkSteps(g *grid.Grid) {
@@ -263,7 +264,7 @@ func (p *P) WalkSteps(g *grid.Grid) {
 	}
 	step := p.steps[0]
 	p.steps = p.steps[1:]
-	if p.X == int(step.To.X) && p.Y == int(step.To.Y) {
+	if p.X == step.To.X && p.Y == step.To.Y {
 		p.Direction = step.Dir
 		return
 	}
@@ -288,7 +289,7 @@ func (p *P) WalkSteps(g *grid.Grid) {
 	p.Pos[0] = float64(p.X * constants.TileSize)
 	p.Pos[1] = float64(p.Y * constants.TileSize)
 	g.Move(0, typ.P{X: int32(p.X), Y: int32(p.Y)}, step.To)
-	p.X, p.Y = int(step.To.X), int(step.To.Y)
+	p.X, p.Y = step.To.X, step.To.Y
 }
 
 func (p *P) AddStep(e *msgs.EventPlayerMoved) {
@@ -308,8 +309,8 @@ func NewLogin(e *msgs.EventPlayerLogin) *P {
 	p.Client.p = p
 	p.HPImg = ebiten.NewImage(30, 3)
 	p.MPImg = ebiten.NewImage(30, 3)
-	p.HPMPBGImg = ebiten.NewImage(34, 10)
-	p.HPImg.Fill(color.RGBA{250, 20, 20, 255})
+	p.HPMPBGImg = ebiten.NewImage(32, 10)
+	p.HPImg.Fill(color.RGBA{255, 60, 60, 255})
 	p.MPImg.Fill(color.RGBA{40, 130, 250, 255})
 	p.HPMPBGImg.Fill(color.RGBA{0, 0, 0, 200})
 	return p
@@ -318,8 +319,8 @@ func NewLogin(e *msgs.EventPlayerLogin) *P {
 func Create(a *msgs.EventPlayerLogin) *P {
 	p := &P{
 		ID:        uint32(a.ID),
-		X:         int(a.Pos.X),
-		Y:         int(a.Pos.Y),
+		X:         a.Pos.X,
+		Y:         a.Pos.Y,
 		Direction: a.Dir,
 		Pos: f64.Vec2{ // pixel value of position
 			float64(a.Pos.X) * constants.TileSize,
@@ -348,8 +349,8 @@ func CreateFromLogin(local *P, a *msgs.EventNewPlayer) *P {
 	p := &P{
 		local:     local,
 		ID:        uint32(a.ID),
-		X:         int(a.Pos.X),
-		Y:         int(a.Pos.Y),
+		X:         a.Pos.X,
+		Y:         a.Pos.Y,
 		Direction: a.Dir,
 		Pos: f64.Vec2{ // pixel value of position
 			float64(a.Pos.X) * constants.TileSize,
@@ -378,8 +379,8 @@ func CreatePlayerSpawned(local *P, a *msgs.EventPlayerSpawned) *P {
 	p := &P{
 		local:     local,
 		ID:        uint32(a.ID),
-		X:         int(a.Pos.X),
-		Y:         int(a.Pos.Y),
+		X:         a.Pos.X,
+		Y:         a.Pos.Y,
 		Direction: a.Dir,
 		Pos: f64.Vec2{ // pixel value of position
 			float64(a.Pos.X) * constants.TileSize,
@@ -440,8 +441,8 @@ var spellOffsets = map[assets.Image]struct{ x, y int }{
 	assets.SpellInmo:       {-30, -55},
 	assets.SpellInmoRm:     {-20, -30},
 	assets.SpellDesca:      {-45, -70},
-	assets.SpellHealWounds: {-36, -50},
-	assets.SpellRevive:     {-24, -36},
+	assets.SpellHealWounds: {-36, -38},
+	assets.SpellResurrect:  {-24, -36},
 }
 
 func NewSpellOffset(a assets.Image) *SpellOffset {
