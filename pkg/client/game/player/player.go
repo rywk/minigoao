@@ -4,12 +4,13 @@ import (
 	"image"
 	"image/color"
 	"strconv"
+	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/rywk/minigoao/pkg/client/audio2d"
+	"github.com/rywk/minigoao/pkg/client/game/text"
 	"github.com/rywk/minigoao/pkg/client/game/texture"
-	"github.com/rywk/minigoao/pkg/conc"
 	"github.com/rywk/minigoao/pkg/constants"
 	"github.com/rywk/minigoao/pkg/constants/assets"
 	"github.com/rywk/minigoao/pkg/constants/direction"
@@ -47,6 +48,9 @@ type P struct {
 	leftForMove  float64
 	lastDir      direction.D
 	steps        []Step
+
+	chatMsg      string
+	chatMsgStart time.Time
 
 	soundPrevWalk int
 	soundboard    *audio2d.SoundBoard
@@ -101,6 +105,14 @@ func (p *P) Update(counter int) {
 		}
 	}
 	p.UpdateFrames(counter)
+	if time.Since(p.chatMsgStart) > constants.ChatMsgTTL {
+		p.chatMsg = ""
+	}
+}
+
+func (p *P) SetChatMsg(msg string) {
+	p.chatMsgStart = time.Now()
+	p.chatMsg = msg
 }
 
 const PlayerDrawOffsetX, PlayerDrawOffsetY = 3, -14
@@ -152,6 +164,10 @@ func (p *P) Draw(screen *ebiten.Image) {
 		p.DrawNick(screen)
 	}
 	p.Effect.Draw(screen)
+	if p.chatMsg != "" {
+		off := len(p.chatMsg) * 3
+		text.PrintAt(screen, p.chatMsg, int(p.Pos[0])+16-off, int(p.Pos[1]-36))
+	}
 }
 
 func (p *P) DrawNick(screen *ebiten.Image) {
@@ -232,9 +248,11 @@ func (p *P) SetSoundboard(sb *audio2d.SoundBoard) {
 }
 
 type Step struct {
-	To     typ.P
-	Dir    direction.D
-	Expect bool
+	To        typ.P
+	Dir       direction.D
+	Expect    bool
+	Allowed   bool
+	Confirmed bool
 }
 
 func (p *P) WalkSteps(g *grid.Grid) {
@@ -340,7 +358,6 @@ func Create(a *msgs.EventPlayerLogin) *P {
 	p.Effect = &PEffects{
 		p:      p,
 		active: make([]texture.Effect, 0),
-		Add:    make(chan texture.Effect, 10),
 	}
 	return p
 }
@@ -370,7 +387,6 @@ func CreateFromLogin(local *P, a *msgs.EventNewPlayer) *P {
 	p.Effect = &PEffects{
 		p:      p,
 		active: make([]texture.Effect, 0),
-		Add:    make(chan texture.Effect, 10),
 	}
 	return p
 }
@@ -400,7 +416,6 @@ func CreatePlayerSpawned(local *P, a *msgs.EventPlayerSpawned) *P {
 	p.Effect = &PEffects{
 		p:      p,
 		active: make([]texture.Effect, 0),
-		Add:    make(chan texture.Effect, 10),
 	}
 	return p
 }
@@ -411,23 +426,22 @@ func (p *P) ValueY() float64 { return p.Pos[1] }
 type PEffects struct {
 	p      *P
 	active []texture.Effect
-	Add    chan texture.Effect
 }
 
 func (pfx *PEffects) NewMeleeHit() {
-	pfx.Add <- texture.LoadEffect(assets.MeleeHit)
+	pfx.active = append(pfx.active, texture.LoadEffect(assets.MeleeHit))
 }
 
 func (pfx *PEffects) NewSpellHit(s spell.Spell) {
 	a := texture.AssetFromSpell(s)
 	if a != assets.Nothing {
-		pfx.Add <- NewSpellOffset(a)
+		pfx.active = append(pfx.active, NewSpellOffset(a))
 	}
 }
 
 func (pfx *PEffects) NewAttackNumber(dmg int) {
 	if dmg > 0 {
-		pfx.Add <- &AtkDmgFxTxt{img: ebiten.NewImage(40, 40), dmg: strconv.FormatInt(int64(dmg), 10)}
+		pfx.active = append(pfx.active, &AtkDmgFxTxt{img: ebiten.NewImage(40, 40), dmg: strconv.FormatInt(int64(dmg), 10)})
 	}
 }
 
@@ -490,9 +504,6 @@ func (a *AtkDmgFxTxt) EffectOpt(op *ebiten.DrawImageOptions) *ebiten.DrawImageOp
 }
 
 func (pfx *PEffects) Update(counter int) {
-	if nfx, ok := conc.Check(pfx.Add); ok {
-		pfx.active = append(pfx.active, nfx)
-	}
 	if counter%2 == 0 {
 		i := 0
 		for _, fx := range pfx.active {

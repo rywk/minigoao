@@ -1,12 +1,19 @@
 package game
 
 import (
+	"image/color"
+	"log"
+	"strings"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/inpututil"
+	"github.com/rywk/minigoao/pkg/client/game/text"
+	"github.com/rywk/minigoao/pkg/client/game/typing"
+	"github.com/rywk/minigoao/pkg/constants"
 	"github.com/rywk/minigoao/pkg/constants/direction"
-	"github.com/rywk/minigoao/pkg/constants/potion"
 	"github.com/rywk/minigoao/pkg/constants/spell"
+	"github.com/rywk/minigoao/pkg/msgs"
 )
 
 type KeyConfig struct {
@@ -15,23 +22,27 @@ type KeyConfig struct {
 	Left  ebiten.Key
 	Right ebiten.Key
 
-	PotionHP ebiten.Key
-	PotionMP ebiten.Key
+	PotionHP *Input
+	PotionMP *Input
 
-	Melee ebiten.Key
+	Melee *Input
 
 	// Spell picker
-	PickParalize          ebiten.Key
-	PickParalizeRm        ebiten.Key
-	PickExplode           ebiten.Key
-	PickElectricDischarge ebiten.Key
-	PickResurrect         ebiten.Key
-	PickHealWounds        ebiten.Key
+	PickParalize          *Input
+	PickParalizeRm        *Input
+	PickExplode           *Input
+	PickElectricDischarge *Input
+	PickResurrect         *Input
+	PickHealWounds        *Input
 
-	MeleeCooldown  time.Duration
-	SpellCooldown  time.Duration
-	SwitchCooldown time.Duration
 	PotionCooldown time.Duration
+	// Cooldown to cast spells or do a melee attack
+	// spells and melee attacks trigger this cd
+	CooldownAction time.Duration
+	// Cooldown for each spell
+	CooldownSpells [spell.None]time.Duration
+	// Cooldown for melee
+	CooldownMelee time.Duration
 }
 
 var DefaultConfig = KeyConfig{
@@ -40,37 +51,72 @@ var DefaultConfig = KeyConfig{
 	Left:  ebiten.KeyA,
 	Right: ebiten.KeyD,
 
-	PickParalize:          ebiten.Key3,
-	PickParalizeRm:        ebiten.KeyShiftLeft,
-	PickExplode:           ebiten.Key2,
-	PickElectricDischarge: ebiten.Key1,
-	PickHealWounds:        ebiten.KeyControlLeft,
-	PickResurrect:         ebiten.KeyR,
+	PickParalize:          NewInputPtr(ebiten.Key3),
+	PickParalizeRm:        NewInputPtr(ebiten.KeyShiftLeft),
+	PickExplode:           NewInputPtr(ebiten.Key2),
+	PickElectricDischarge: NewInputPtr(ebiten.Key1),
+	PickHealWounds:        NewInputPtr(ebiten.KeyControlLeft),
+	PickResurrect:         NewInputPtr(ebiten.KeyR),
 
-	PotionHP: ebiten.KeyQ,
-	PotionMP: ebiten.KeyF,
+	PotionHP: NewInputPtr(ebiten.MouseButtonRight),
+	PotionMP: NewInputPtr(ebiten.KeyF),
 
-	Melee:          ebiten.KeySpace,
-	MeleeCooldown:  time.Millisecond * 950,
-	SpellCooldown:  time.Millisecond * 950,
-	SwitchCooldown: time.Millisecond * 700,
+	Melee:          NewInputPtr(ebiten.KeySpace),
 	PotionCooldown: time.Millisecond * 300,
+
+	CooldownAction: time.Millisecond * 400,
+	CooldownMelee:  time.Millisecond * 900,
+	CooldownSpells: [spell.None]time.Duration{
+		time.Millisecond * 950,   //Paralize
+		time.Millisecond * 950,   //RemoveParalize
+		time.Millisecond * 950,   //HealWounds
+		time.Millisecond * 10000, //Resurrect
+		time.Millisecond * 750,   //ElectricDischarge
+		time.Millisecond * 1000,  //Explode
+	},
 }
 
 type Keys struct {
-	cfg     *KeyConfig
-	last    ebiten.Key
-	pressed map[ebiten.Key]bool
-
+	g            *Game
+	cfg          *KeyConfig
+	last         ebiten.Key
+	pressed      map[ebiten.Key]bool
 	directionMap map[ebiten.Key]direction.D
+
+	keysLocked    bool
+	chatInputOpen bool
+	enterDown     bool
+	typer         *typing.Typer
+	sentChat      string
+	lastChat      time.Time
+	openCloseImg  *ebiten.Image
+
+	spell           spell.Spell
+	castedSpell     bool
+	potion          msgs.Item
+	lastSpellKey    *Input
+	lastPotionInput *Input
+	lastPotion      time.Time
+	spellPressed    map[*Input]bool
+	spellMap        map[*Input]spell.Spell
+	potionPressed   map[*Input]bool
+	potionMap       map[*Input]msgs.Item
+	cursorMode      ebiten.CursorShapeType
+
+	LastAction time.Time
+	LastMelee  time.Time
+	LastSpells [spell.None]time.Time
 }
 
-func NewKeys(cfg *KeyConfig) *Keys {
+func NewKeys(g *Game, cfg *KeyConfig) *Keys {
 	if cfg == nil {
 		cfg = &DefaultConfig
 	}
 	k := &Keys{
-		cfg: cfg,
+		g:            g,
+		cfg:          cfg,
+		typer:        typing.NewTyper(),
+		openCloseImg: ebiten.NewImage(8, 14),
 		pressed: map[ebiten.Key]bool{
 			cfg.Front: false,
 			cfg.Back:  false,
@@ -84,11 +130,53 @@ func NewKeys(cfg *KeyConfig) *Keys {
 			cfg.Right: direction.Right,
 			-1:        direction.Still,
 		},
+
+		spell:      spell.None,
+		lastPotion: time.Now(),
+		spellPressed: map[*Input]bool{
+			cfg.PickExplode:           false,
+			cfg.PickParalize:          false,
+			cfg.PickParalizeRm:        false,
+			cfg.PickElectricDischarge: false,
+			cfg.PickResurrect:         false,
+			cfg.PickHealWounds:        false,
+		},
+		spellMap: map[*Input]spell.Spell{
+			cfg.PickExplode:           spell.Explode,
+			cfg.PickParalize:          spell.Paralize,
+			cfg.PickParalizeRm:        spell.RemoveParalize,
+			cfg.PickElectricDischarge: spell.ElectricDischarge,
+			cfg.PickResurrect:         spell.Resurrect,
+			cfg.PickHealWounds:        spell.HealWounds,
+			&NoInput:                  spell.None,
+		},
+		potionPressed: map[*Input]bool{
+			cfg.PotionHP: false,
+			cfg.PotionMP: false,
+		},
+		potionMap: map[*Input]msgs.Item{
+			cfg.PotionHP: msgs.ItemHealthPotion,
+			cfg.PotionMP: msgs.ItemManaPotion,
+			&NoInput:     msgs.ItemNone,
+		},
+
+		LastSpells: [spell.None]time.Time{
+			time.Now().Add(-time.Second * 10), //Paralize
+			time.Now().Add(-time.Second * 10), //RemoveParalize
+			time.Now().Add(-time.Second * 10), //HealWounds
+			time.Now().Add(-time.Second * 10), //Resurrect
+			time.Now().Add(-time.Second * 10), //ElectricDischarge
+			time.Now().Add(-time.Second * 10), //Explode
+		},
 	}
+	k.openCloseImg.Fill(color.RGBA{176, 82, 51, 0})
 	return k
 }
 
 func (k *Keys) ListenMovement() {
+	if k.keysLocked {
+		return
+	}
 	front, back, left, right := ebiten.IsKeyPressed(k.cfg.Front),
 		ebiten.IsKeyPressed(k.cfg.Back),
 		ebiten.IsKeyPressed(k.cfg.Left),
@@ -139,186 +227,282 @@ func (k *Keys) MovingTo() direction.D {
 	return k.directionMap[k.last]
 }
 
-type CombatKeys struct {
-	cfg           *KeyConfig
-	spell         spell.Spell
-	lastSpellCast spell.Spell
-	potion        potion.Potion
-	lastSpellKey  ebiten.Key
-	lastPotionKey ebiten.Key
-	lastCast      time.Time
-	lastMelee     time.Time
-	lastPotion    time.Time
-	spellPressed  map[ebiten.Key]bool
-	spellMap      map[ebiten.Key]spell.Spell
-	potionPressed map[ebiten.Key]bool
-	potionMap     map[ebiten.Key]potion.Potion
-
-	cursorMode ebiten.CursorShapeType
-}
-
-func NewCombatKeys(cfg *KeyConfig) *CombatKeys {
-	if cfg == nil {
-		cfg = &DefaultConfig
+func (k *Keys) MeleeHit() bool {
+	if k.keysLocked {
+		return false
 	}
-	ck := &CombatKeys{
-		cfg:        cfg,
-		spell:      spell.None,
-		lastMelee:  time.Now(),
-		lastCast:   time.Now(),
-		lastPotion: time.Now(),
-		spellPressed: map[ebiten.Key]bool{
-			cfg.PickExplode:           false,
-			cfg.PickParalize:          false,
-			cfg.PickParalizeRm:        false,
-			cfg.PickElectricDischarge: false,
-			cfg.PickResurrect:         false,
-			cfg.PickHealWounds:        false,
-		},
-		spellMap: map[ebiten.Key]spell.Spell{
-			cfg.PickExplode:           spell.Explode,
-			cfg.PickParalize:          spell.Paralize,
-			cfg.PickParalizeRm:        spell.RemoveParalize,
-			cfg.PickElectricDischarge: spell.ElectricDischarge,
-			cfg.PickResurrect:         spell.Resurrect,
-			cfg.PickHealWounds:        spell.HealWounds,
-			-1:                        spell.None,
-		},
-		potionPressed: map[ebiten.Key]bool{
-			cfg.PotionHP: false,
-			cfg.PotionMP: false,
-		},
-		potionMap: map[ebiten.Key]potion.Potion{
-			cfg.PotionHP: potion.Red,
-			cfg.PotionMP: potion.Blue,
-			-1:           potion.None,
-		},
-	}
-	return ck
-}
-
-func (ck *CombatKeys) MeleeHit() bool {
 	hit := false
-	if ebiten.IsKeyPressed(ck.cfg.Melee) &&
-		time.Since(ck.lastMelee) > ck.cfg.MeleeCooldown {
-		// &&time.Since(ck.lastCast) > ck.cfg.SwitchCooldown
-		ck.lastMelee = time.Now()
+	if k.cfg.Melee.IsPressed() &&
+		time.Since(k.LastMelee) > k.cfg.CooldownMelee &&
+		time.Since(k.LastAction) > k.cfg.CooldownAction {
+		k.LastMelee = time.Now()
+		k.LastAction = k.LastMelee
 		hit = true
 	}
 	return hit
 }
 
-func (ck *CombatKeys) SetSpell() {
-	apoca, inmo, inmoRm, desca, healWounds, resurrect := ebiten.IsKeyPressed(ck.cfg.PickExplode),
-		ebiten.IsKeyPressed(ck.cfg.PickParalize),
-		ebiten.IsKeyPressed(ck.cfg.PickParalizeRm),
-		ebiten.IsKeyPressed(ck.cfg.PickElectricDischarge),
-		ebiten.IsKeyPressed(ck.cfg.PickHealWounds),
-		ebiten.IsKeyPressed(ck.cfg.PickResurrect)
-
-	if apoca && !ck.spellPressed[ck.cfg.PickExplode] {
-		ck.spellPressed[ck.cfg.PickExplode] = true
-		ck.lastSpellKey = ck.cfg.PickExplode
-	} else if !apoca && ck.spellPressed[ck.cfg.PickExplode] {
-		ck.spellPressed[ck.cfg.PickExplode] = false
+func (k *Keys) ListenSpell() {
+	if k.keysLocked {
+		return
 	}
 
-	if inmo && !ck.spellPressed[ck.cfg.PickParalize] {
-		ck.spellPressed[ck.cfg.PickParalize] = true
-		ck.lastSpellKey = ck.cfg.PickParalize
-	} else if !inmo && ck.spellPressed[ck.cfg.PickParalize] {
-		ck.spellPressed[ck.cfg.PickParalize] = false
+	apoca, inmo, inmoRm, desca, healWounds, resurrect := k.cfg.PickExplode.IsPressed(),
+		k.cfg.PickParalize.IsPressed(),
+		k.cfg.PickParalizeRm.IsPressed(),
+		k.cfg.PickElectricDischarge.IsPressed(),
+		k.cfg.PickHealWounds.IsPressed(),
+		k.cfg.PickResurrect.IsPressed()
+
+	if apoca && !k.spellPressed[k.cfg.PickExplode] {
+		k.spellPressed[k.cfg.PickExplode] = true
+		k.lastSpellKey = k.cfg.PickExplode
+	} else if !apoca && k.spellPressed[k.cfg.PickExplode] {
+		k.spellPressed[k.cfg.PickExplode] = false
 	}
 
-	if inmoRm && !ck.spellPressed[ck.cfg.PickParalizeRm] {
-		ck.spellPressed[ck.cfg.PickParalizeRm] = true
-		ck.lastSpellKey = ck.cfg.PickParalizeRm
-	} else if !inmoRm && ck.spellPressed[ck.cfg.PickParalizeRm] {
-		ck.spellPressed[ck.cfg.PickParalizeRm] = false
+	if inmo && !k.spellPressed[k.cfg.PickParalize] {
+		k.spellPressed[k.cfg.PickParalize] = true
+		k.lastSpellKey = k.cfg.PickParalize
+	} else if !inmo && k.spellPressed[k.cfg.PickParalize] {
+		k.spellPressed[k.cfg.PickParalize] = false
 	}
 
-	if desca && !ck.spellPressed[ck.cfg.PickElectricDischarge] {
-		ck.spellPressed[ck.cfg.PickElectricDischarge] = true
-		ck.lastSpellKey = ck.cfg.PickElectricDischarge
-	} else if !desca && ck.spellPressed[ck.cfg.PickElectricDischarge] {
-		ck.spellPressed[ck.cfg.PickElectricDischarge] = false
+	if inmoRm && !k.spellPressed[k.cfg.PickParalizeRm] {
+		k.spellPressed[k.cfg.PickParalizeRm] = true
+		k.lastSpellKey = k.cfg.PickParalizeRm
+	} else if !inmoRm && k.spellPressed[k.cfg.PickParalizeRm] {
+		k.spellPressed[k.cfg.PickParalizeRm] = false
 	}
 
-	if healWounds && !ck.spellPressed[ck.cfg.PickHealWounds] {
-		ck.spellPressed[ck.cfg.PickHealWounds] = true
-		ck.lastSpellKey = ck.cfg.PickHealWounds
-	} else if !healWounds && ck.spellPressed[ck.cfg.PickHealWounds] {
-		ck.spellPressed[ck.cfg.PickHealWounds] = false
+	if desca && !k.spellPressed[k.cfg.PickElectricDischarge] {
+		k.spellPressed[k.cfg.PickElectricDischarge] = true
+		k.lastSpellKey = k.cfg.PickElectricDischarge
+	} else if !desca && k.spellPressed[k.cfg.PickElectricDischarge] {
+		k.spellPressed[k.cfg.PickElectricDischarge] = false
 	}
 
-	if resurrect && !ck.spellPressed[ck.cfg.PickResurrect] {
-		ck.spellPressed[ck.cfg.PickResurrect] = true
-		ck.lastSpellKey = ck.cfg.PickResurrect
-	} else if !resurrect && ck.spellPressed[ck.cfg.PickResurrect] {
-		ck.spellPressed[ck.cfg.PickResurrect] = false
+	if healWounds && !k.spellPressed[k.cfg.PickHealWounds] {
+		k.spellPressed[k.cfg.PickHealWounds] = true
+		k.lastSpellKey = k.cfg.PickHealWounds
+	} else if !healWounds && k.spellPressed[k.cfg.PickHealWounds] {
+		k.spellPressed[k.cfg.PickHealWounds] = false
 	}
 
-	ck.spell = ck.spellMap[ck.lastSpellKey]
+	if resurrect && !k.spellPressed[k.cfg.PickResurrect] {
+		k.spellPressed[k.cfg.PickResurrect] = true
+		k.lastSpellKey = k.cfg.PickResurrect
+	} else if !resurrect && k.spellPressed[k.cfg.PickResurrect] {
+		k.spellPressed[k.cfg.PickResurrect] = false
+	}
+
+	k.spell = k.spellMap[k.lastSpellKey]
 }
 
-func (ck *CombatKeys) CastSpell() (bool, spell.Spell, int, int) {
-	ck.SetSpell()
+func (k *Keys) CastSpell() (bool, spell.Spell, int, int) {
 	// if spell is picked and mouse mode is not crosshair, activate and set
-	if ck.spell != spell.None && ck.cursorMode != ebiten.CursorShapeCrosshair {
+	if k.spell != spell.None && k.cursorMode != ebiten.CursorShapeCrosshair {
 		ebiten.SetCursorShape(ebiten.CursorShapeCrosshair)
-		ck.cursorMode = ebiten.CursorShapeCrosshair
+		k.cursorMode = ebiten.CursorShapeCrosshair
 	}
 
-	if ck.spell != spell.None && ebiten.IsMouseButtonPressed(ebiten.MouseButton0) &&
-		time.Since(ck.lastCast) > ck.cfg.SpellCooldown {
-		//&&
-		//time.Since(ck.lastMelee) > ck.cfg.SwitchCooldown
-		ck.lastCast = time.Now()
-		x, y := ebiten.CursorPosition()
-		pspell := ck.spell
-		ck.spell = spell.None
-		ck.lastSpellKey = -1
-		ck.lastSpellCast = pspell
-		return true, pspell, x, y
+	if ebiten.IsMouseButtonPressed(ebiten.MouseButton0) {
+		if !k.castedSpell && k.spell != spell.None &&
+			time.Since(k.LastSpells[k.spell]) > k.cfg.CooldownSpells[k.spell] &&
+			time.Since(k.LastAction) > k.cfg.CooldownAction {
+			x, y := ebiten.CursorPosition()
+			k.LastAction = time.Now()
+			k.LastSpells[k.spell] = k.LastAction
+			k.castedSpell = true
+			pspell := k.spell
+			k.spell = spell.None
+			k.lastSpellKey = &NoInput
+			return true, pspell, x, y
+		}
+	} else {
+		k.castedSpell = false
 	}
 
-	if ck.spell == spell.None && ck.cursorMode == ebiten.CursorShapeCrosshair {
+	if k.spell == spell.None && k.cursorMode == ebiten.CursorShapeCrosshair {
 		ebiten.SetCursorShape(ebiten.CursorShapeDefault)
-		ck.cursorMode = ebiten.CursorShapeDefault
+		k.cursorMode = ebiten.CursorShapeDefault
 	}
 	return false, spell.None, 0, 0
 }
 
-func (ck *CombatKeys) PressedPotion() potion.Potion {
-	red, blue := ebiten.IsKeyPressed(ck.cfg.PotionHP),
-		ebiten.IsKeyPressed(ck.cfg.PotionMP)
+func (k *Keys) PressedPotion() msgs.Item {
+	if k.keysLocked {
+		return msgs.ItemNone
+	}
+	red, blue := k.cfg.PotionHP.IsPressed(),
+		k.cfg.PotionMP.IsPressed()
 
-	if red && !ck.potionPressed[ck.cfg.PotionHP] {
-		ck.potionPressed[ck.cfg.PotionHP] = true
-		ck.lastPotionKey = ck.cfg.PotionHP
-	} else if red && !ck.potionPressed[ck.lastPotionKey] {
-		ck.lastPotionKey = ck.cfg.PotionHP
-	} else if !red && ck.potionPressed[ck.cfg.PotionHP] {
-		ck.potionPressed[ck.cfg.PotionHP] = false
+	if red && !k.potionPressed[k.cfg.PotionHP] {
+		k.potionPressed[k.cfg.PotionHP] = true
+		k.lastPotionInput = k.cfg.PotionHP
+	} else if red && !k.potionPressed[k.lastPotionInput] {
+		k.lastPotionInput = k.cfg.PotionHP
+	} else if !red && k.potionPressed[k.cfg.PotionHP] {
+		k.potionPressed[k.cfg.PotionHP] = false
 
 	}
 
-	if blue && !ck.potionPressed[ck.cfg.PotionMP] {
-		ck.potionPressed[ck.cfg.PotionMP] = true
-		ck.lastPotionKey = ck.cfg.PotionMP
-	} else if blue && !ck.potionPressed[ck.lastPotionKey] {
-		ck.lastPotionKey = ck.cfg.PotionMP
-	} else if !blue && ck.potionPressed[ck.cfg.PotionMP] {
-		ck.potionPressed[ck.cfg.PotionMP] = false
+	if blue && !k.potionPressed[k.cfg.PotionMP] {
+		k.potionPressed[k.cfg.PotionMP] = true
+		k.lastPotionInput = k.cfg.PotionMP
+	} else if blue && !k.potionPressed[k.lastPotionInput] {
+		k.lastPotionInput = k.cfg.PotionMP
+	} else if !blue && k.potionPressed[k.cfg.PotionMP] {
+		k.potionPressed[k.cfg.PotionMP] = false
 	}
 
 	if !red && !blue {
-		ck.lastPotionKey = -1
+		k.lastPotionInput = &NoInput
 	}
-	p := ck.potionMap[ck.lastPotionKey]
-	if p != potion.None && time.Since(ck.lastPotion) > ck.cfg.PotionCooldown {
-		ck.lastPotion = time.Now()
+	p := k.potionMap[k.lastPotionInput]
+	if p != msgs.ItemNone && time.Since(k.lastPotion) > k.cfg.PotionCooldown {
+		k.lastPotion = time.Now()
 		return p
 	}
-	return potion.None
+
+	return msgs.ItemNone
+}
+func (k *Keys) DrawChat(screen *ebiten.Image, x, y int) {
+	// Blink the cursor.
+	if k.chatInputOpen {
+		t := k.typer.Text
+		off := len(t) * 3
+		if k.g.counter%60 < 30 {
+			t += "_"
+		}
+		text.PrintColAt(screen, t, x-off, y, color.RGBA{176, 82, 51, 0})
+	} else if k.sentChat != "" {
+		off := len(k.sentChat) * 3
+		text.PrintAt(screen, k.sentChat, x-off, y)
+	}
+	if k.enterDown && k.sentChat == "" {
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Translate(float64(x), float64(y))
+		screen.DrawImage(k.openCloseImg, op)
+	}
+}
+func (k *Keys) ChatMessage() string {
+	if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
+		if !k.enterDown {
+			k.enterDown = true
+			if k.chatInputOpen && k.typer.Text != "" {
+				k.lastChat = time.Now()
+				k.sentChat = strings.Trim(k.typer.Text, "\n")
+				k.typer.Text = ""
+				k.chatInputOpen = !k.chatInputOpen
+				k.keysLocked = !k.keysLocked
+				return k.sentChat
+			}
+			k.sentChat = ""
+			k.chatInputOpen = !k.chatInputOpen
+			k.keysLocked = !k.keysLocked
+		}
+	} else {
+		k.enterDown = false
+	}
+	if k.chatInputOpen {
+		k.typer.Update()
+		k.typer.Text = strings.TrimPrefix(k.typer.Text, "\n")
+	}
+	if time.Since(k.lastChat) > constants.ChatMsgTTL {
+		k.sentChat = ""
+	}
+	return ""
+}
+
+var NoInput = Input{Keyboard: -1, Mouse: -1}
+
+func EmptyInput() *Input {
+	return &Input{Keyboard: -1, Mouse: -1}
+}
+
+type Input struct {
+	Mouse    ebiten.MouseButton
+	Keyboard ebiten.Key
+}
+
+type KBind interface {
+	comparable
+	V() Input
+	IsPressed() bool
+	String() string
+	Empty() bool
+	Set(Input)
+}
+
+func (i *Input) V() Input {
+	return *i
+}
+
+func (i *Input) Empty() bool {
+	return *i == NoInput
+}
+
+func (i *Input) Set(ni Input) {
+	if i == nil {
+		i = &Input{}
+	}
+	i.Keyboard = ni.Keyboard
+	i.Mouse = ni.Mouse
+}
+
+func (i *Input) IsPressed() bool {
+	if i.Keyboard != -1 {
+		return ebiten.IsKeyPressed(i.Keyboard)
+	}
+	return ebiten.IsMouseButtonPressed(i.Mouse)
+}
+
+func (i *Input) String() string {
+	if i == nil {
+		return "nil"
+	}
+	if *i == NoInput {
+		return "no input"
+	}
+	if i.Keyboard != -1 {
+		return i.Keyboard.String()
+	}
+	switch i.Mouse {
+	case ebiten.MouseButtonRight:
+		return "MouseButtonRight"
+	case ebiten.MouseButtonMiddle:
+		return "MouseButtonMiddle"
+	}
+	return "idk"
+}
+
+func NewInput(input interface{}) Input {
+	i := Input{}
+	switch v := input.(type) {
+	case ebiten.MouseButton:
+		i.Mouse = v
+		i.Keyboard = -1
+	case ebiten.Key:
+		i.Mouse = -1
+		i.Keyboard = v
+	default:
+		log.Printf("BIG ERROR\n")
+	}
+	return i
+}
+
+func NewInputPtr(input interface{}) *Input {
+	i := Input{}
+	switch v := input.(type) {
+	case ebiten.MouseButton:
+		i.Mouse = v
+		i.Keyboard = -1
+	case ebiten.Key:
+		i.Mouse = -1
+		i.Keyboard = v
+	default:
+		log.Printf("BIG ERROR\n")
+	}
+	return &i
 }

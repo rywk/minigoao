@@ -7,7 +7,6 @@ import (
 
 	"github.com/rywk/minigoao/pkg/constants"
 	"github.com/rywk/minigoao/pkg/constants/spell"
-	"github.com/rywk/minigoao/pkg/msgs"
 	"github.com/rywk/minigoao/pkg/typ"
 )
 
@@ -39,7 +38,7 @@ var spellProps = [spell.None]SpellProp{
 	},
 	{
 		Spell:    spell.RemoveParalize,
-		ManaCost: 300,
+		ManaCost: 450,
 		Cast: func(from, to *Player, calc int32) error {
 			to.paralized = false
 			return nil
@@ -57,7 +56,7 @@ var spellProps = [spell.None]SpellProp{
 	},
 	{
 		Spell:      spell.Resurrect,
-		ManaCost:   700,
+		ManaCost:   1100,
 		BaseDamage: 0,
 		RNGRange:   0,
 		Cast: func(from, to *Player, calc int32) error {
@@ -71,9 +70,9 @@ var spellProps = [spell.None]SpellProp{
 	},
 	{
 		Spell:      spell.ElectricDischarge,
-		ManaCost:   500,
-		BaseDamage: 60,
-		RNGRange:   10,
+		ManaCost:   550,
+		BaseDamage: 81,
+		RNGRange:   6,
 		Cast: func(from, to *Player, calc int32) error {
 			if from == to {
 				return ErrorSelfCast
@@ -84,8 +83,8 @@ var spellProps = [spell.None]SpellProp{
 	},
 	{
 		Spell:      spell.Explode,
-		ManaCost:   1000,
-		BaseDamage: 170,
+		ManaCost:   1100,
+		BaseDamage: 177,
 		RNGRange:   10,
 		Cast: func(from, to *Player, calc int32) error {
 			if from == to {
@@ -103,6 +102,10 @@ func Cast(s *SpellProp, from, to *Player) (int32, error) {
 	}
 	if to.dead && s.Spell != spell.Resurrect {
 		return 0, ErrorTargetDead
+	}
+	if from.dead && s.Spell == spell.Resurrect {
+		s.Cast(from, to, 0)
+		return 0, nil
 	}
 	if from.mp < s.ManaCost {
 		return 0, ErrorNoMana
@@ -126,8 +129,8 @@ func GetSpellProp(s spell.Spell) *SpellProp {
 
 // Melee
 const (
-	MeleeBaseDamage = 100
-	MeleeRNGRange   = 30
+	MeleeBaseDamage = 109
+	MeleeRNGRange   = 11
 )
 
 func Melee(from, to *Player) int32 {
@@ -138,50 +141,6 @@ func Melee(from, to *Player) int32 {
 		to.dead = true
 	}
 	return calc
-}
-
-// Potions
-type Item struct {
-	Type ItemType
-	Use  func(p *Player) uint32
-}
-type ItemType msgs.Item
-
-func (i ItemType) Item() *Item {
-	return &items[i]
-}
-
-const (
-	ItemManaPotion ItemType = iota
-	ItemHealthPotion
-
-	ItemLen
-)
-
-var items = [ItemLen]Item{
-	{
-		Type: ItemManaPotion,
-		Use: func(p *Player) uint32 {
-			p.mp = p.mp + int32(float32(p.maxMp)*0.05)
-			if p.mp > p.maxMp {
-				p.mp = p.maxMp
-			}
-			return uint32(p.mp)
-		},
-	}, {
-		Type: ItemHealthPotion,
-		Use: func(p *Player) uint32 {
-			p.hp = p.hp + 30
-			if p.hp > p.maxHp {
-				p.hp = p.maxHp
-			}
-			return uint32(p.hp)
-		},
-	},
-}
-
-func UseItem(item ItemType, p *Player) uint32 {
-	return item.Item().Use(p)
 }
 
 type Cooldown struct {

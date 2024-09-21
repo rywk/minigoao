@@ -8,5 +8,6 @@ import (
 func Run() error {
 	g := game.NewGame()
 	ebiten.SetWindowSize(game.ScreenWidth, game.ScreenHeight)
+	ebiten.SetVsyncEnabled(false)
 	return ebiten.RunGame(g)
 }

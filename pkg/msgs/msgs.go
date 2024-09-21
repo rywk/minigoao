@@ -13,16 +13,6 @@ import (
 	"github.com/vmihailenco/msgpack/v5"
 )
 
-// M game protocol messenger
-// basically plain tcp with message size prefix.
-// (not anymore) using protobuf but its irrelevant.
-// given the size of the messages i opted for messagepack
-// also to reduce deserialization im sending
-// another prefix with event type
-//
-// |--size-|-event-| message...
-//
-// 0,0,1,0,0,0,0,1, 256 byte message...
 type M struct {
 	// The connection
 	c net.Conn
@@ -129,6 +119,7 @@ const (
 	ECastSpell
 	EMelee
 	EUseItem
+	ESendChat
 
 	EMoveOk
 	ECastSpellOk
@@ -142,6 +133,7 @@ const (
 	EPlayerDespawned     // A Player despawned in the viewport
 	EPlayerEnterViewport // A Player spawned at an edge of the viewport
 	EPlayerLeaveViewport // A Player despawned at an edge of the viewport
+	EBroadcastChat       // A player chatted in viewport
 
 	EPlayerMoved         // A Player in the viewport moved
 	EPlayerSpell         // A Player in the viewport recieved a spell
@@ -162,6 +154,7 @@ var eventLen = [ELen]int{
 	1 + 4*2, // ECastSpell - 1 byte (uint8) to define the spell picked in the client side. x, y map coords are 2 uint32
 	1,       // EMelee - signals user used the melee key
 	1,       // EUseItem - 1 byte (uint8) to define the item id
+	-1,      // ESendChat
 
 	2,                 // EMoveOk - 1 byte (bool) move, 1 byte (bool) direction
 	1 + 2 + 4 + 4 + 1, // ECastSpellOk - 1 byte (uint8) spell, 2 bytes (uint16) to define the player id, 4 bytes (uint32) damage,  4 bytes (uint32) new mp,  1 byte (bool) killed target
@@ -175,6 +168,7 @@ var eventLen = [ELen]int{
 	2,  // EPlayerDespawned - 2 bytes (uint16) to define the player id
 	-1, // EPlayerEnterViewport - -1 dynamic size msgpack
 	2,  // EPlayerLeaveViewport - 2 bytes (uint16) to define the player id
+	-1, // EBroadcastChat
 
 	11,            // EPlayerMoved - 1 byte (uint8) direction, 2 bytes (uint16) player id, 8 bytes (uint32, uint32) x y
 	2 + 1 + 1,     // EPlayerSpell - 2 bytes (uint16) to define the target player id, 1 byte (uint8) to define the spell, 1 byte (bool) killed target
@@ -238,7 +232,9 @@ func (m *M) EncodeAndWrite(e E, msg interface{}) error {
 		log.Print("writing melee")
 		return m.Write(e, make([]byte, EMelee.Len()))
 	case EUseItem:
-		return m.Write(e, []byte{msg.(uint8)})
+		return m.Write(e, []byte{byte(msg.(Item))})
+	case ESendChat:
+		return m.WriteWithLen(e, EncodeMsgpack(msg.(*EventSendChat)))
 	case EMoveOk:
 		return m.Write(e, msg.([]byte))
 	case ECastSpellOk:
@@ -255,6 +251,8 @@ func (m *M) EncodeAndWrite(e E, msg interface{}) error {
 		return m.WriteWithLen(e, EncodeMsgpack(msg.(*EventPlayerEnterViewport)))
 	case EPlayerLeaveViewport:
 		return m.Write(e, binary.BigEndian.AppendUint16(make([]byte, 0, 2), msg.(uint16)))
+	case EBroadcastChat:
+		return m.WriteWithLen(e, EncodeMsgpack(msg.(*EventBroadcastChat)))
 	case EPlayerMoved:
 		return m.Write(e, EncodeEventPlayerMoved(msg.(*EventPlayerMoved)))
 	case EPlayerSpell:
@@ -269,6 +267,15 @@ func (m *M) EncodeAndWrite(e E, msg interface{}) error {
 		log.Printf("unknown event %v\n", e.String())
 		return fmt.Errorf("unknown event %v", e.String())
 	}
+}
+
+type EventSendChat struct {
+	Msg string
+}
+
+type EventBroadcastChat struct {
+	ID  uint16
+	Msg string
 }
 
 func BoolByte(b bool) byte {
@@ -322,6 +329,14 @@ type EventPlayerEnterViewport = EventNewPlayer
 
 // binary
 type Item uint8
+
+const (
+	ItemManaPotion Item = iota
+	ItemHealthPotion
+
+	ItemNone
+)
+
 type EventCastSpell struct {
 	Spell  spell.Spell
 	PX, PY uint32

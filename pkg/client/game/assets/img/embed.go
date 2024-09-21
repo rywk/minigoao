@@ -95,6 +95,8 @@ var (
 
 	//go:embed text.png
 	Text_png []byte
+	//go:embed text_small.png
+	TextSmall_png []byte
 
 	//go:embed hud_bg.png
 	HudBg_png []byte
@@ -107,4 +109,23 @@ var (
 	BluePotion_png []byte
 	//go:embed red_potion.png
 	RedPotion_png []byte
+
+	//go:embed icon_melee.png
+	IconMelee_png []byte
+
+	//go:embed icon_resurrect64.png
+	IconResurrect_png []byte
+	//go:embed icon_heal64.png
+	IconHeal_png []byte
+	//go:embed icon_rm_paralize64.png
+	IconRmParalize_png []byte
+	//go:embed icon_paralize64.png
+	IconParalize_png []byte
+	//go:embed icon_electric_discharge64.png
+	IconElectricDischarge_png []byte
+	//go:embed icon_apoca64.png
+	IconExplode_png []byte
+
+	//go:embed cooldown_base.png
+	CooldownBase_png []byte
 )

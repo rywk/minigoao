@@ -1,5 +1,7 @@
 package constants
 
+import "time"
+
 const (
 	Port = ":5555"
 )
@@ -15,6 +17,8 @@ const (
 	MaxConnCount = 50
 
 	GridViewportX, GridViewportY = 43, 31
+
+	ChatMsgTTL = time.Second * 10
 )
 
 type Err struct{}

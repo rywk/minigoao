@@ -10,7 +10,7 @@ func (p *P) Set(x, y int32) {
 }
 
 func (p *P) In(r Rect) bool {
-	if p.X >= r.Min.X && p.Y >= r.Min.Y && p.X <= r.Max.X && p.Y <= r.Max.Y {
+	if p.X >= r.Min.X && p.Y >= r.Min.Y && p.X < r.Max.X && p.Y < r.Max.Y {
 		return true
 	}
 	return false

@@ -106,19 +106,20 @@ func (g *Grid) GetSlot(layer int, p typ.P) uint16 {
 	return g.grid[p.X][p.Y].Layers[layer]
 }
 
+func (g *Grid) SetSlot(layer int, p typ.P, pid uint16) {
+	g.grid[p.X][p.Y].Layers[layer] = pid
+}
+
 func (g *Grid) Move(layer int, p typ.P, np typ.P) error {
 	if !exist(np, typ.P{}, g.w, g.h) {
 		return fmt.Errorf("%s: from %v to %v", ErrorOutOfBounds, p, np)
 	}
-	to, unlockTo := g.Update(np)
-	defer unlockTo()
-	if to.Layers[layer] != 0 {
+	to := g.GetSlot(layer, np)
+	if to != 0 {
 		return fmt.Errorf("%s: from %v to %v", ErrorSlotOccupied, p, np)
 	}
-	from, unlockFrom := g.Update(p)
-	defer unlockFrom()
-	to.Layers[layer] = from.Layers[layer]
-	from.Layers[layer] = 0
+	g.SetSlot(layer, np, g.GetSlot(layer, p))
+	g.SetSlot(layer, p, 0)
 	return nil
 }
 
@@ -135,13 +136,11 @@ func (g *Grid) Set(layer int, np typ.P, id uint16) error {
 	return nil
 }
 
-func (g *Grid) Unset(layer int, np typ.P) error {
-	if !exist(np, typ.P{}, g.w, g.h) {
-		return fmt.Errorf("%s: on %v", ErrorOutOfBounds, np)
+func (g *Grid) Unset(layer int, p typ.P) error {
+	if !exist(p, typ.P{}, g.w, g.h) {
+		return fmt.Errorf("%s: on %v", ErrorOutOfBounds, p)
 	}
-	on, unlock := g.Update(np)
-	defer unlock()
-	on.Layers[layer] = 0
+	g.SetSlot(layer, p, 0)
 	return nil
 }
 

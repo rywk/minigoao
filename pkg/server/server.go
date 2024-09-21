@@ -47,7 +47,7 @@ func (s *Server) AcceptConnections() {
 func (s *Server) Start(exposed bool) error {
 	address := fmt.Sprintf("127.0.0.1:%d", s.port)
 	if exposed {
-		address = fmt.Sprintf("0.0.0.0:%d", s.port)
+		address = fmt.Sprintf("192.168.0.66:%d", s.port)
 	}
 	var err error
 	s.tcp, err = net.Listen("tcp4", address)
@@ -141,15 +141,15 @@ func (g *Game) HandleLogin() {
 		p := &Player{
 			g:             g,
 			m:             msgs.New(conn),
-			pos:           typ.P{X: 50, Y: 50},
+			pos:           typ.P{X: 250, Y: 250},
 			Send:          make(chan OutMsg, 100),
 			dir:           direction.Front,
 			speedPxXFrame: 3,
 			speedXTile:    (constants.TileSize / 3) * AverageGameFrame,
-			hp:            333,
-			maxHp:         333,
-			mp:            3333,
-			maxMp:         3333,
+			hp:            372,
+			maxHp:         372,
+			mp:            2420,
+			maxMp:         2420,
 		}
 
 		log.Printf("waiting nick\n")
@@ -170,11 +170,11 @@ func (g *Game) HandleLogin() {
 
 func (g *Game) AddObjectsToSpace() {
 	for y := 0; y < constants.WorldY; y++ {
-		// g.space.Set(1, typ.P{X: int32(30), Y: int32(y)}, uint16(assets.Shroom))
-		// g.space.Set(1, typ.P{X: int32(270), Y: int32(y)}, uint16(assets.Shroom))
+		g.space.Set(1, typ.P{X: int32(0), Y: int32(y)}, uint16(assets.Shroom))
+		g.space.Set(1, typ.P{X: int32(constants.WorldX - 1), Y: int32(y)}, uint16(assets.Shroom))
 		for x := 0; x < constants.WorldX; x++ {
-			// g.space.Set(1, typ.P{X: int32(x), Y: int32(30)}, uint16(assets.Shroom))
-			// g.space.Set(1, typ.P{X: int32(x), Y: int32(270)}, uint16(assets.Shroom))
+			g.space.Set(1, typ.P{X: int32(x), Y: int32(0)}, uint16(assets.Shroom))
+			g.space.Set(1, typ.P{X: int32(x), Y: int32(constants.WorldY - 1)}, uint16(assets.Shroom))
 			if x%25 == 0 && y%25 == 0 {
 				g.space.Set(1, typ.P{X: int32(x), Y: int32(y)}, uint16(assets.Shroom))
 			}
@@ -211,13 +211,19 @@ func (g *Game) consumeIncomingData() {
 		case msgs.EMelee:
 			g.playerMelee(player)
 		case msgs.EUseItem:
-			item := ItemType(incomingData.Data.(msgs.Item))
+			item := incomingData.Data.(msgs.Item)
 			log.Printf("[%v][%v] USE ITEM %v\n", player.id, player.nick, item)
 			changed := UseItem(item, player)
 			player.Send <- OutMsg{Event: msgs.EUseItemOk, Data: &msgs.EventUseItemOk{
 				Item:   msgs.Item(item),
 				Change: changed,
 			}}
+		case msgs.ESendChat:
+			chat := incomingData.Data.(*msgs.EventSendChat)
+			g.space.Notify(player.pos, msgs.EBroadcastChat, &msgs.EventBroadcastChat{
+				ID:  player.id,
+				Msg: chat.Msg,
+			}, player.id)
 		}
 	}
 }
@@ -254,7 +260,7 @@ func (g *Game) playerMove(player *Player, incomingData IncomingMsg) {
 			Pos: player.pos,
 			Dir: player.dir,
 		}, player.id)
-		log.Printf("[%v] %v -X-> %v: %v\n", player.nick, player.pos, np, err)
+		log.Printf("[%v][%v] %v -X-> %v: %v\n", player.id, player.nick, player.pos, np, err)
 		return
 	}
 	player.lastMove = time.Now()
@@ -456,6 +462,10 @@ func (p *Player) HandleIncomingMessages() {
 		case msgs.EMelee:
 		case msgs.EUseItem:
 			msg.Data = msgs.Item(im.Data[0])
+		case msgs.ESendChat:
+			d := msgs.DecodeMsgpack(im.Data, &msgs.EventSendChat{})
+			msg.Data = d
+			log.Print(d.Msg)
 		default:
 			log.Printf("HandleIncomingMessages unknown event\n")
 			continue

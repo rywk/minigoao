@@ -26,12 +26,12 @@ func repeatingKeyPressed(key ebiten.Key) bool {
 
 type Typer struct {
 	runes   []rune
-	text    string
+	Text    string
 	counter int
 }
 
 func NewTyper(s ...string) *Typer {
-	return &Typer{runes: make([]rune, 0), text: strings.Join(s, "")}
+	return &Typer{runes: make([]rune, 0), Text: strings.Join(s, "")}
 }
 
 func (g *Typer) Update() error {
@@ -39,23 +39,23 @@ func (g *Typer) Update() error {
 	// Note that AppendInputChars result changes every frame, so you need to call this
 	// every frame.
 	g.runes = ebiten.AppendInputChars(g.runes[:0])
-	g.text += string(g.runes)
+	g.Text += string(g.runes)
 
 	// Adjust the string to be at most 10 lines.
-	ss := strings.Split(g.text, "\n")
+	ss := strings.Split(g.Text, "\n")
 	if len(ss) > 10 {
-		g.text = strings.Join(ss[len(ss)-10:], "\n")
+		g.Text = strings.Join(ss[len(ss)-10:], "\n")
 	}
 
 	// If the enter key is pressed, add a line break.
 	if repeatingKeyPressed(ebiten.KeyEnter) || repeatingKeyPressed(ebiten.KeyNumpadEnter) {
-		g.text += "\n"
+		g.Text += "\n"
 	}
 
 	// If the backspace key is pressed, remove one character.
 	if repeatingKeyPressed(ebiten.KeyBackspace) {
-		if len(g.text) >= 1 {
-			g.text = g.text[:len(g.text)-1]
+		if len(g.Text) >= 1 {
+			g.Text = g.Text[:len(g.Text)-1]
 		}
 	}
 
@@ -63,13 +63,13 @@ func (g *Typer) Update() error {
 	return nil
 }
 
-func (g *Typer) Text() string {
-	return g.text
+func (g *Typer) String() string {
+	return g.Text
 }
 
 func (g *Typer) Draw(screen *ebiten.Image, x, y int) {
 	// Blink the cursor.
-	t := g.text
+	t := g.Text
 	if g.counter%60 < 30 {
 		t += "_"
 	}

@@ -74,11 +74,26 @@ func (m *Map) Update() {
 	// ? eventually npcs?
 }
 
-func (m *Map) Draw() {
+const (
+	pixelXView = constants.GridViewportX * constants.TileSize
+	pixelYView = constants.GridViewportY * constants.TileSize
+)
+
+func (m *Map) Draw(pos typ.P) {
+	minX, minY := pos.X*constants.TileSize-pixelXView, pos.Y*constants.TileSize-pixelYView
+	maxX, maxY := pos.X*constants.TileSize+pixelXView, pos.Y*constants.TileSize+pixelYView
 	for y := range m.floorTiles {
+		ypx := int32(y * texture.GrassTextureSize)
+		if ypx < minY || ypx > maxY {
+			continue
+		}
 		for x := range m.floorTiles[y] {
+			xpx := int32(x * texture.GrassTextureSize)
+			if xpx < minX || xpx > maxX {
+				continue
+			}
 			op := &ebiten.DrawImageOptions{}
-			op.GeoM.Translate(float64(x*texture.GrassTextureSize), float64(y*texture.GrassTextureSize))
+			op.GeoM.Translate(float64(xpx), float64(ypx))
 			if m.floorTiles[y][x] == nil {
 				continue
 			}
@@ -86,9 +101,17 @@ func (m *Map) Draw() {
 		}
 	}
 	for y := range m.stuffTiles {
+		ypx := int32(y * constants.TileSize)
+		if ypx < minY || ypx > maxY {
+			continue
+		}
 		for x := range m.stuffTiles[y] {
+			xpx := int32(x * constants.TileSize)
+			if xpx < minX || xpx > maxX {
+				continue
+			}
 			op := &ebiten.DrawImageOptions{}
-			op.GeoM.Translate(float64(x*constants.TileSize), float64(y*constants.TileSize))
+			op.GeoM.Translate(float64(xpx), float64(ypx))
 			m.stuffTiles[y][x].Draw(m.world, op)
 		}
 	}
@@ -123,13 +146,13 @@ func RandomShroomLayer(width, height int) [][]assets.Image {
 	layer := make([][]assets.Image, height)
 	for y := 0; y < height; y++ {
 		layer[y] = make([]assets.Image, width)
-		// layer[y][30] = assets.Shroom
-		// layer[y][270] = assets.Shroom
+		layer[y][0] = assets.Shroom
+		layer[y][width-1] = assets.Shroom
 	}
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
-			// layer[30][x] = assets.Shroom
-			// layer[270][x] = assets.Shroom
+			layer[0][x] = assets.Shroom
+			layer[height-1][x] = assets.Shroom
 			if x%25 == 0 && y%25 == 0 {
 				layer[y][x] = assets.Shroom
 			}

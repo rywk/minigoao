@@ -25,12 +25,9 @@ import (
 	"github.com/rywk/minigoao/pkg/constants"
 	"github.com/rywk/minigoao/pkg/constants/assets"
 	"github.com/rywk/minigoao/pkg/constants/direction"
-	"github.com/rywk/minigoao/pkg/constants/potion"
 	"github.com/rywk/minigoao/pkg/constants/spell"
 	"github.com/rywk/minigoao/pkg/msgs"
-	"github.com/rywk/minigoao/pkg/server"
 	"github.com/rywk/minigoao/pkg/typ"
-	"golang.design/x/clipboard"
 	"golang.org/x/image/math/f64"
 )
 
@@ -72,14 +69,14 @@ type Game struct {
 	client *player.ClientP
 	stats  *Hud
 
-	keys       *Keys
-	combatKeys *CombatKeys
+	keys *Keys
 
-	lastMove      time.Time
-	leftForMove   float64 // pixels left to complete tile change
-	lastDir       direction.D
-	soundPrevWalk int
-	startForStep  time.Time
+	lastMove          time.Time
+	leftForMove       float64 // pixels left to complete tile change
+	lastDir           direction.D
+	soundPrevWalk     int
+	startForStep      time.Time
+	lastMoveConfirmed bool
 
 	lastPotion     time.Time
 	lastPotionUsed msgs.Item
@@ -116,10 +113,10 @@ func NewGame() *Game {
 func (g *Game) init() {
 	g.mode = ModeRegister
 	g.typer = typing.NewTyper()
-	err := clipboard.Init()
-	if err != nil {
-		log.Fatal(err)
-	}
+	// err := clipboard.Init()
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 	g.fsBtn = NewCheckbox(typ.P{X: HalfScreenX + 30, Y: ScreenHeight - ScreenHeight/6},
 		texture.Decode(img.CheckboxOn_png), texture.Decode(img.CheckboxOff_png))
 	g.inputBox = texture.Decode(img.InputBox_png)
@@ -150,9 +147,9 @@ func (g *Game) updateRegister() {
 	g.fsBtn.Update()
 	g.fullscreen = g.fsBtn.On
 	g.typer.Update()
-	text := g.typer.Text()
+	text := g.typer.String()
 	if ebiten.IsMouseButtonPressed(ebiten.MouseButton2) {
-		g.serverAddress = string(clipboard.Read(clipboard.FmtText))
+		g.serverAddress = "127.0.0.1:28441" // string(clipboard.Read(clipboard.FmtText))
 	}
 	if !strings.HasSuffix(text, "\n") {
 		return
@@ -186,13 +183,14 @@ func (g *Game) drawRegister(screen *ebiten.Image) {
 }
 
 func (g *Game) drawGame(screen *ebiten.Image) {
-	g.world.Draw()
+	g.world.Draw(typ.P{X: g.player.X, Y: g.player.Y})
 	for _, p := range g.playersY {
 		if p == nil {
 			continue
 		}
 		p.Draw(g.world.Image())
 	}
+	g.keys.DrawChat(g.world.Image(), int(g.player.Pos[0]+16), int(g.player.Pos[1]-36))
 	g.Render(g.world.Image(), screen)
 
 	ebitenutil.DebugPrint(screen,
@@ -201,14 +199,54 @@ func (g *Game) drawGame(screen *ebiten.Image) {
 	g.stats.Draw(screen)
 }
 
+func (g *Game) updateGame() error {
+	if ebiten.IsKeyPressed(ebiten.KeyEscape) {
+		g.Clear()
+		g.typer = typing.NewTyper()
+		g.mode = ModeRegister
+		ebiten.SetFullscreen(false)
+		g.ms.Close()
+		return errors.New("esc exit")
+	}
+	if err := g.ProcessEventQueue(); err != nil {
+		g.Clear()
+		g.typer = typing.NewTyper()
+		g.mode = ModeRegister
+		ebiten.SetFullscreen(false)
+		return err
+	}
+	g.pingServer()
+	g.SendChat()
+	g.ListenInputs()
+	g.ProcessMovement()
+	g.ProcessCombat()
+	g.world.Update()
+	g.player.Update(g.counter)
+	g.player.Effect.Update(g.counter)
+	for _, p := range g.players {
+		if p == nil {
+			continue
+		}
+		p.WalkSteps(g.world.Space)
+		p.Update(g.counter)
+		p.Effect.Update(g.counter)
+	}
+	sort.Slice(g.playersY, func(i, j int) bool {
+		return g.playersY[i].ValueY() < g.playersY[j].ValueY()
+	})
+	g.stats.Update()
+	g.counter++
+	return nil
+}
+
 func (g *Game) StartGame(nick string, address string) {
 	ebiten.SetFullscreen(g.fullscreen)
 	g.SoundBoard = audio2d.NewSoundBoard()
 	g.ViewPort = f64.Vec2{ScreenWidth, ScreenHeight}
 	g.ZoomFactor = 1
 	g.lastMove = time.Now()
-	g.keys = NewKeys(nil)
-	g.combatKeys = NewCombatKeys(nil)
+	g.lastMoveConfirmed = true
+	g.keys = NewKeys(g, nil)
 
 	tcp, err := net.Dial("tcp4", address)
 	if err != nil {
@@ -305,6 +343,10 @@ func (g *Game) WriteEventQueue() {
 			dim.Data = msg
 		case msgs.EPlayerDespawned:
 			dim.Data = binary.BigEndian.Uint16(im.Data)
+		case msgs.EBroadcastChat:
+			msg := &msgs.EventBroadcastChat{}
+			msgs.DecodeMsgpack(im.Data, msg)
+			dim.Data = msg
 		}
 		g.eventLock.Lock()
 		g.eventQueue = append(g.eventQueue, &dim)
@@ -418,8 +460,8 @@ func (g *Game) ProcessEventQueue() error {
 				caster = g.player
 			}
 			g.SoundBoard.Play(assets.SoundFromSpell(event.Spell))
-			caster.Effect.NewAttackNumber(int(event.Damage))
 			g.player.Effect.NewSpellHit(event.Spell)
+			caster.Effect.NewAttackNumber(int(event.Damage))
 			g.player.Client.HP = int(event.NewHP)
 			if g.player.Client.HP == 0 {
 				g.player.Inmobilized = false
@@ -435,14 +477,17 @@ func (g *Game) ProcessEventQueue() error {
 			event := ev.Data.(*msgs.EventUseItemOk)
 			log.Printf("UsePotionOk m: %#v\n", event)
 			switch event.Item {
-			case msgs.Item(server.ItemManaPotion):
+			case msgs.Item(msgs.ItemManaPotion):
 				g.player.Client.MP = int(event.Change)
-			case msgs.Item(server.ItemHealthPotion):
+			case msgs.Item(msgs.ItemHealthPotion):
 				g.player.Client.HP = int(event.Change)
 			}
-			g.stats.potionAlpha = 190
+			g.stats.potionAlpha = 1
 			g.lastPotionUsed = event.Item
 			g.SoundBoard.Play(assets.Potion)
+		case msgs.EBroadcastChat:
+			event := ev.Data.(*msgs.EventBroadcastChat)
+			g.players[event.ID].SetChatMsg(event.Msg)
 		}
 	}
 	g.eventQueue = g.eventQueue[:0]
@@ -473,54 +518,20 @@ func (g *Game) DespawnPlayer(pid uint16) {
 		}
 	}
 }
-
-func (g *Game) updateGame() error {
-	if ebiten.IsKeyPressed(ebiten.KeyEscape) {
-		g.Clear()
-		g.typer = typing.NewTyper()
-		g.mode = ModeRegister
-		ebiten.SetFullscreen(false)
-		g.ms.Close()
-		return errors.New("esc exit")
-	}
-	if err := g.ProcessEventQueue(); err != nil {
-		g.Clear()
-		g.typer = typing.NewTyper()
-		g.mode = ModeRegister
-		ebiten.SetFullscreen(false)
-		return err
-	}
-	g.pingServer()
-	g.ProcessMovement()
-	g.ProcessCombat()
-	g.world.Update()
-	g.player.Update(g.counter)
-	g.player.Effect.Update(g.counter)
-	for _, p := range g.players {
-		if p == nil {
-			continue
+func (g *Game) SendChat() {
+	if msg := g.keys.ChatMessage(); msg != "" {
+		g.outQueue <- &GameMsg{
+			E:    msgs.ESendChat,
+			Data: &msgs.EventSendChat{Msg: msg},
 		}
-		p.WalkSteps(g.world.Space)
-		p.Update(g.counter)
-		p.Effect.Update(g.counter)
 	}
-	sort.Slice(g.playersY, func(i, j int) bool {
-		return g.playersY[i].ValueY() < g.playersY[j].ValueY()
-	})
-	g.stats.Update()
-	// if ebiten.IsKeyPressed(ebiten.KeyZ) {
-	// 	g.Reset()
-	// }
-	g.counter++
-
-	return nil
 }
 
 func (g *Game) ProcessCombat() {
-	if g.combatKeys.MeleeHit() {
+	if g.keys.MeleeHit() {
 		g.outQueue <- &GameMsg{E: msgs.EMelee}
 	}
-	if ok, spellType, x, y := g.combatKeys.CastSpell(); ok {
+	if ok, spellType, x, y := g.keys.CastSpell(); ok {
 		worldX, worldY := g.ScreenToWorld(x, y)
 		g.outQueue <- &GameMsg{E: msgs.ECastSpell, Data: &msgs.EventCastSpell{
 			PX:    uint32(worldX),
@@ -528,7 +539,7 @@ func (g *Game) ProcessCombat() {
 			Spell: spellType,
 		}}
 	}
-	if pressedPotion := g.combatKeys.PressedPotion(); pressedPotion != potion.None {
+	if pressedPotion := g.keys.PressedPotion(); pressedPotion != msgs.ItemNone {
 		g.outQueue <- &GameMsg{E: msgs.EUseItem, Data: pressedPotion}
 	}
 }
@@ -548,6 +559,7 @@ func DirToNewPos(p *player.P, d direction.D) typ.P {
 }
 
 func (g *Game) MovementResponse(data []byte) {
+	g.lastMoveConfirmed = true
 	allowed := data[0] != 0
 	dir := direction.D(data[1])
 	if len(g.steps) == 0 {
@@ -597,6 +609,7 @@ func (g *Game) MovementResponse(data []byte) {
 
 func (g *Game) TryMove(d direction.D, np typ.P, confident bool) {
 	g.lastDir = d
+	g.lastMoveConfirmed = false
 	g.outQueue <- &GameMsg{E: msgs.EMove, Data: d}
 	g.steps = append(g.steps, player.Step{
 		To:     np,
@@ -635,7 +648,7 @@ func (g *Game) AddGameStep(d direction.D) {
 	g.player.Direction = d
 	np := DirToNewPos(g.player, d)
 	outWorld := np.Out(g.world.Space.Rect)
-	if outWorld && d == g.lastDir {
+	if outWorld {
 		return
 	}
 	stuff := g.world.Space.GetSlot(1, np)
@@ -648,6 +661,11 @@ func (g *Game) AddGameStep(d direction.D) {
 	confident := !outWorld && !g.player.Inmobilized && playerLayer == 0 && stuff == 0
 
 	g.TryMove(d, np, confident)
+}
+
+func (g *Game) ListenInputs() {
+	g.keys.ListenMovement()
+	g.keys.ListenSpell()
 }
 
 func (g *Game) ProcessMovement() {
@@ -670,9 +688,8 @@ func (g *Game) ProcessMovement() {
 	} else {
 		g.player.Walking = false
 	}
-	g.keys.ListenMovement()
 	d := g.keys.MovingTo()
-	if g.leftForMove == 0 && d != direction.Still && time.Since(g.startForStep).Milliseconds() > 50 {
+	if g.lastMoveConfirmed && g.leftForMove == 0 && d != direction.Still && time.Since(g.startForStep).Milliseconds() > 50 {
 		g.AddGameStep(d)
 	}
 }
