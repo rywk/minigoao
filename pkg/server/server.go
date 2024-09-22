@@ -205,6 +205,7 @@ func (g *Game) Run() {
 	g.AddObjectsToSpace()
 	go g.HandleLogin()
 	g.consumeIncomingData()
+
 }
 
 func (g *Game) consumeIncomingData() {
