@@ -13,7 +13,6 @@ import (
 	"github.com/gopxl/beep/v2/speaker"
 	"github.com/gopxl/beep/v2/vorbis"
 	"github.com/gopxl/beep/v2/wav"
-	"github.com/hajimehoshi/ebiten/v2/audio"
 	audiofile "github.com/rywk/minigoao/pkg/client/game/assets/audio"
 	"github.com/rywk/minigoao/pkg/constants/assets"
 )
@@ -128,43 +127,44 @@ type AudioMixer interface {
 }
 
 var _ AudioMixer = (*SoundBoard)(nil)
-var _ AudioMixer = (*SimpleSoundBoard)(nil)
 
-type SimpleSoundBoard struct {
-	assetFiles map[assets.Sound]*[]byte
-	ctx        *audio.Context
-}
+// var _ AudioMixer = (*SimpleSoundBoard)(nil)
 
-func (sb *SimpleSoundBoard) Play(s assets.Sound) {
-	sePlayer := sb.ctx.NewPlayerFromBytes(*sb.assetFiles[s])
-	sePlayer.SetVolume(.4)
-	sePlayer.Play()
-}
+// type SimpleSoundBoard struct {
+// 	assetFiles map[assets.Sound]*[]byte
+// 	ctx        *audio.Context
+// }
 
-func (sb *SimpleSoundBoard) PlayFrom(s assets.Sound, x, y, sx, sy int32) {
-	sb.Play(s)
-}
+// func (sb *SimpleSoundBoard) Play(s assets.Sound) {
+// 	sePlayer := sb.ctx.NewPlayerFromBytes(*sb.assetFiles[s])
+// 	sePlayer.SetVolume(.4)
+// 	sePlayer.Play()
+// }
 
-func NewSimpleSoundBoard() *SimpleSoundBoard {
-	ssb := &SimpleSoundBoard{
-		ctx: audio.NewContext(22050),
-	}
-	ssb.assetFiles = map[assets.Sound]*[]byte{
-		assets.Spawn:                &audiofile.Spawn_wav,
-		assets.MeleeAir:             &audiofile.MeleeAir_wav,
-		assets.MeleeBlood:           &audiofile.MeleeHit_wav,
-		assets.Walk1:                &audiofile.Walk1_wav,
-		assets.Walk2:                &audiofile.Walk2_wav,
-		assets.SpellApocaSound:      &audiofile.SpellApoca_wav,
-		assets.SpellDescaSound:      &audiofile.SpellDesca_wav,
-		assets.SpellInmoSound:       &audiofile.SpellInmo_wav,
-		assets.SpellHealWoundsSound: &audiofile.SpellHealWounds_wav,
-		assets.SpellResurrectSound:  &audiofile.SpellResurrect_wav,
-		assets.SpellInmoRmSound:     &audiofile.SpellInmoRm_wav,
-		assets.Potion:               &audiofile.Potion_wav,
-	}
-	return ssb
-}
+// func (sb *SimpleSoundBoard) PlayFrom(s assets.Sound, x, y, sx, sy int32) {
+// 	sb.Play(s)
+// }
+
+// func NewSimpleSoundBoard() *SimpleSoundBoard {
+// 	ssb := &SimpleSoundBoard{
+// 		ctx: audio.NewContext(22050),
+// 	}
+// 	ssb.assetFiles = map[assets.Sound]*[]byte{
+// 		assets.Spawn:                &audiofile.Spawn_wav,
+// 		assets.MeleeAir:             &audiofile.MeleeAir_wav,
+// 		assets.MeleeBlood:           &audiofile.MeleeHit_wav,
+// 		assets.Walk1:                &audiofile.Walk1_wav,
+// 		assets.Walk2:                &audiofile.Walk2_wav,
+// 		assets.SpellApocaSound:      &audiofile.SpellApoca_wav,
+// 		assets.SpellDescaSound:      &audiofile.SpellDesca_wav,
+// 		assets.SpellInmoSound:       &audiofile.SpellInmo_wav,
+// 		assets.SpellHealWoundsSound: &audiofile.SpellHealWounds_wav,
+// 		assets.SpellResurrectSound:  &audiofile.SpellResurrect_wav,
+// 		assets.SpellInmoRmSound:     &audiofile.SpellInmoRm_wav,
+// 		assets.Potion:               &audiofile.Potion_wav,
+// 	}
+// 	return ssb
+// }
 
 func (sb *SoundBoard) Play(s assets.Sound) {
 	sb.sounds[s].Play()
