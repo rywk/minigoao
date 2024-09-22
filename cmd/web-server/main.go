@@ -36,6 +36,7 @@ import (
 )
 
 const mainWasm = "main.wasm"
+const miniaoExe = "miniao.exe"
 
 const indexHTML = `<!DOCTYPE html>
 <script src="wasm_exec.js"></script>
@@ -73,13 +74,18 @@ var (
 	tmpOutputDir = ""
 	waitChannel  = make(chan struct{})
 
-	wasmFile *os.File
-	wasmExec []byte
+	wasmFile   *os.File
+	gameClient *os.File
+	wasmExec   []byte
 )
 
 func init() {
 	var err error
 	wasmFile, err = os.Open("./" + mainWasm)
+	if err != nil {
+		panic(err)
+	}
+	gameClient, err = os.Open("./" + miniaoExe)
 	if err != nil {
 		panic(err)
 	}
@@ -109,7 +115,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 	upath := r.URL.Path[1:]
 	fpath := path.Base(upath)
 	file := filepath.Base(fpath)
-	if !strings.HasSuffix(r.URL.Path, "/") && file != "wasm_exec.js" && file != mainWasm {
+	if !strings.HasSuffix(r.URL.Path, "/") && file != "wasm_exec.js" && file != mainWasm && file != "miniao.exe" {
 		http.Error(w, "", http.StatusNotFound)
 		return
 	}
@@ -161,6 +167,8 @@ func handle(w http.ResponseWriter, r *http.Request) {
 	case mainWasm:
 		http.ServeContent(w, r, mainWasm, time.Now(), wasmFile)
 		return
+	case "miniao.exe":
+		http.ServeContent(w, r, "miniao.exe", time.Now(), gameClient)
 	case "_wait":
 		waitForUpdate(w, r)
 		return
@@ -168,8 +176,6 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		notifyWaiters(w, r)
 		return
 	}
-
-	http.ServeFile(w, r, filepath.Join(".", r.URL.Path))
 }
 
 func target() string {

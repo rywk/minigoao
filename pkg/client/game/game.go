@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/rywk/minigoao/pkg/client/audio2d"
 	"github.com/rywk/minigoao/pkg/client/game/assets/img"
 	"github.com/rywk/minigoao/pkg/client/game/player"
@@ -132,21 +133,7 @@ func NewGame(web bool, serverAddr string) *Game {
 	}
 	g.fsBtn = NewCheckbox(g)
 	g.vsyncBtn = NewCheckbox(g)
-	// if g.web {
-	// 	g.SoundBoard = audio2d.NewSimpleSoundBoard()
-	// } else {
-	// }
 	g.SoundBoard = audio2d.NewSoundBoard(web)
-	// g.typingServer = false
-	// if !g.web {
-	// 	g.typingServer = true
-	// 	g.serverTyper = typing.NewTyper()
-	// 	g.adressEnteringPasteTooltip = "(right click to paste)"
-	// 	err := clipboard.Init()
-	// 	if err != nil {
-	// 		log.Fatal(err)
-	// 	}
-	// }
 	return g
 }
 
@@ -199,22 +186,6 @@ func (g *Game) updateRegister() {
 		return
 	}
 
-	// if inpututil.IsKeyJustPressed(ebiten.KeyTab) {
-	// 	if g.typingServer {
-	// 		g.serverTyper.StopCursor()
-	// 	} else {
-	// 		g.nickTyper.StopCursor()
-	// 	}
-	// 	g.typingServer = !g.typingServer
-
-	// }
-
-	// if !g.web {
-	// 	if ebiten.IsMouseButtonPressed(ebiten.MouseButton2) {
-	// 		g.serverTyper.Text = string(clipboard.Read(clipboard.FmtText))
-	// 	}
-	// }
-
 	r := strings.NewReplacer("\n", "", " ", "")
 	nickText := g.nickTyper.String()
 	addressText := g.serverTyper.String()
@@ -231,13 +202,6 @@ func (g *Game) updateRegister() {
 
 func (g *Game) drawRegister(screen *ebiten.Image) {
 	g.mouseX, g.mouseY = ebiten.CursorPosition()
-
-	// text.PrintBigAt(screen, "Type a server IP", HalfScreenX-150, HalfScreenY/2-40)
-	// text.PrintAt(screen, g.adressEnteringPasteTooltip, HalfScreenX-144, HalfScreenY/2+58)
-	// op := &ebiten.DrawImageOptions{}
-	// op.GeoM.Translate(HalfScreenX-150, HalfScreenY/2-5)
-	// screen.DrawImage(g.inputBox, op)
-	// g.serverTyper.DrawCol(screen, HalfScreenX-130, HalfScreenY/2+7, color.RGBA{255, uint8(255 - g.connErrorColorStart), uint8(255 - g.connErrorColorStart), 0})
 	text.PrintBigAt(screen, "Nick", HalfScreenX-144, HalfScreenY-95)
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(HalfScreenX-150, HalfScreenY-55)
@@ -247,7 +211,6 @@ func (g *Game) drawRegister(screen *ebiten.Image) {
 	g.fsBtn.Draw(screen, HalfScreenX+46, HalfScreenY+92)
 	text.PrintBigAt(screen, "Vsync", HalfScreenX-95, HalfScreenY+135)
 	g.vsyncBtn.Draw(screen, HalfScreenX+46, HalfScreenY+132)
-
 	if g.connErrorColorStart > 0 {
 		text.PrintBigAtCol(screen, "Server offline", HalfScreenX-90, HalfScreenY+5, color.RGBA{178, 0, 16, uint8(g.connErrorColorStart)})
 	}
@@ -264,15 +227,14 @@ func (g *Game) drawGame(screen *ebiten.Image) {
 	}
 	g.keys.DrawChat(g.world.Image(), int(g.player.Pos[0]+16), int(g.player.Pos[1]-40))
 	g.Render(g.world.Image(), screen)
-
+	g.stats.Draw(screen)
 	text.PrintAt(screen, fmt.Sprintf("FPS: %v", int(ebiten.ActualFPS())), 0, 0)
 	text.PrintAt(screen, fmt.Sprintf("Ping: %v", g.latency), 60, 0)
 	text.PrintAt(screen, fmt.Sprintf("Online: %v", g.onlines), 128, 0)
-	g.stats.Draw(screen)
 }
 
 func (g *Game) updateGame() error {
-	if ebiten.IsKeyPressed(ebiten.KeyEscape) {
+	if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
 		g.Clear()
 		g.nickTyper = typing.NewTyper()
 		g.mode = ModeRegister
