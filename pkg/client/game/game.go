@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"image/color"
 	_ "image/png"
 	"log"
 	"math"
@@ -229,8 +230,12 @@ func (g *Game) drawRegister(screen *ebiten.Image) {
 	op.GeoM.Translate(HalfScreenX-150, HalfScreenY-55)
 	screen.DrawImage(g.inputBox, op)
 	g.nickTyper.Draw(screen, HalfScreenX-130, HalfScreenY-42)
-	text.PrintBigAt(screen, "Fullscreen", HalfScreenX-110, HalfScreenY+95)
-	g.fsBtn.Draw(screen, HalfScreenX+30, HalfScreenY+95)
+	text.PrintBigAt(screen, "Fullscreen", HalfScreenX-95, HalfScreenY+95)
+	g.fsBtn.Draw(screen, HalfScreenX+30, HalfScreenY+92)
+
+	if g.connErrorColorStart > 0 {
+		text.PrintBigAtCol(screen, "Server offline", HalfScreenX-90, HalfScreenY+5, color.RGBA{178, 0, 16, uint8(g.connErrorColorStart)})
+	}
 }
 
 func (g *Game) drawGame(screen *ebiten.Image) {

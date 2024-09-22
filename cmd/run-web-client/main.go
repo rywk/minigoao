@@ -1,13 +1,17 @@
 package main
 
 import (
+	_ "embed"
 	"os"
 
-	client "github.com/rywk/minigoao/pkg/client"
+	"github.com/rywk/minigoao/pkg/client"
 )
 
+//go:embed config.txt
+var config []byte
+
 func main() {
-	defaultServer := ""
+	defaultServer := string(config)
 	if len(os.Args) == 2 {
 		defaultServer = os.Args[1]
 	}
