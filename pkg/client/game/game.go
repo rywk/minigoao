@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"image/color"
 	_ "image/png"
 	"log"
 	"math"
@@ -22,6 +23,7 @@ import (
 	"github.com/rywk/minigoao/pkg/client/game/text"
 	"github.com/rywk/minigoao/pkg/client/game/texture"
 	"github.com/rywk/minigoao/pkg/client/game/typing"
+	"github.com/rywk/minigoao/pkg/conc"
 	"github.com/rywk/minigoao/pkg/constants"
 	"github.com/rywk/minigoao/pkg/constants/assets"
 	"github.com/rywk/minigoao/pkg/constants/direction"
@@ -45,17 +47,27 @@ type YSortable interface {
 	Draw(*ebiten.Image)
 }
 
+type Login struct {
+	data *msgs.EventPlayerLogin
+	err  error
+}
+
 type Game struct {
 	web  bool
 	mode Mode
+
 	// register stuff
-	serverAddress string
-	serverTyper   *typing.Typer
-	typingServer  bool
-	nickTyper     *typing.Typer
-	fsBtn         *Checkbox
-	inputBox      *ebiten.Image
-	fullscreen    bool
+	connecting                 bool
+	connected                  chan Login
+	adressEnteringPasteTooltip string
+	serverAddress              string
+	serverTyper                *typing.Typer
+	typingServer               bool
+	nickTyper                  *typing.Typer
+	fsBtn                      *Checkbox
+	inputBox                   *ebiten.Image
+	fullscreen                 bool
+	connErrorColorStart        int
 
 	// game
 	latency    string
@@ -115,11 +127,14 @@ func NewGame(web bool) *Game {
 }
 
 func (g *Game) init() {
+	g.connected = make(chan Login)
 	g.mode = ModeRegister
 	g.nickTyper = typing.NewTyper()
 	g.serverTyper = typing.NewTyper()
 	g.typingServer = true
 	if !g.web {
+		g.serverTyper = typing.NewTyper()
+		g.adressEnteringPasteTooltip = "(right click to paste)"
 		err := clipboard.Init()
 		if err != nil {
 			log.Fatal(err)
@@ -152,6 +167,9 @@ func (g *Game) Draw(screen *ebiten.Image) {
 }
 
 func (g *Game) updateRegister() {
+	if g.connErrorColorStart > 0 {
+		g.connErrorColorStart--
+	}
 	g.fullscreen = g.fsBtn.On
 	g.fsBtn.Update()
 	if g.typingServer {
@@ -160,8 +178,28 @@ func (g *Game) updateRegister() {
 		g.nickTyper.Update()
 	}
 
+	if g.connecting {
+		login, ok := conc.Check(g.connected)
+		if !ok {
+			return
+		}
+		g.connecting = false
+		if login.err != nil {
+			g.connErrorColorStart = 255
+			return
+		}
+		g.StartGame(login.data)
+		return
+	}
+
 	if inpututil.IsKeyJustPressed(ebiten.KeyTab) {
+		if g.typingServer {
+			g.serverTyper.StopCursor()
+		} else {
+			g.nickTyper.StopCursor()
+		}
 		g.typingServer = !g.typingServer
+
 	}
 
 	if !g.web {
@@ -170,39 +208,32 @@ func (g *Game) updateRegister() {
 		}
 	}
 
+	r := strings.NewReplacer("\n", "", " ", "")
 	nickText := g.nickTyper.String()
 	addressText := g.serverTyper.String()
-
-	if !strings.HasSuffix(addressText, "\n") && !strings.HasSuffix(nickText, "\n") {
+	if !strings.HasSuffix(nickText, "\n") && !strings.HasSuffix(addressText, "\n") {
+		g.nickTyper.Text, g.serverTyper.Text = r.Replace(nickText), r.Replace(addressText)
 		return
 	}
-
-	address := strings.Trim(strings.Trim(addressText, "\n"), " ")
-	if address == "" {
-		g.serverTyper = typing.NewTyper(addressText[:len(addressText)-1])
-		return
+	g.nickTyper.Text, g.serverTyper.Text = r.Replace(nickText), r.Replace(addressText)
+	if g.nickTyper.Text != "" && g.serverTyper.Text != "" {
+		g.connecting = true
+		go g.Connect(g.nickTyper.Text, g.serverTyper.Text)
 	}
-	nick := strings.Trim(strings.Trim(nickText, "\n"), " ")
-	if nick == "" {
-		g.nickTyper = typing.NewTyper(nickText[:len(nickText)-1])
-		return
-	}
-	g.StartGame(nick, address)
 }
 
 func (g *Game) drawRegister(screen *ebiten.Image) {
-	text.PrintBigAt(screen, "Right click to paste an IP", HalfScreenX-150, HalfScreenY/2-40)
+	text.PrintBigAt(screen, "Type a server IP", HalfScreenX-150, HalfScreenY/2-40)
+	text.PrintAt(screen, g.adressEnteringPasteTooltip, HalfScreenX-144, HalfScreenY/2+58)
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(HalfScreenX-150, HalfScreenY/2-5)
 	screen.DrawImage(g.inputBox, op)
-	g.serverTyper.Draw(screen, HalfScreenX-130, HalfScreenY/2+7)
-	//text.PrintBigAt(screen, g.serverAddress, HalfScreenX-130, HalfScreenY/2+7)
+	g.serverTyper.DrawCol(screen, HalfScreenX-130, HalfScreenY/2+7, color.RGBA{255, uint8(255 - g.connErrorColorStart), uint8(255 - g.connErrorColorStart), 0})
 	text.PrintBigAt(screen, "Type a nickname and press ENTER", HalfScreenX-180, HalfScreenY-45)
 	op = &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(HalfScreenX-150, HalfScreenY-5)
 	screen.DrawImage(g.inputBox, op)
 	g.nickTyper.Draw(screen, HalfScreenX-130, HalfScreenY+7)
-
 	text.PrintBigAt(screen, "Fullscreen", HalfScreenX-110, ScreenHeight-ScreenHeight/6)
 	g.fsBtn.Draw(screen)
 }
@@ -215,7 +246,7 @@ func (g *Game) drawGame(screen *ebiten.Image) {
 		}
 		p.Draw(g.world.Image())
 	}
-	g.keys.DrawChat(g.world.Image(), int(g.player.Pos[0]+16), int(g.player.Pos[1]-36))
+	g.keys.DrawChat(g.world.Image(), int(g.player.Pos[0]+16), int(g.player.Pos[1]-40))
 	g.Render(g.world.Image(), screen)
 
 	ebitenutil.DebugPrint(screen,
@@ -264,53 +295,53 @@ func (g *Game) updateGame() error {
 	return nil
 }
 
-func (g *Game) StartGame(nick string, address string) {
-	g.serverAddress = address
+func (g *Game) Connect(nick string, address string) {
+	var err error
+	g.ms, err = msgs.DialServer(address, g.web)
+	if err != nil {
+		g.connected <- Login{data: nil, err: err}
+		return
+	}
+	register := &msgs.EventRegister{
+		Nick: nick,
+	}
+	err = g.ms.EncodeAndWrite(msgs.ERegister, register)
+	if err != nil {
+		g.connected <- Login{data: nil, err: err}
+		return
+	}
+	im, err := g.ms.Read()
+	if err != nil {
+		g.connected <- Login{data: nil, err: err}
+		return
+	}
+	if im.Event != msgs.EPlayerLogin {
+		g.connected <- Login{data: nil, err: fmt.Errorf("not login response")}
+		return
+	}
+	g.connected <- Login{data: msgs.DecodeMsgpack(im.Data, &msgs.EventPlayerLogin{}), err: nil}
+}
+
+func (g *Game) StartGame(login *msgs.EventPlayerLogin) {
 	ebiten.SetFullscreen(g.fullscreen)
+	g.mode = ModeGame
 	g.SoundBoard = audio2d.NewSoundBoard(g.web)
 	g.ViewPort = f64.Vec2{ScreenWidth, ScreenHeight}
 	g.ZoomFactor = 1
 	g.lastMove = time.Now()
 	g.lastMoveConfirmed = true
 	g.keys = NewKeys(g, nil)
-	var err error
-	g.ms, err = msgs.DialServer(address, g.web)
-	if err != nil {
-		g.nickTyper.Text = nick
-		g.mode = ModeRegister
-		return
-	}
-
-	register := &msgs.EventRegister{
-		Nick: nick,
-	}
-	err = g.ms.EncodeAndWrite(msgs.ERegister, register)
-	if err != nil {
-		panic(err)
-	}
-	im, err := g.ms.Read()
-	if err != nil {
-		panic(err)
-	}
-	if im.Event != msgs.EPlayerLogin {
-		panic("not login response")
-	}
-	login := &msgs.EventPlayerLogin{}
-	msgs.DecodeMsgpack(im.Data, login)
-	g.Login(login)
 	g.playersY = append(g.playersY, g.player)
 	g.stats = NewHud(g)
+	g.Login(login)
 
 	g.eventQueue = make([]*GameMsg, 0, 100)
 	g.outQueue = make(chan *GameMsg, 100)
 	g.eventLock = sync.Mutex{}
-
 	go g.WriteEventQueue()
 	go g.WriteToServer()
 
-	g.mode = ModeGame
 	g.SoundBoard.Play(assets.Spawn)
-	log.Printf("Logged in as %v with id [%v] to server %v", g.player.Nick, g.player.ID, address)
 }
 
 func (g *Game) Login(e *msgs.EventPlayerLogin) {
@@ -405,7 +436,7 @@ func (g *Game) ProcessEventQueue() error {
 			return errors.New("server disconnected")
 		case msgs.EPing:
 			g.WaitingPong = false
-			g.latency = fmt.Sprintf("%dms", time.Since(g.LastPing).Milliseconds())
+			g.latency = fmt.Sprintf("%dms", time.Since(g.LastPing).Milliseconds()/2)
 		case msgs.EPlayerDespawned:
 			pid := ev.Data.(uint16)
 			g.DespawnPlayer(pid)
@@ -524,7 +555,7 @@ func (g *Game) ProcessEventQueue() error {
 }
 
 func (g *Game) pingServer() {
-	if g.counter%120 != 0 || g.WaitingPong {
+	if g.WaitingPong || g.counter%240 != 0 {
 		return
 	}
 	g.outQueue <- &GameMsg{E: msgs.EPing}
@@ -597,7 +628,7 @@ func (g *Game) MovementResponse(data []byte) {
 	}
 	step := g.steps[0]
 	g.steps = g.steps[1:]
-	log.Printf("MOVE:[%v][%v] %v %vms\n", allowed, step.Expect, direction.S(g.player.Direction), time.Since(g.startForStep).Milliseconds())
+	//log.Printf("MOVE:[%v][%v] %v %vms\n", allowed, step.Expect, direction.S(g.player.Direction), time.Since(g.startForStep).Milliseconds())
 
 	if allowed == step.Expect {
 		// if it was expected, we already did it
@@ -742,14 +773,16 @@ const HalfScreenX, HalfScreenY = ScreenWidth / 2, ScreenHeight / 2
 func (g *Game) worldMatrix() ebiten.GeoM {
 	m := ebiten.GeoM{}
 	m.Translate(-g.player.Pos[0]+HalfScreenX-16, -g.player.Pos[1]+HalfScreenY-48)
-	// We want to scale and rotate around center of image / screen
-	m.Translate(-g.viewportCenter()[0], -g.viewportCenter()[1])
-	m.Scale(
-		float64(g.ZoomFactor),
-		float64(g.ZoomFactor),
-	)
-	m.Rotate(float64(g.Rotation) * 2 * math.Pi / 360)
-	m.Translate(g.viewportCenter()[0], g.viewportCenter()[1])
+
+	// think of a spell that shakes the screen :O (rotation included with precise aim)
+	// // We want to scale and rotate around center of image / screen
+	// m.Translate(-g.viewportCenter()[0], -g.viewportCenter()[1])
+	// m.Scale(
+	// 	float64(g.ZoomFactor),
+	// 	float64(g.ZoomFactor),
+	// )
+	// m.Rotate(float64(g.Rotation) * 2 * math.Pi / 360)
+	// m.Translate(g.viewportCenter()[0], g.viewportCenter()[1])
 	return m
 }
 
@@ -767,18 +800,5 @@ func (g *Game) ScreenToWorld(posX, posY int) (float64, float64) {
 	} else {
 		// When scaling it can happened that matrix is not invertable
 		return math.NaN(), math.NaN()
-	}
-}
-
-func (g *Game) Reset() {
-	g.Rotation = 0
-	if g.counter%10 == 0 {
-		if g.ZoomFactor == 1 {
-			g.ZoomFactor = 2
-		} else if g.ZoomFactor == 2 {
-			g.ZoomFactor = 0.6
-		} else {
-			g.ZoomFactor = 1
-		}
 	}
 }

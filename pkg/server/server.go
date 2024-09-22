@@ -61,8 +61,8 @@ func (s *Server) Start(exposed bool) error {
 	address := fmt.Sprintf("127.0.0.1:%d", s.port)
 	addressws := fmt.Sprintf("127.0.0.1:%d", s.port+1)
 	if exposed {
-		address = fmt.Sprintf("192.168.0.66:%d", s.port)
-		addressws = fmt.Sprintf("192.168.0.66:%d", s.port+1)
+		address = fmt.Sprintf("0.0.0.0:%d", s.port)
+		addressws = fmt.Sprintf("0.0.0.0:%d", s.port+1)
 	}
 	var err error
 	s.mws, err = msgs.ListenWS(addressws)
@@ -160,7 +160,7 @@ func (g *Game) HandleLogin() {
 		p := &Player{
 			g:             g,
 			m:             conn,
-			pos:           typ.P{X: 250, Y: 250},
+			pos:           typ.P{X: constants.WorldX / 2, Y: constants.WorldY / 2},
 			Send:          make(chan OutMsg, 100),
 			dir:           direction.Front,
 			speedPxXFrame: 3,
@@ -171,7 +171,7 @@ func (g *Game) HandleLogin() {
 			maxMp:         2420,
 		}
 
-		log.Printf("waiting nick\n")
+		//log.Printf("waiting nick\n")
 		nick, err := GetNick(p.m)
 		if err != nil {
 			log.Printf("Get nick error: %v\n", err)
@@ -232,7 +232,7 @@ func (g *Game) consumeIncomingData() {
 			g.playerMelee(player)
 		case msgs.EUseItem:
 			item := incomingData.Data.(msgs.Item)
-			log.Printf("[%v][%v] USE ITEM %v\n", player.id, player.nick, item)
+			//log.Printf("[%v][%v] USE ITEM %v\n", player.id, player.nick, item)
 			changed := UseItem(item, player)
 			player.Send <- OutMsg{Event: msgs.EUseItemOk, Data: &msgs.EventUseItemOk{
 				Item:   msgs.Item(item),
@@ -240,6 +240,7 @@ func (g *Game) consumeIncomingData() {
 			}}
 		case msgs.ESendChat:
 			chat := incomingData.Data.(*msgs.EventSendChat)
+			log.Printf("[%v][%v]: %v", player.id, player.nick, chat.Msg)
 			g.space.Notify(player.pos, msgs.EBroadcastChat, &msgs.EventBroadcastChat{
 				ID:  player.id,
 				Msg: chat.Msg,
@@ -280,11 +281,11 @@ func (g *Game) playerMove(player *Player, incomingData IncomingMsg) {
 			Pos: player.pos,
 			Dir: player.dir,
 		}, player.id)
-		log.Printf("[%v][%v] %v -X-> %v: %v\n", player.id, player.nick, player.pos, np, err)
+		//log.Printf("[%v][%v] %v -X-> %v: %v\n", player.id, player.nick, player.pos, np, err)
 		return
 	}
 	player.lastMove = time.Now()
-	log.Printf("[%v][%v] MOVE %v->%v\n", player.id, player.nick, player.pos, np)
+	//log.Printf("[%v][%v] MOVE %v->%v\n", player.id, player.nick, player.pos, np)
 	player.obs.MoveOne(player.dir, func(x, y int32) {
 		newPlayerInSight := g.space.GetSlot(0, typ.P{X: x, Y: y})
 		if newPlayerInSight == 0 {
@@ -327,10 +328,10 @@ func (g *Game) playerMove(player *Player, incomingData IncomingMsg) {
 
 func (g *Game) playerCastSpell(player *Player, incomingData IncomingMsg) {
 	ev := incomingData.Data.(*msgs.EventCastSpell)
-	log.Printf("[%v][%v] SPELL %v at [%v %v]\n", player.id, player.nick, ev.Spell.String(), ev.PX, ev.PY)
+	//log.Printf("[%v][%v] SPELL %v at [%v %v]\n", player.id, player.nick, ev.Spell.String(), ev.PX, ev.PY)
 	hitPlayer := g.CheckSpellTargets(typ.P{X: int32(ev.PX), Y: int32(ev.PY)})
 	if hitPlayer == 0 {
-		log.Printf("missed all hitboxs\n")
+		//log.Printf("missed all hitboxs\n")
 		return
 	}
 	targetPlayer := g.players[hitPlayer]
@@ -373,7 +374,7 @@ func (g *Game) playerMelee(player *Player) {
 	case direction.Right:
 		np.X++
 	}
-	log.Printf("[%v][%v] MELEE at %v to %v\n", player.id, player.nick, player.pos, np)
+	//log.Printf("[%v][%v] MELEE at %v to %v\n", player.id, player.nick, player.pos, np)
 	if player.dead {
 		player.Send <- OutMsg{Event: msgs.EMeleeOk, Data: &msgs.EventMeleeOk{}}
 		return
@@ -485,7 +486,6 @@ func (p *Player) HandleIncomingMessages() {
 		case msgs.ESendChat:
 			d := msgs.DecodeMsgpack(im.Data, &msgs.EventSendChat{})
 			msg.Data = d
-			log.Print(d.Msg)
 		default:
 			log.Printf("HandleIncomingMessages unknown event\n")
 			continue

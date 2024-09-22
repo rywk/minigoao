@@ -166,7 +166,7 @@ func (p *P) Draw(screen *ebiten.Image) {
 	p.Effect.Draw(screen)
 	if p.chatMsg != "" {
 		off := len(p.chatMsg) * 3
-		text.PrintAt(screen, p.chatMsg, int(p.Pos[0])+16-off, int(p.Pos[1]-36))
+		text.PrintAt(screen, p.chatMsg, int(p.Pos[0])+16-off, int(p.Pos[1]-40))
 	}
 }
 

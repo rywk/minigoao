@@ -64,21 +64,23 @@ type Tile struct {
 	obs     []chan Event
 }
 
+// since the server was re arched we are not accessing this concurrently we process 1 event after the other
+
 func (l *Tile) AddObserver(c chan Event) {
-	l.obsLock.Lock()
-	defer l.obsLock.Unlock()
+	//l.obsLock.Lock()
+	//defer l.obsLock.Unlock()
 	l.obs = append(l.obs, c)
 }
 
 func (l *Tile) RemoveObserver(c chan Event) {
-	l.obsLock.Lock()
-	defer l.obsLock.Unlock()
+	//l.obsLock.Lock()
+	//defer l.obsLock.Unlock()
 	l.obs = removeObs(l.obs, c)
 }
 
 func (l *Tile) NotifyTile(ev Event) {
-	l.obsLock.RLock()
-	defer l.obsLock.RUnlock()
+	//l.obsLock.RLock()
+	//defer l.obsLock.RUnlock()
 	for _, c := range l.obs {
 		c <- ev
 	}

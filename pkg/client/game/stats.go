@@ -20,22 +20,19 @@ import (
 type Checkbox struct {
 	Pos           typ.P
 	W, H          int32
-	LastPressed   time.Time
-	Cooldown      time.Duration
 	ImgOn, ImgOff *ebiten.Image
 	On            bool
+	Pressed       bool
 }
 
 func NewCheckbox(pos typ.P, on, off *ebiten.Image) *Checkbox {
 	return &Checkbox{
-		Pos:         pos,
-		W:           int32(on.Bounds().Dx()),
-		H:           int32(on.Bounds().Dy()),
-		LastPressed: time.Now(),
-		Cooldown:    time.Millisecond * 700,
-		ImgOn:       on,
-		ImgOff:      off,
-		On:          false,
+		Pos:    pos,
+		W:      int32(on.Bounds().Dx()),
+		H:      int32(on.Bounds().Dy()),
+		ImgOn:  on,
+		ImgOff: off,
+		On:     false,
 	}
 }
 
@@ -52,9 +49,13 @@ func (b *Checkbox) Draw(screen *ebiten.Image) {
 func (b *Checkbox) Update() {
 	cx, cy := ebiten.CursorPosition()
 	if cx > int(b.Pos.X) && cx < int(b.Pos.X+b.W) && cy > int(b.Pos.Y) && cy < int(b.Pos.Y+b.H) {
-		if ebiten.IsMouseButtonPressed(ebiten.MouseButton0) && time.Since(b.LastPressed) > b.Cooldown {
-			b.LastPressed = time.Now()
-			b.On = !b.On
+		if ebiten.IsMouseButtonPressed(ebiten.MouseButton0) {
+			if !b.Pressed {
+				b.On = !b.On
+			}
+			b.Pressed = true
+		} else {
+			b.Pressed = false
 		}
 	}
 }

@@ -112,7 +112,7 @@ func (ws *WSM2) IP() string {
 }
 
 func (ws *WSM2) Close() {
-	//ws.c.CloseNow()
+	ws.c.CloseNow()
 }
 
 func (ws *WSM2) Read() (*IncomingData, error) {

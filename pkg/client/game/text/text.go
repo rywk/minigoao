@@ -82,6 +82,16 @@ func PrintAtBg(image *ebiten.Image, str string, x, y int) {
 	})
 }
 
+func PrintBigAtCol(image *ebiten.Image, str string, x, y int, col color.Color) (int, int) {
+	return drawDebugTextOpt(image, str, x, y, options{
+		textimg: bigDebugPrintTextImage,
+		bgimg:   bigBgImage,
+		runemap: bigDebugPrintTextSubImages,
+		cw:      bcw, ch: bch,
+		col: col,
+	})
+}
+
 func PrintBigAt(image *ebiten.Image, str string, x, y int) (int, int) {
 	return drawDebugTextOpt(image, str, x, y, options{
 		textimg: bigDebugPrintTextImage,

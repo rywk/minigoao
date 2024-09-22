@@ -27,11 +27,6 @@ type SoundBoard struct {
 	sounds     map[assets.Sound]*Sound
 }
 
-type Sound struct {
-	sampleRate beep.SampleRate
-	buffer     *beep.Buffer
-}
-
 func NewSound(bs []byte) *Sound {
 	s := &Sound{}
 	s.sampleRate = SampleRate
@@ -43,7 +38,7 @@ func NewSound(bs []byte) *Sound {
 }
 func NewOggSound(bs []byte) *Sound {
 	s := &Sound{}
-	s.sampleRate = SampleRate
+	s.sampleRate = SampleRateWeb
 	st, f := mustDecodeOgg(bs)
 	s.buffer = beep.NewBuffer(f)
 	s.buffer.Append(st)
@@ -67,17 +62,17 @@ func (s *Sound) Play() {
 }
 
 func (s *Sound) PlayFrom(x, y, sx, sy int) {
-	dx, dy := x-sx, y-sy
+	dx, dy := sx-x, sy-y
 	var mx, my float64
 	if dx < 0 {
-		mx = mapValue(float64(dx), 0, 30, 1, 15)
+		mx = mapValue(float64(dx), -40, 0, -7, -1)
 	} else {
-		mx = mapValue(float64(dx), -30, 0, -15, -1)
+		mx = mapValue(float64(dx), 0, 40, 1, 7)
 	}
 	if dy < 0 {
-		my = mapValue(float64(dy), -20, 0, -10, -1)
+		my = mapValue(float64(dy), -40, 0, -7, -1)
 	} else {
-		my = mapValue(float64(dy), 0, 20, 1, 10)
+		my = mapValue(float64(dy), 0, 40, 1, 7)
 	}
 	leftCh, rightCh := beep.Dup(s.buffer.Streamer(0, s.buffer.Len()))
 	leftCh = effects.Mono(multiplyChannels(1, 0, leftCh))
@@ -90,7 +85,7 @@ func NewSoundBoard(web bool) *SoundBoard {
 	sb := &SoundBoard{}
 	if web {
 		sb.sampleRate = SampleRateWeb
-		speaker.Init(sb.sampleRate, 1026)
+		speaker.Init(sb.sampleRate, 2051)
 		sb.sounds = map[assets.Sound]*Sound{
 			assets.Spawn:                NewOggSound(audiofile.SpawnLow_ogg),
 			assets.MeleeAir:             NewOggSound(audiofile.MeleeAirLow_ogg),
@@ -145,9 +140,14 @@ func multiplyChannels(left, right float64, s beep.Streamer) beep.Streamer {
 	})
 }
 
+type Sound struct {
+	sampleRate beep.SampleRate
+	buffer     *beep.Buffer
+}
+
 type MovingStreamer struct {
-	x, y         float64
-	velX, velY   float64
+	x, y float64
+	//velX, velY   float64
 	leftDoppler  beep.Streamer
 	rightDoppler beep.Streamer
 }
@@ -165,9 +165,9 @@ func NewMovingStreamer(sr beep.SampleRate, x, y float64, streamer beep.Streamer)
 
 	const earDistance = 0.16
 	ms.leftDoppler = effects.Doppler(2, samplesPerMeter, leftEar, func(delta int) float64 {
-		dt := sr.D(delta).Seconds()
-		ms.x += ms.velX * dt
-		ms.y += ms.velY * dt
+		// dt := sr.D(delta).Seconds()
+		// ms.x += ms.velX * dt
+		// ms.y += ms.velY * dt
 		return math.Max(0.25, math.Hypot(ms.x+earDistance/2, ms.y))
 	})
 	ms.rightDoppler = effects.Doppler(2, samplesPerMeter, rightEar, func(delta int) float64 {

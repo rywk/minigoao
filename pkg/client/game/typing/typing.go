@@ -1,6 +1,7 @@
 package typing
 
 import (
+	"image/color"
 	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -27,11 +28,15 @@ func repeatingKeyPressed(key ebiten.Key) bool {
 type Typer struct {
 	runes   []rune
 	Text    string
-	counter int
+	Counter int
+}
+
+func (g *Typer) StopCursor() {
+	g.Counter = 31
 }
 
 func NewTyper(s ...string) *Typer {
-	return &Typer{runes: make([]rune, 0), Text: strings.Join(s, "")}
+	return &Typer{runes: make([]rune, 0), Text: strings.Join(s, ""), Counter: 31}
 }
 
 func (g *Typer) Update() error {
@@ -59,7 +64,7 @@ func (g *Typer) Update() error {
 		}
 	}
 
-	g.counter++
+	g.Counter++
 	return nil
 }
 
@@ -70,8 +75,17 @@ func (g *Typer) String() string {
 func (g *Typer) Draw(screen *ebiten.Image, x, y int) {
 	// Blink the cursor.
 	t := g.Text
-	if g.counter%60 < 30 {
+	if g.Counter%40 < 20 {
 		t += "_"
 	}
 	text.PrintBigAt(screen, t, x, y)
+}
+
+func (g *Typer) DrawCol(screen *ebiten.Image, x, y int, col color.Color) {
+	// Blink the cursor.
+	t := g.Text
+	if g.Counter%40 < 20 {
+		t += "_"
+	}
+	text.PrintBigAtCol(screen, t, x, y, col)
 }

@@ -92,7 +92,7 @@ type Keys struct {
 	openCloseImg  *ebiten.Image
 
 	spell           spell.Spell
-	castedSpell     bool
+	clickDown       bool
 	potion          msgs.Item
 	lastSpellKey    *Input
 	lastPotionInput *Input
@@ -307,20 +307,21 @@ func (k *Keys) CastSpell() (bool, spell.Spell, int, int) {
 	}
 
 	if ebiten.IsMouseButtonPressed(ebiten.MouseButton0) {
-		if !k.castedSpell && k.spell != spell.None &&
+		if !k.clickDown && k.spell != spell.None &&
 			time.Since(k.LastSpells[k.spell]) > k.cfg.CooldownSpells[k.spell] &&
 			time.Since(k.LastAction) > k.cfg.CooldownAction {
 			x, y := ebiten.CursorPosition()
 			k.LastAction = time.Now()
 			k.LastSpells[k.spell] = k.LastAction
-			k.castedSpell = true
+			k.clickDown = true
 			pspell := k.spell
 			k.spell = spell.None
 			k.lastSpellKey = &NoInput
 			return true, pspell, x, y
 		}
+		k.clickDown = true
 	} else {
-		k.castedSpell = false
+		k.clickDown = false
 	}
 
 	if k.spell == spell.None && k.cursorMode == ebiten.CursorShapeCrosshair {
