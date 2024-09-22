@@ -54,6 +54,9 @@ func readMsg(r io.Reader) (*IncomingData, error) {
 	if err != nil {
 		return nil, err
 	}
+	if eventByte[0] >= byte(ELen) {
+		return nil, err
+	}
 	incd := &IncomingData{Event: E(eventByte[0])}
 	if incd.Event.Len() == 0 {
 		if incd.Event == EMelee {

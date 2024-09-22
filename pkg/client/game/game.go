@@ -127,6 +127,7 @@ func NewGame(web bool) *Game {
 }
 
 func (g *Game) init() {
+	g.SoundBoard = audio2d.NewSoundBoard(g.web)
 	g.connected = make(chan Login)
 	g.mode = ModeRegister
 	g.nickTyper = typing.NewTyper()
@@ -325,7 +326,7 @@ func (g *Game) Connect(nick string, address string) {
 func (g *Game) StartGame(login *msgs.EventPlayerLogin) {
 	ebiten.SetFullscreen(g.fullscreen)
 	g.mode = ModeGame
-	g.SoundBoard = audio2d.NewSoundBoard(g.web)
+	g.Login(login)
 	g.ViewPort = f64.Vec2{ScreenWidth, ScreenHeight}
 	g.ZoomFactor = 1
 	g.lastMove = time.Now()
@@ -333,7 +334,6 @@ func (g *Game) StartGame(login *msgs.EventPlayerLogin) {
 	g.keys = NewKeys(g, nil)
 	g.playersY = append(g.playersY, g.player)
 	g.stats = NewHud(g)
-	g.Login(login)
 
 	g.eventQueue = make([]*GameMsg, 0, 100)
 	g.outQueue = make(chan *GameMsg, 100)
