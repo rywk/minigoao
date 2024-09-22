@@ -255,8 +255,8 @@ func (g *Game) drawGame(screen *ebiten.Image) {
 	g.Render(g.world.Image(), screen)
 
 	text.PrintAt(screen, fmt.Sprintf("FPS: %v", int(ebiten.ActualFPS())), 0, 0)
-	text.PrintAt(screen, fmt.Sprintf("Ping: %v", g.latency), 70, 0)
-	text.PrintAt(screen, fmt.Sprintf("Online: %v", g.onlines), 140, 0)
+	text.PrintAt(screen, fmt.Sprintf("Ping: %v", g.latency), 60, 0)
+	text.PrintAt(screen, fmt.Sprintf("Online: %v", g.onlines), 128, 0)
 	g.stats.Draw(screen)
 }
 
