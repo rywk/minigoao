@@ -33,4 +33,33 @@ var (
 	SpellResurrect_wav []byte
 	//go:embed spell_heal_wounds.wav
 	SpellHealWounds_wav []byte
+
+	//go:embed walk_1_low.ogg
+	Walk1Low_ogg []byte
+	//go:embed walk_2_low.ogg
+	Walk2Low_ogg []byte
+
+	//go:embed melee_air_low.ogg
+	MeleeAirLow_ogg []byte
+	//go:embed melee_hit_low.ogg
+	MeleeHitLow_ogg []byte
+
+	//go:embed potion_low.ogg
+	PotionLow_ogg []byte
+
+	//go:embed spawn_low.ogg
+	SpawnLow_ogg []byte
+
+	//go:embed spell_apoca_low.ogg
+	SpellApocaLow_ogg []byte
+	//go:embed spell_inmo_low.ogg
+	SpellInmoLow_ogg []byte
+	//go:embed spell_inmo_rm_low.ogg
+	SpellInmoRmLow_ogg []byte
+	//go:embed spell_desca_low.ogg
+	SpellDescaLow_ogg []byte
+	//go:embed spell_resurrect_low.ogg
+	SpellResurrectLow_ogg []byte
+	//go:embed spell_heal_wounds_low.ogg
+	SpellHealWoundsLow_ogg []byte
 )

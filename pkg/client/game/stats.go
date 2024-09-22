@@ -324,6 +324,10 @@ func (s *Hud) Draw(screen *ebiten.Image) {
 	for _, kb := range s.keyBinders {
 		kb.Draw(screen)
 	}
+	x, y := ebiten.CursorPosition()
+	for _, kb := range s.keyBinders {
+		kb.DrawTooltips(screen, x, y)
+	}
 }
 
 const (
@@ -553,7 +557,10 @@ func (kb *KeyBinder[A]) Draw(screen *ebiten.Image) {
 		op.GeoM.Translate(float64(kb.Rect.Min.X), float64(kb.Rect.Min.Y))
 		screen.DrawImage(kb.IconImg, op)
 	}
-	x, y := ebiten.CursorPosition()
+}
+
+func (kb *KeyBinder[A]) DrawTooltips(screen *ebiten.Image, x, y int) {
+
 	op := &ebiten.DrawImageOptions{}
 	if x > ScreenWidth-300 {
 		x -= 180

@@ -8,7 +8,6 @@ import (
 	_ "image/png"
 	"log"
 	"math"
-	"net"
 	"sort"
 	"strings"
 	"sync"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/rywk/minigoao/pkg/client/audio2d"
 	"github.com/rywk/minigoao/pkg/client/game/assets/img"
 	"github.com/rywk/minigoao/pkg/client/game/player"
@@ -28,6 +28,7 @@ import (
 	"github.com/rywk/minigoao/pkg/constants/spell"
 	"github.com/rywk/minigoao/pkg/msgs"
 	"github.com/rywk/minigoao/pkg/typ"
+	"golang.design/x/clipboard"
 	"golang.org/x/image/math/f64"
 )
 
@@ -45,10 +46,13 @@ type YSortable interface {
 }
 
 type Game struct {
+	web  bool
 	mode Mode
 	// register stuff
 	serverAddress string
-	typer         *typing.Typer
+	serverTyper   *typing.Typer
+	typingServer  bool
+	nickTyper     *typing.Typer
 	fsBtn         *Checkbox
 	inputBox      *ebiten.Image
 	fullscreen    bool
@@ -56,7 +60,7 @@ type Game struct {
 	// game
 	latency    string
 	counter    int
-	ms         *msgs.M
+	ms         msgs.Msgs
 	world      *Map
 	sessionID  uint32
 	players    [constants.MaxConnCount]*player.P
@@ -104,19 +108,23 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 	return ScreenWidth, ScreenHeight
 }
 
-func NewGame() *Game {
-	g := &Game{}
+func NewGame(web bool) *Game {
+	g := &Game{web: web}
 	g.init()
 	return g
 }
 
 func (g *Game) init() {
 	g.mode = ModeRegister
-	g.typer = typing.NewTyper()
-	// err := clipboard.Init()
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	g.nickTyper = typing.NewTyper()
+	g.serverTyper = typing.NewTyper()
+	g.typingServer = true
+	if !g.web {
+		err := clipboard.Init()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
 	g.fsBtn = NewCheckbox(typ.P{X: HalfScreenX + 30, Y: ScreenHeight - ScreenHeight/6},
 		texture.Decode(img.CheckboxOn_png), texture.Decode(img.CheckboxOff_png))
 	g.inputBox = texture.Decode(img.InputBox_png)
@@ -144,26 +152,42 @@ func (g *Game) Draw(screen *ebiten.Image) {
 }
 
 func (g *Game) updateRegister() {
-	g.fsBtn.Update()
 	g.fullscreen = g.fsBtn.On
-	g.typer.Update()
-	text := g.typer.String()
-	if ebiten.IsMouseButtonPressed(ebiten.MouseButton2) {
-		g.serverAddress = "127.0.0.1:28441" // string(clipboard.Read(clipboard.FmtText))
+	g.fsBtn.Update()
+	if g.typingServer {
+		g.serverTyper.Update()
+	} else {
+		g.nickTyper.Update()
 	}
-	if !strings.HasSuffix(text, "\n") {
+
+	if inpututil.IsKeyJustPressed(ebiten.KeyTab) {
+		g.typingServer = !g.typingServer
+	}
+
+	if !g.web {
+		if ebiten.IsMouseButtonPressed(ebiten.MouseButton2) {
+			g.serverTyper.Text = string(clipboard.Read(clipboard.FmtText))
+		}
+	}
+
+	nickText := g.nickTyper.String()
+	addressText := g.serverTyper.String()
+
+	if !strings.HasSuffix(addressText, "\n") && !strings.HasSuffix(nickText, "\n") {
 		return
 	}
-	if g.serverAddress == "" {
-		g.typer = typing.NewTyper(text[:len(text)-1])
+
+	address := strings.Trim(strings.Trim(addressText, "\n"), " ")
+	if address == "" {
+		g.serverTyper = typing.NewTyper(addressText[:len(addressText)-1])
 		return
 	}
-	nick := strings.Trim(strings.Trim(text, "\n"), " ")
+	nick := strings.Trim(strings.Trim(nickText, "\n"), " ")
 	if nick == "" {
-		g.typer = typing.NewTyper(text[:len(text)-1])
+		g.nickTyper = typing.NewTyper(nickText[:len(nickText)-1])
 		return
 	}
-	g.StartGame(nick, g.serverAddress)
+	g.StartGame(nick, address)
 }
 
 func (g *Game) drawRegister(screen *ebiten.Image) {
@@ -171,12 +195,13 @@ func (g *Game) drawRegister(screen *ebiten.Image) {
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(HalfScreenX-150, HalfScreenY/2-5)
 	screen.DrawImage(g.inputBox, op)
-	text.PrintBigAt(screen, g.serverAddress, HalfScreenX-130, HalfScreenY/2+7)
+	g.serverTyper.Draw(screen, HalfScreenX-130, HalfScreenY/2+7)
+	//text.PrintBigAt(screen, g.serverAddress, HalfScreenX-130, HalfScreenY/2+7)
 	text.PrintBigAt(screen, "Type a nickname and press ENTER", HalfScreenX-180, HalfScreenY-45)
 	op = &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(HalfScreenX-150, HalfScreenY-5)
 	screen.DrawImage(g.inputBox, op)
-	g.typer.Draw(screen, HalfScreenX-130, HalfScreenY+7)
+	g.nickTyper.Draw(screen, HalfScreenX-130, HalfScreenY+7)
 
 	text.PrintBigAt(screen, "Fullscreen", HalfScreenX-110, ScreenHeight-ScreenHeight/6)
 	g.fsBtn.Draw(screen)
@@ -202,7 +227,7 @@ func (g *Game) drawGame(screen *ebiten.Image) {
 func (g *Game) updateGame() error {
 	if ebiten.IsKeyPressed(ebiten.KeyEscape) {
 		g.Clear()
-		g.typer = typing.NewTyper()
+		g.nickTyper = typing.NewTyper()
 		g.mode = ModeRegister
 		ebiten.SetFullscreen(false)
 		g.ms.Close()
@@ -210,7 +235,7 @@ func (g *Game) updateGame() error {
 	}
 	if err := g.ProcessEventQueue(); err != nil {
 		g.Clear()
-		g.typer = typing.NewTyper()
+		g.nickTyper = typing.NewTyper()
 		g.mode = ModeRegister
 		ebiten.SetFullscreen(false)
 		return err
@@ -240,19 +265,22 @@ func (g *Game) updateGame() error {
 }
 
 func (g *Game) StartGame(nick string, address string) {
+	g.serverAddress = address
 	ebiten.SetFullscreen(g.fullscreen)
-	g.SoundBoard = audio2d.NewSoundBoard()
+	g.SoundBoard = audio2d.NewSoundBoard(g.web)
 	g.ViewPort = f64.Vec2{ScreenWidth, ScreenHeight}
 	g.ZoomFactor = 1
 	g.lastMove = time.Now()
 	g.lastMoveConfirmed = true
 	g.keys = NewKeys(g, nil)
-
-	tcp, err := net.Dial("tcp4", address)
+	var err error
+	g.ms, err = msgs.DialServer(address, g.web)
 	if err != nil {
-		log.Fatal(err)
+		g.nickTyper.Text = nick
+		g.mode = ModeRegister
+		return
 	}
-	g.ms = msgs.New(tcp)
+
 	register := &msgs.EventRegister{
 		Nick: nick,
 	}

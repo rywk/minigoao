@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"net"
 	"sync/atomic"
 	"time"
 
@@ -17,28 +16,42 @@ import (
 )
 
 type Server struct {
-	tcp       net.Listener
+	mms       msgs.MMsgs
+	mws       msgs.MMsgs
 	port      int
 	connCount atomic.Int32
-	newConn   chan net.Conn
+	newConn   chan msgs.Msgs
 	game      *Game
 }
 
 func NewServer(port int) *Server {
 	return &Server{
 		port:    port,
-		newConn: make(chan net.Conn, 10),
+		newConn: make(chan msgs.Msgs, 100),
 	}
 }
 
-func (s *Server) AcceptConnections() {
-	log.Printf("Accepting connections at %v.\n", s.tcp.Addr().String())
+func (s *Server) AcceptTCPConnections() {
+	log.Printf("Accepting TCP connections at %v.\n", s.mms.Address())
 	for {
-		conn, err := s.tcp.Accept()
+		conn, err := s.mms.NewConn()
 		if err != nil {
 			return
 		}
-		log.Printf("accepted conn\n")
+		log.Printf("accepted plain tcp conn\n")
+		s.connCount.Add(1)
+		s.newConn <- conn
+	}
+}
+
+func (s *Server) AcceptWSConnections() {
+	log.Printf("Accepting WS connections at %v.\n", s.mws.Address())
+	for {
+		conn, err := s.mws.NewConn()
+		if err != nil {
+			return
+		}
+		log.Printf("accepted web socket conn\n")
 		s.connCount.Add(1)
 		s.newConn <- conn
 	}
@@ -46,15 +59,20 @@ func (s *Server) AcceptConnections() {
 
 func (s *Server) Start(exposed bool) error {
 	address := fmt.Sprintf("127.0.0.1:%d", s.port)
+	addressws := fmt.Sprintf("127.0.0.1:%d", s.port+1)
 	if exposed {
 		address = fmt.Sprintf("192.168.0.66:%d", s.port)
+		addressws = fmt.Sprintf("192.168.0.66:%d", s.port+1)
 	}
 	var err error
-	s.tcp, err = net.Listen("tcp4", address)
+	s.mws, err = msgs.ListenWS(addressws)
 	if err != nil {
 		return err
 	}
-
+	s.mms, err = msgs.ListenTCP(address)
+	if err != nil {
+		return err
+	}
 	s.game = &Game{
 		newConn:      s.newConn,
 		players:      []*Player{{id: 0}}, // no 0 id
@@ -63,7 +81,8 @@ func (s *Server) Start(exposed bool) error {
 		incomingData: make(chan IncomingMsg, 100),
 	}
 
-	go s.AcceptConnections()
+	go s.AcceptTCPConnections()
+	go s.AcceptWSConnections()
 
 	s.game.Run()
 
@@ -71,7 +90,7 @@ func (s *Server) Start(exposed bool) error {
 }
 
 type Game struct {
-	newConn      chan net.Conn
+	newConn      chan msgs.Msgs
 	players      []*Player
 	playersIndex []uint16
 	space        *grid.Grid
@@ -106,7 +125,7 @@ func (g *Game) RemovePlayer(pid uint16) {
 	g.playersIndex = g.playersIndex[:len(g.playersIndex)-1]
 }
 
-func getNick(m *msgs.M) (string, error) {
+func getNick(m msgs.Msgs) (string, error) {
 	im, err := m.Read()
 	if err != nil {
 		return "", err
@@ -119,7 +138,7 @@ func getNick(m *msgs.M) (string, error) {
 	return reg.Nick, nil
 }
 
-func GetNick(m *msgs.M) (nick string, err error) {
+func GetNick(m msgs.Msgs) (nick string, err error) {
 	timeout := time.NewTicker(time.Second).C
 	done := make(chan struct{})
 	go func() {
@@ -140,7 +159,7 @@ func (g *Game) HandleLogin() {
 
 		p := &Player{
 			g:             g,
-			m:             msgs.New(conn),
+			m:             conn,
 			pos:           typ.P{X: 250, Y: 250},
 			Send:          make(chan OutMsg, 100),
 			dir:           direction.Front,
@@ -392,7 +411,7 @@ func (g *Game) playerMelee(player *Player) {
 type Player struct {
 	g    *Game
 	obs  *grid.Obs
-	m    *msgs.M
+	m    msgs.Msgs
 	Send chan OutMsg
 	id   uint16
 	nick string

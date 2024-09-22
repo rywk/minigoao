@@ -3,6 +3,7 @@ package msgs
 import (
 	"encoding/binary"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"unsafe"
@@ -12,6 +13,15 @@ import (
 	"github.com/rywk/minigoao/pkg/typ"
 	"github.com/vmihailenco/msgpack/v5"
 )
+
+type Msgs interface {
+	IP() string
+	Close()
+	Read() (*IncomingData, error)
+	Write(event E, data []byte) error
+	WriteWithLen(event E, data []byte) error
+	EncodeAndWrite(e E, msg interface{}) error
+}
 
 type M struct {
 	// The connection
@@ -37,11 +47,10 @@ func (m *M) Close() {
 	m.c.Close()
 }
 
-// Read blocks until a new event is read from the tcp byte stream.
-func (m *M) Read() (*IncomingData, error) {
+func readMsg(r io.Reader) (*IncomingData, error) {
 	eventByte := make([]byte, eventTypeLen)
 
-	_, err := m.c.Read(eventByte)
+	_, err := r.Read(eventByte)
 	if err != nil {
 		return nil, err
 	}
@@ -54,31 +63,36 @@ func (m *M) Read() (*IncomingData, error) {
 	}
 	if incd.Event.Len() != -1 {
 		incd.Data = make([]byte, incd.Event.Len())
-		_, err = m.c.Read(incd.Data)
+		_, err = r.Read(incd.Data)
 		return incd, err
 	}
 
 	msgSizeBs := make([]byte, 2)
-	_, err = m.c.Read(msgSizeBs)
+	_, err = r.Read(msgSizeBs)
 	if err != nil {
 		return nil, err
 	}
 	msgSize := binary.BigEndian.Uint16(msgSizeBs)
 	incd.Data = make([]byte, msgSize)
-	_, err = m.c.Read(incd.Data)
+	_, err = r.Read(incd.Data)
 	return incd, err
 }
 
+// Read blocks until a new event is read from the tcp byte stream.
+func (m *M) Read() (*IncomingData, error) {
+	return readMsg(m.c)
+}
+
 // Write sends the event to the connection
-func (m *M) Write(event E, data []byte) error {
+func write(w io.Writer, event E, data []byte) error {
 	buf := []byte{byte(event)}
 	if data == nil {
-		_, err := m.c.Write(buf)
+		_, err := w.Write(buf)
 		if err != nil {
 			return err
 		}
 	}
-	_, err := m.c.Write(append(buf, data...))
+	_, err := w.Write(append(buf, data...))
 	if err != nil {
 		return err
 	}
@@ -86,15 +100,25 @@ func (m *M) Write(event E, data []byte) error {
 }
 
 // Write sends the event to the connection
-func (m *M) WriteWithLen(event E, data []byte) error {
+func writeWithLen(w io.Writer, event E, data []byte) error {
 	pref := make([]byte, 3)
 	pref[0] = byte(event)
 	binary.BigEndian.PutUint16(pref[1:], uint16(len(data)))
-	_, err := m.c.Write(append(pref, data...))
+	_, err := w.Write(append(pref, data...))
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+// Write sends the event to the connection
+func (m *M) Write(event E, data []byte) error {
+	return write(m.c, event, data)
+}
+
+// Write sends the event to the connection
+func (m *M) WriteWithLen(event E, data []byte) error {
+	return writeWithLen(m.c, event, data)
 }
 
 type IncomingData struct {
@@ -217,8 +241,7 @@ func (e E) Len() int {
 func (e E) String() string {
 	return eventString[e]
 }
-
-func (m *M) EncodeAndWrite(e E, msg interface{}) error {
+func encodeAndWrite(m Msgs, e E, msg interface{}) error {
 	switch e {
 	case EPing:
 		return m.Write(e, nil)
@@ -267,6 +290,9 @@ func (m *M) EncodeAndWrite(e E, msg interface{}) error {
 		log.Printf("unknown event %v\n", e.String())
 		return fmt.Errorf("unknown event %v", e.String())
 	}
+}
+func (m *M) EncodeAndWrite(e E, msg interface{}) error {
+	return encodeAndWrite(m, e, msg)
 }
 
 type EventSendChat struct {

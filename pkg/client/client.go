@@ -5,8 +5,8 @@ import (
 	"github.com/rywk/minigoao/pkg/client/game"
 )
 
-func Run() error {
-	g := game.NewGame()
+func Run(web bool) error {
+	g := game.NewGame(web)
 	ebiten.SetWindowSize(game.ScreenWidth, game.ScreenHeight)
 	ebiten.SetVsyncEnabled(false)
 	return ebiten.RunGame(g)

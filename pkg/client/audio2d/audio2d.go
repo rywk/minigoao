@@ -8,18 +8,18 @@ import (
 	"os"
 	"time"
 
-	"github.com/gopxl/beep"
-	"github.com/gopxl/beep/effects"
-	"github.com/gopxl/beep/speaker"
-	"github.com/gopxl/beep/wav"
-	"github.com/hajimehoshi/ebiten/v2/audio/vorbis"
-	wavv "github.com/hajimehoshi/ebiten/v2/audio/wav"
+	"github.com/gopxl/beep/v2"
+	"github.com/gopxl/beep/v2/effects"
+	"github.com/gopxl/beep/v2/speaker"
+	"github.com/gopxl/beep/v2/vorbis"
+	"github.com/gopxl/beep/v2/wav"
 	audiofile "github.com/rywk/minigoao/pkg/client/game/assets/audio"
 	"github.com/rywk/minigoao/pkg/constants/assets"
 )
 
 const (
-	SampleRate = beep.SampleRate(44100)
+	SampleRate    = beep.SampleRate(44100)
+	SampleRateWeb = beep.SampleRate(22050)
 )
 
 type SoundBoard struct {
@@ -41,7 +41,15 @@ func NewSound(bs []byte) *Sound {
 	st.Close()
 	return s
 }
-
+func NewOggSound(bs []byte) *Sound {
+	s := &Sound{}
+	s.sampleRate = SampleRate
+	st, f := mustDecodeOgg(bs)
+	s.buffer = beep.NewBuffer(f)
+	s.buffer.Append(st)
+	st.Close()
+	return s
+}
 func NewSoundCopies(n int, bs []byte) []*Sound {
 	sounds := make([]*Sound, n)
 	for i := range sounds {
@@ -62,9 +70,9 @@ func (s *Sound) PlayFrom(x, y, sx, sy int) {
 	dx, dy := x-sx, y-sy
 	var mx, my float64
 	if dx < 0 {
-		mx = mapValue(float64(dx), -30, 0, -15, -1)
-	} else {
 		mx = mapValue(float64(dx), 0, 30, 1, 15)
+	} else {
+		mx = mapValue(float64(dx), -30, 0, -15, -1)
 	}
 	if dy < 0 {
 		my = mapValue(float64(dy), -20, 0, -10, -1)
@@ -78,8 +86,27 @@ func (s *Sound) PlayFrom(x, y, sx, sy int) {
 	NewMovingStreamer(s.sampleRate, mx, my, rightCh).Play()
 }
 
-func NewSoundBoard() *SoundBoard {
+func NewSoundBoard(web bool) *SoundBoard {
 	sb := &SoundBoard{}
+	if web {
+		sb.sampleRate = SampleRateWeb
+		speaker.Init(sb.sampleRate, 1026)
+		sb.sounds = map[assets.Sound]*Sound{
+			assets.Spawn:                NewOggSound(audiofile.SpawnLow_ogg),
+			assets.MeleeAir:             NewOggSound(audiofile.MeleeAirLow_ogg),
+			assets.MeleeBlood:           NewOggSound(audiofile.MeleeHitLow_ogg),
+			assets.Walk1:                NewOggSound(audiofile.Walk1Low_ogg),
+			assets.Walk2:                NewOggSound(audiofile.Walk2Low_ogg),
+			assets.SpellApocaSound:      NewOggSound(audiofile.SpellApocaLow_ogg),
+			assets.SpellDescaSound:      NewOggSound(audiofile.SpellDescaLow_ogg),
+			assets.SpellInmoSound:       NewOggSound(audiofile.SpellInmoLow_ogg),
+			assets.SpellHealWoundsSound: NewOggSound(audiofile.SpellHealWoundsLow_ogg),
+			assets.SpellResurrectSound:  NewOggSound(audiofile.SpellResurrectLow_ogg),
+			assets.SpellInmoRmSound:     NewOggSound(audiofile.SpellInmoRmLow_ogg),
+			assets.Potion:               NewOggSound(audiofile.PotionLow_ogg),
+		}
+		return sb
+	}
 	sb.sampleRate = SampleRate
 	speaker.Init(sb.sampleRate, sb.sampleRate.N(time.Second/45))
 	sb.sounds = map[assets.Sound]*Sound{
@@ -167,23 +194,23 @@ func mustDecode(bs []byte) (beep.StreamSeekCloser, beep.Format) {
 	return s, f
 }
 
-func mustDecodeOgg(bs []byte) []byte {
-	d, err := vorbis.DecodeWithoutResampling(bytes.NewReader(bs))
+func mustDecodeOgg(bs []byte) (beep.StreamSeekCloser, beep.Format) {
+	rc := io.NopCloser(bytes.NewBuffer(bs))
+	s, f, err := vorbis.Decode(rc)
 	if err != nil {
 		panic(err)
 	}
-	dbs, _ := io.ReadAll(d)
-	return dbs
+	return s, f
 }
 
-func mustDecodeWav(bs []byte) []byte {
-	d, err := wavv.DecodeWithoutResampling(bytes.NewReader(bs))
-	if err != nil {
-		panic(err)
-	}
-	dbs, _ := io.ReadAll(d)
-	return dbs
-}
+// func mustDecodeWav(bs []byte) []byte {
+// 	d, err := wavv.DecodeWithoutResampling(bytes.NewReader(bs))
+// 	if err != nil {
+// 		panic(err)
+// 	}
+// 	dbs, _ := io.ReadAll(d)
+// 	return dbs
+// }
 
 func mapValue(v, start1, stop1, start2, stop2 float64) float64 {
 	newval := (v-start1)/(stop1-start1)*(stop2-start2) + start2
