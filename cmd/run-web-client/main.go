@@ -1,9 +1,17 @@
 package main
 
-import client "github.com/rywk/minigoao/pkg/client"
+import (
+	"os"
+
+	client "github.com/rywk/minigoao/pkg/client"
+)
 
 func main() {
-	if err := client.Run(true); err != nil {
+	defaultServer := ""
+	if len(os.Args) == 2 {
+		defaultServer = os.Args[1]
+	}
+	if err := client.Run(true, defaultServer); err != nil {
 		panic(err)
 	}
 }

@@ -120,20 +120,18 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 	return ScreenWidth, ScreenHeight
 }
 
-func NewGame(web bool) *Game {
-	g := &Game{web: web}
-	g.init()
-	return g
-}
-
-func (g *Game) init() {
-	g.SoundBoard = audio2d.NewSoundBoard(g.web)
-	g.connected = make(chan Login)
-	g.mode = ModeRegister
-	g.nickTyper = typing.NewTyper()
-	g.serverTyper = typing.NewTyper()
-	g.typingServer = true
+func NewGame(web bool, serverAddr string) *Game {
+	g := &Game{
+		mode:        ModeRegister,
+		web:         web,
+		SoundBoard:  audio2d.NewSoundBoard(web),
+		connected:   make(chan Login),
+		nickTyper:   typing.NewTyper(),
+		serverTyper: typing.NewTyper(serverAddr),
+	}
+	g.typingServer = false
 	if !g.web {
+		g.typingServer = true
 		g.serverTyper = typing.NewTyper()
 		g.adressEnteringPasteTooltip = "(right click to paste)"
 		err := clipboard.Init()
@@ -141,9 +139,15 @@ func (g *Game) init() {
 			log.Fatal(err)
 		}
 	}
-	g.fsBtn = NewCheckbox(typ.P{X: HalfScreenX + 30, Y: ScreenHeight - ScreenHeight/6},
-		texture.Decode(img.CheckboxOn_png), texture.Decode(img.CheckboxOff_png))
+	p := typ.P{
+		X: HalfScreenX + 30,
+		Y: ScreenHeight - ScreenHeight/6,
+	}
+	g.fsBtn = NewCheckbox(p,
+		texture.Decode(img.CheckboxOn_png),
+		texture.Decode(img.CheckboxOff_png))
 	g.inputBox = texture.Decode(img.InputBox_png)
+	return g
 }
 
 func (g *Game) Update() error {
