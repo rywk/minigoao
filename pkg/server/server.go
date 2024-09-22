@@ -3,6 +3,7 @@ package server
 import (
 	"errors"
 	"fmt"
+	"image"
 	"log"
 	"sync/atomic"
 	"time"
@@ -188,6 +189,35 @@ func (g *Game) HandleLogin() {
 }
 
 func (g *Game) AddObjectsToSpace() {
+	arena1v1 := image.Rect(0, 0, 10, 10)
+	arena2v2 := image.Rect(0, 0, 22, 16)
+
+	arena1v1n1 := arena1v1.Add(image.Point{X: 25, Y: 29})
+	arena2v2n1 := arena2v2.Add(image.Point{X: 40, Y: 29})
+
+	for y := arena1v1n1.Min.Y; y < arena1v1n1.Max.Y; y++ {
+		g.space.Set(1, typ.P{X: int32(arena1v1n1.Min.X), Y: int32(y)}, uint16(assets.Shroom))
+		g.space.Set(1, typ.P{X: int32(arena1v1n1.Max.X), Y: int32(y)}, uint16(assets.Shroom))
+	}
+	for x := arena1v1n1.Min.X; x < arena1v1n1.Max.X; x++ {
+		g.space.Set(1, typ.P{X: int32(x), Y: int32(arena1v1n1.Min.Y)}, uint16(assets.Shroom))
+		g.space.Set(1, typ.P{X: int32(x), Y: int32(arena1v1n1.Max.Y)}, uint16(assets.Shroom))
+	}
+	g.space.Unset(1, typ.P{X: 34, Y: 39})
+
+	for y := arena2v2n1.Min.Y; y < arena2v2n1.Max.Y; y++ {
+		g.space.Set(1, typ.P{X: int32(arena2v2n1.Min.X), Y: int32(y)}, uint16(assets.Shroom))
+		g.space.Set(1, typ.P{X: int32(arena2v2n1.Max.X), Y: int32(y)}, uint16(assets.Shroom))
+	}
+	for x := arena2v2n1.Min.X; x < arena2v2n1.Max.X; x++ {
+		g.space.Set(1, typ.P{X: int32(x), Y: int32(arena2v2n1.Min.Y)}, uint16(assets.Shroom))
+		g.space.Set(1, typ.P{X: int32(x), Y: int32(arena2v2n1.Max.Y)}, uint16(assets.Shroom))
+	}
+	g.space.Unset(1, typ.P{X: 61, Y: 45})
+	g.space.Unset(1, typ.P{X: 60, Y: 45})
+	g.space.Unset(1, typ.P{X: 40, Y: 45})
+	g.space.Unset(1, typ.P{X: 41, Y: 45})
+
 	for y := 0; y < constants.WorldY; y++ {
 		g.space.Set(1, typ.P{X: int32(0), Y: int32(y)}, uint16(assets.Shroom))
 		g.space.Set(1, typ.P{X: int32(constants.WorldX - 1), Y: int32(y)}, uint16(assets.Shroom))

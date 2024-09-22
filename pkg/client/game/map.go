@@ -1,6 +1,7 @@
 package game
 
 import (
+	"image"
 	"log"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -159,6 +160,35 @@ func RandomShroomLayer(width, height int) [][]assets.Image {
 
 		}
 	}
+	arena1v1 := image.Rect(0, 0, 10, 10)
+	arena2v2 := image.Rect(0, 0, 22, 16)
+	arena1v1n1 := arena1v1.Add(image.Point{X: 25, Y: 29})
+	arena2v2n1 := arena2v2.Add(image.Point{X: 40, Y: 29})
+
+	for y := arena1v1n1.Min.Y; y < arena1v1n1.Max.Y; y++ {
+		layer[y][arena1v1n1.Min.X] = assets.Shroom
+		layer[y][arena1v1n1.Max.X] = assets.Shroom
+	}
+	for x := arena1v1n1.Min.X; x < arena1v1n1.Max.X; x++ {
+		layer[arena1v1n1.Min.Y][x] = assets.Shroom
+		layer[arena1v1n1.Max.Y][x] = assets.Shroom
+
+	}
+	layer[39][34] = assets.Nothing
+
+	for y := arena2v2n1.Min.Y; y < arena2v2n1.Max.Y; y++ {
+		layer[y][arena2v2n1.Min.X] = assets.Shroom
+		layer[y][arena2v2n1.Max.X] = assets.Shroom
+	}
+	for x := arena2v2n1.Min.X; x < arena2v2n1.Max.X; x++ {
+		layer[arena2v2n1.Min.Y][x] = assets.Shroom
+		layer[arena2v2n1.Max.Y][x] = assets.Shroom
+
+	}
+	layer[45][61] = assets.Nothing
+	layer[45][60] = assets.Nothing
+	layer[45][40] = assets.Nothing
+	layer[45][41] = assets.Nothing
 	return layer
 }
 
