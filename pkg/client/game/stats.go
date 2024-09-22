@@ -25,9 +25,9 @@ type Checkbox struct {
 	Pressed       bool
 }
 
-func NewCheckbox(pos typ.P, on, off *ebiten.Image) *Checkbox {
+func NewCheckbox() *Checkbox {
+	on, off := texture.Decode(img.CheckboxOn_png), texture.Decode(img.CheckboxOff_png)
 	return &Checkbox{
-		Pos:    pos,
 		W:      int32(on.Bounds().Dx()),
 		H:      int32(on.Bounds().Dy()),
 		ImgOn:  on,
@@ -35,8 +35,8 @@ func NewCheckbox(pos typ.P, on, off *ebiten.Image) *Checkbox {
 		On:     false,
 	}
 }
-
-func (b *Checkbox) Draw(screen *ebiten.Image) {
+func (b *Checkbox) Draw(screen *ebiten.Image, x, y int) {
+	b.Pos = typ.P{X: int32(x), Y: int32(y)}
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(float64(b.Pos.X), float64(b.Pos.Y))
 	if b.On {

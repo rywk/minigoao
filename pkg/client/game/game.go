@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"image/color"
 	_ "image/png"
 	"log"
 	"math"
@@ -15,7 +14,6 @@ import (
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/rywk/minigoao/pkg/client/audio2d"
 	"github.com/rywk/minigoao/pkg/client/game/assets/img"
 	"github.com/rywk/minigoao/pkg/client/game/player"
@@ -29,7 +27,6 @@ import (
 	"github.com/rywk/minigoao/pkg/constants/spell"
 	"github.com/rywk/minigoao/pkg/msgs"
 	"github.com/rywk/minigoao/pkg/typ"
-	"golang.design/x/clipboard"
 	"golang.org/x/image/math/f64"
 )
 
@@ -94,7 +91,6 @@ type Game struct {
 	startForStep      time.Time
 	lastMoveConfirmed bool
 
-	lastPotion     time.Time
 	lastPotionUsed msgs.Item
 
 	steps []player.Step
@@ -128,25 +124,19 @@ func NewGame(web bool, serverAddr string) *Game {
 		connected:   make(chan Login),
 		nickTyper:   typing.NewTyper(),
 		serverTyper: typing.NewTyper(serverAddr),
+		fsBtn:       NewCheckbox(),
+		inputBox:    texture.Decode(img.InputBox_png),
 	}
-	g.typingServer = false
-	if !g.web {
-		g.typingServer = true
-		g.serverTyper = typing.NewTyper()
-		g.adressEnteringPasteTooltip = "(right click to paste)"
-		err := clipboard.Init()
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-	p := typ.P{
-		X: HalfScreenX + 30,
-		Y: ScreenHeight - ScreenHeight/6,
-	}
-	g.fsBtn = NewCheckbox(p,
-		texture.Decode(img.CheckboxOn_png),
-		texture.Decode(img.CheckboxOff_png))
-	g.inputBox = texture.Decode(img.InputBox_png)
+	// g.typingServer = false
+	// if !g.web {
+	// 	g.typingServer = true
+	// 	g.serverTyper = typing.NewTyper()
+	// 	g.adressEnteringPasteTooltip = "(right click to paste)"
+	// 	err := clipboard.Init()
+	// 	if err != nil {
+	// 		log.Fatal(err)
+	// 	}
+	// }
 	return g
 }
 
@@ -197,21 +187,21 @@ func (g *Game) updateRegister() {
 		return
 	}
 
-	if inpututil.IsKeyJustPressed(ebiten.KeyTab) {
-		if g.typingServer {
-			g.serverTyper.StopCursor()
-		} else {
-			g.nickTyper.StopCursor()
-		}
-		g.typingServer = !g.typingServer
+	// if inpututil.IsKeyJustPressed(ebiten.KeyTab) {
+	// 	if g.typingServer {
+	// 		g.serverTyper.StopCursor()
+	// 	} else {
+	// 		g.nickTyper.StopCursor()
+	// 	}
+	// 	g.typingServer = !g.typingServer
 
-	}
+	// }
 
-	if !g.web {
-		if ebiten.IsMouseButtonPressed(ebiten.MouseButton2) {
-			g.serverTyper.Text = string(clipboard.Read(clipboard.FmtText))
-		}
-	}
+	// if !g.web {
+	// 	if ebiten.IsMouseButtonPressed(ebiten.MouseButton2) {
+	// 		g.serverTyper.Text = string(clipboard.Read(clipboard.FmtText))
+	// 	}
+	// }
 
 	r := strings.NewReplacer("\n", "", " ", "")
 	nickText := g.nickTyper.String()
@@ -228,19 +218,19 @@ func (g *Game) updateRegister() {
 }
 
 func (g *Game) drawRegister(screen *ebiten.Image) {
-	text.PrintBigAt(screen, "Type a server IP", HalfScreenX-150, HalfScreenY/2-40)
-	text.PrintAt(screen, g.adressEnteringPasteTooltip, HalfScreenX-144, HalfScreenY/2+58)
+	// text.PrintBigAt(screen, "Type a server IP", HalfScreenX-150, HalfScreenY/2-40)
+	// text.PrintAt(screen, g.adressEnteringPasteTooltip, HalfScreenX-144, HalfScreenY/2+58)
+	// op := &ebiten.DrawImageOptions{}
+	// op.GeoM.Translate(HalfScreenX-150, HalfScreenY/2-5)
+	// screen.DrawImage(g.inputBox, op)
+	// g.serverTyper.DrawCol(screen, HalfScreenX-130, HalfScreenY/2+7, color.RGBA{255, uint8(255 - g.connErrorColorStart), uint8(255 - g.connErrorColorStart), 0})
+	text.PrintBigAt(screen, "Type a nickname and press ENTER", HalfScreenX-180, HalfScreenY-95)
 	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(HalfScreenX-150, HalfScreenY/2-5)
+	op.GeoM.Translate(HalfScreenX-150, HalfScreenY-55)
 	screen.DrawImage(g.inputBox, op)
-	g.serverTyper.DrawCol(screen, HalfScreenX-130, HalfScreenY/2+7, color.RGBA{255, uint8(255 - g.connErrorColorStart), uint8(255 - g.connErrorColorStart), 0})
-	text.PrintBigAt(screen, "Type a nickname and press ENTER", HalfScreenX-180, HalfScreenY-45)
-	op = &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(HalfScreenX-150, HalfScreenY-5)
-	screen.DrawImage(g.inputBox, op)
-	g.nickTyper.Draw(screen, HalfScreenX-130, HalfScreenY+7)
-	text.PrintBigAt(screen, "Fullscreen", HalfScreenX-110, ScreenHeight-ScreenHeight/6)
-	g.fsBtn.Draw(screen)
+	g.nickTyper.Draw(screen, HalfScreenX-130, HalfScreenY-42)
+	text.PrintBigAt(screen, "Fullscreen", HalfScreenX-110, HalfScreenY+95)
+	g.fsBtn.Draw(screen, HalfScreenX+30, HalfScreenY+95)
 }
 
 func (g *Game) drawGame(screen *ebiten.Image) {
