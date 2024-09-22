@@ -2,6 +2,7 @@ package msgs
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -47,6 +48,8 @@ func (m *M) Close() {
 	m.c.Close()
 }
 
+var BadData = errors.New("bad data")
+
 func readMsg(r io.Reader) (*IncomingData, error) {
 	eventByte := make([]byte, eventTypeLen)
 
@@ -55,7 +58,7 @@ func readMsg(r io.Reader) (*IncomingData, error) {
 		return nil, err
 	}
 	if eventByte[0] >= byte(ELen) {
-		return nil, err
+		return nil, BadData
 	}
 	incd := &IncomingData{Event: E(eventByte[0])}
 	if incd.Event.Len() == 0 {
