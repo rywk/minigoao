@@ -1,3 +1,4 @@
 *.exe
 !miniao.exe
 *.wasm
+config.txt
