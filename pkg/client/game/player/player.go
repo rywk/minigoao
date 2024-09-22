@@ -53,7 +53,7 @@ type P struct {
 	chatMsgStart time.Time
 
 	soundPrevWalk int
-	soundboard    *audio2d.SoundBoard
+	soundboard    audio2d.AudioMixer
 }
 
 type ClientP struct {
@@ -243,7 +243,7 @@ func (p *P) UpdateFrames(c int) {
 	}
 }
 
-func (p *P) SetSoundboard(sb *audio2d.SoundBoard) {
+func (p *P) SetSoundboard(sb audio2d.AudioMixer) {
 	p.soundboard = sb
 }
 

@@ -18,6 +18,7 @@ import (
 )
 
 type Checkbox struct {
+	g             *Game
 	Pos           typ.P
 	W, H          int32
 	ImgOn, ImgOff *ebiten.Image
@@ -25,9 +26,10 @@ type Checkbox struct {
 	Pressed       bool
 }
 
-func NewCheckbox() *Checkbox {
+func NewCheckbox(g *Game) *Checkbox {
 	on, off := texture.Decode(img.CheckboxOn_png), texture.Decode(img.CheckboxOff_png)
 	return &Checkbox{
+		g:      g,
 		W:      int32(on.Bounds().Dx()),
 		H:      int32(on.Bounds().Dy()),
 		ImgOn:  on,
@@ -47,7 +49,7 @@ func (b *Checkbox) Draw(screen *ebiten.Image, x, y int) {
 }
 
 func (b *Checkbox) Update() {
-	cx, cy := ebiten.CursorPosition()
+	cx, cy := b.g.mouseX, b.g.mouseY
 	if cx > int(b.Pos.X) && cx < int(b.Pos.X+b.W) && cy > int(b.Pos.Y) && cy < int(b.Pos.Y+b.H) {
 		if ebiten.IsMouseButtonPressed(ebiten.MouseButton0) {
 			if !b.Pressed {
@@ -259,6 +261,10 @@ func NewHud(g *Game) *Hud {
 	}.NewKeyBinder(EmptyInput())
 	s.keyBinders = append(s.keyBinders, meleeKeyBinder)
 
+	for _, kb := range s.keyBinders {
+		kb.g = g
+	}
+
 	s.healthPotionSignalImg.Fill(RedAlpha(uint8(60)))
 	s.manaPotionSignalImg.Fill(BlueAlpha(uint8(90)))
 
@@ -325,9 +331,8 @@ func (s *Hud) Draw(screen *ebiten.Image) {
 	for _, kb := range s.keyBinders {
 		kb.Draw(screen)
 	}
-	x, y := ebiten.CursorPosition()
 	for _, kb := range s.keyBinders {
-		kb.DrawTooltips(screen, x, y)
+		kb.DrawTooltips(screen, s.g.mouseX, s.g.mouseY)
 	}
 }
 
@@ -381,6 +386,7 @@ func mapValue(v, start1, stop1, start2, stop2 float64) float64 {
 }
 
 type KeyBinder[A KBind] struct {
+	g            *Game
 	counter      int
 	Img          *ebiten.Image
 	IconImg      *ebiten.Image
@@ -476,7 +482,7 @@ func (opt KeyBinderOpt[A, B, C]) NewKeyBinder(selected A) *KeyBinder[A] {
 }
 
 func (kb *KeyBinder[A]) Mouse() {
-	x, y := ebiten.CursorPosition()
+	x, y := kb.g.mouseX, kb.g.mouseY
 	if x > kb.Rect.Min.X && x < kb.Rect.Max.X && y > kb.Rect.Min.Y && y < kb.Rect.Max.Y {
 		kb.Over = true
 		if ebiten.IsMouseButtonPressed(ebiten.MouseButton0) {

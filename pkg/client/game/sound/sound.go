@@ -7,7 +7,6 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/audio"
 	"github.com/hajimehoshi/ebiten/v2/audio/wav"
 	audiofile "github.com/rywk/minigoao/pkg/client/game/assets/audio"
-	"github.com/rywk/minigoao/pkg/constants/assets"
 )
 
 type Sounds struct {
@@ -39,18 +38,4 @@ func decodeWav(bs []byte) *wav.Stream {
 		log.Fatal(err)
 	}
 	return walk1d
-}
-
-var assetFile = map[assets.Sound]*[]byte{
-	assets.Spawn:      &audiofile.Spawn_wav,
-	assets.Walk1:      &audiofile.Walk1_wav,
-	assets.Walk2:      &audiofile.Walk2_wav,
-	assets.MeleeAir:   &audiofile.MeleeAir_wav,
-	assets.MeleeBlood: &audiofile.MeleeHit_wav,
-}
-
-func PlaySoundEffect(ctx *audio.Context, s assets.Sound) {
-	sePlayer := ctx.NewPlayerFromBytes(*assetFile[s])
-	sePlayer.SetVolume(.08)
-	sePlayer.Play()
 }

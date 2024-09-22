@@ -62,23 +62,26 @@ type Game struct {
 	typingServer               bool
 	nickTyper                  *typing.Typer
 	fsBtn                      *Checkbox
+	vsyncBtn                   *Checkbox
 	inputBox                   *ebiten.Image
 	fullscreen                 bool
+	vsync                      bool
 	connErrorColorStart        int
 
 	// game
-	latency    string
-	onlines    string
-	counter    int
-	ms         msgs.Msgs
-	world      *Map
-	sessionID  uint32
-	players    [constants.MaxConnCount]*player.P
-	playersY   []YSortable
-	player     *player.P
-	outQueue   chan *GameMsg
-	eventQueue []*GameMsg
-	eventLock  sync.Mutex
+	mouseX, mouseY int
+	latency        string
+	onlines        string
+	counter        int
+	ms             msgs.Msgs
+	world          *Map
+	sessionID      uint32
+	players        [constants.MaxConnCount]*player.P
+	playersY       []YSortable
+	player         *player.P
+	outQueue       chan *GameMsg
+	eventQueue     []*GameMsg
+	eventLock      sync.Mutex
 
 	client *player.ClientP
 	stats  *Hud
@@ -96,7 +99,7 @@ type Game struct {
 
 	steps []player.Step
 
-	SoundBoard *audio2d.SoundBoard
+	SoundBoard audio2d.AudioMixer
 
 	ViewPort   f64.Vec2
 	ZoomFactor float64
@@ -121,13 +124,19 @@ func NewGame(web bool, serverAddr string) *Game {
 	g := &Game{
 		mode:        ModeRegister,
 		web:         web,
-		SoundBoard:  audio2d.NewSoundBoard(web),
 		connected:   make(chan Login),
 		nickTyper:   typing.NewTyper(),
 		serverTyper: typing.NewTyper(serverAddr),
-		fsBtn:       NewCheckbox(),
-		inputBox:    texture.Decode(img.InputBox_png),
+
+		inputBox: texture.Decode(img.InputBox_png),
 	}
+	g.fsBtn = NewCheckbox(g)
+	g.vsyncBtn = NewCheckbox(g)
+	// if g.web {
+	// 	g.SoundBoard = audio2d.NewSimpleSoundBoard()
+	// } else {
+	// }
+	g.SoundBoard = audio2d.NewSoundBoard(web)
 	// g.typingServer = false
 	// if !g.web {
 	// 	g.typingServer = true
@@ -168,6 +177,8 @@ func (g *Game) updateRegister() {
 	}
 	g.fullscreen = g.fsBtn.On
 	g.fsBtn.Update()
+	g.vsync = g.vsyncBtn.On
+	g.vsyncBtn.Update()
 	if g.typingServer {
 		g.serverTyper.Update()
 	} else {
@@ -219,19 +230,23 @@ func (g *Game) updateRegister() {
 }
 
 func (g *Game) drawRegister(screen *ebiten.Image) {
+	g.mouseX, g.mouseY = ebiten.CursorPosition()
+
 	// text.PrintBigAt(screen, "Type a server IP", HalfScreenX-150, HalfScreenY/2-40)
 	// text.PrintAt(screen, g.adressEnteringPasteTooltip, HalfScreenX-144, HalfScreenY/2+58)
 	// op := &ebiten.DrawImageOptions{}
 	// op.GeoM.Translate(HalfScreenX-150, HalfScreenY/2-5)
 	// screen.DrawImage(g.inputBox, op)
 	// g.serverTyper.DrawCol(screen, HalfScreenX-130, HalfScreenY/2+7, color.RGBA{255, uint8(255 - g.connErrorColorStart), uint8(255 - g.connErrorColorStart), 0})
-	text.PrintBigAt(screen, "Type a nickname and press ENTER", HalfScreenX-180, HalfScreenY-95)
+	text.PrintBigAt(screen, "Nick", HalfScreenX-144, HalfScreenY-95)
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(HalfScreenX-150, HalfScreenY-55)
 	screen.DrawImage(g.inputBox, op)
 	g.nickTyper.Draw(screen, HalfScreenX-130, HalfScreenY-42)
-	text.PrintBigAt(screen, "Fullscreen", HalfScreenX-95, HalfScreenY+95)
-	g.fsBtn.Draw(screen, HalfScreenX+30, HalfScreenY+92)
+	text.PrintBigAt(screen, "Fullscreen", HalfScreenX-95, HalfScreenY+93)
+	g.fsBtn.Draw(screen, HalfScreenX+46, HalfScreenY+92)
+	text.PrintBigAt(screen, "Vsync", HalfScreenX-95, HalfScreenY+135)
+	g.vsyncBtn.Draw(screen, HalfScreenX+46, HalfScreenY+132)
 
 	if g.connErrorColorStart > 0 {
 		text.PrintBigAtCol(screen, "Server offline", HalfScreenX-90, HalfScreenY+5, color.RGBA{178, 0, 16, uint8(g.connErrorColorStart)})
@@ -239,6 +254,7 @@ func (g *Game) drawRegister(screen *ebiten.Image) {
 }
 
 func (g *Game) drawGame(screen *ebiten.Image) {
+	g.mouseX, g.mouseY = ebiten.CursorPosition()
 	g.world.Draw(typ.P{X: g.player.X, Y: g.player.Y})
 	for _, p := range g.playersY {
 		if p == nil {
@@ -323,6 +339,7 @@ func (g *Game) Connect(nick string, address string) {
 }
 
 func (g *Game) StartGame(login *msgs.EventPlayerLogin) {
+	ebiten.SetVsyncEnabled(g.vsync)
 	ebiten.SetFullscreen(g.fullscreen)
 	g.mode = ModeGame
 	g.Login(login)
@@ -749,7 +766,8 @@ func (g *Game) ProcessMovement() {
 		g.player.Walking = false
 	}
 	d := g.keys.MovingTo()
-	if g.lastMoveConfirmed && g.leftForMove == 0 && d != direction.Still && time.Since(g.startForStep).Milliseconds() > 50 {
+	if g.lastMoveConfirmed && g.leftForMove == 0 && d != direction.Still &&
+		(time.Since(g.startForStep).Milliseconds() > 60 || d != g.lastDir) {
 		g.AddGameStep(d)
 	}
 }

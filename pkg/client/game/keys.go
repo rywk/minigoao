@@ -307,20 +307,19 @@ func (k *Keys) CastSpell() (bool, spell.Spell, int, int) {
 	}
 
 	if ebiten.IsMouseButtonPressed(ebiten.MouseButton0) {
-		if !k.clickDown && k.spell != spell.None &&
+		k.clickDown = true
+	} else {
+		if k.clickDown && k.spell != spell.None &&
 			time.Since(k.LastSpells[k.spell]) > k.cfg.CooldownSpells[k.spell] &&
 			time.Since(k.LastAction) > k.cfg.CooldownAction {
-			x, y := ebiten.CursorPosition()
 			k.LastAction = time.Now()
 			k.LastSpells[k.spell] = k.LastAction
-			k.clickDown = true
+			k.clickDown = false
 			pspell := k.spell
 			k.spell = spell.None
 			k.lastSpellKey = &NoInput
-			return true, pspell, x, y
+			return true, pspell, k.g.mouseX, k.g.mouseY
 		}
-		k.clickDown = true
-	} else {
 		k.clickDown = false
 	}
 
