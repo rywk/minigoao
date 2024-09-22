@@ -11,6 +11,7 @@ import (
 	"github.com/rywk/minigoao/pkg/msgs"
 )
 
+// go run ./cmd/lag-proxy/main.go 192.168.0.1:$1 127.0.0.1:$2 $3
 func main() {
 	if len(os.Args) != 4 {
 		panic("usage: 127.0.0.1:5555 127.0.0.1:5555 10")

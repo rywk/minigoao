@@ -151,6 +151,7 @@ const (
 	EUseItem
 	ESendChat
 
+	EPingOk
 	EMoveOk
 	ECastSpellOk
 	EMeleeOk
@@ -186,6 +187,7 @@ var eventLen = [ELen]int{
 	1,       // EUseItem - 1 byte (uint8) to define the item id
 	-1,      // ESendChat
 
+	2,                 // EPingOk
 	2,                 // EMoveOk - 1 byte (bool) move, 1 byte (bool) direction
 	1 + 2 + 4 + 4 + 1, // ECastSpellOk - 1 byte (uint8) spell, 2 bytes (uint16) to define the player id, 4 bytes (uint32) damage,  4 bytes (uint32) new mp,  1 byte (bool) killed target
 	1 + 1 + 2 + 4,     // EMeleeOk -   1 byte (bool) hit/miss, 1 byte (bool) killed target, 2 bytes (uint16) to define the player id, 4 bytes (uint32) damage
@@ -216,6 +218,7 @@ var eventString = [ELen]string{
 	"EMelee",
 	"EUseItem",
 
+	"EPingOk",
 	"EMoveOk",
 	"ECastSpellOk",
 	"EMeleeOk",
@@ -264,6 +267,8 @@ func encodeAndWrite(m Msgs, e E, msg interface{}) error {
 		return m.Write(e, []byte{byte(msg.(Item))})
 	case ESendChat:
 		return m.WriteWithLen(e, EncodeMsgpack(msg.(*EventSendChat)))
+	case EPingOk:
+		return m.Write(e, binary.BigEndian.AppendUint16(make([]byte, 0, 2), msg.(uint16)))
 	case EMoveOk:
 		return m.Write(e, msg.([]byte))
 	case ECastSpellOk:

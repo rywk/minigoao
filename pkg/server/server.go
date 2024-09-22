@@ -240,17 +240,20 @@ func (g *Game) Run() {
 
 func (g *Game) consumeIncomingData() {
 	log.Printf("Game started.\n")
+	online := 0
 	for incomingData := range g.incomingData {
 		player := g.players[incomingData.ID]
 		switch incomingData.Event {
 		case msgs.EPlayerConnect:
+			online++
 			player = incomingData.Data.(*Player)
 			g.AddPlayer(player)
 			player.Login()
 			log.Printf("LOG IN: %v  [%v] [%v]\n", player.m.IP(), player.nick, player.id)
 		case msgs.EPing:
-			player.Send <- OutMsg{Event: incomingData.Event}
+			player.Send <- OutMsg{Event: msgs.EPingOk, Data: uint16(online)}
 		case msgs.EPlayerLogout:
+			online--
 			g.RemovePlayer(player.id)
 			player.Logout()
 			log.Printf("LOG OUT: %v  [%v] [%v]\n", player.m.IP(), player.nick, player.id)

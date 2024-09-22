@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/rywk/minigoao/pkg/client/audio2d"
 	"github.com/rywk/minigoao/pkg/client/game/assets/img"
@@ -71,6 +70,7 @@ type Game struct {
 
 	// game
 	latency    string
+	onlines    string
 	counter    int
 	ms         msgs.Msgs
 	world      *Map
@@ -254,9 +254,9 @@ func (g *Game) drawGame(screen *ebiten.Image) {
 	g.keys.DrawChat(g.world.Image(), int(g.player.Pos[0]+16), int(g.player.Pos[1]-40))
 	g.Render(g.world.Image(), screen)
 
-	ebitenutil.DebugPrint(screen,
-		fmt.Sprintf("FPS: %v\nTPS: %v\nPing: %v", int(ebiten.ActualFPS()), math.Round(ebiten.ActualTPS()), g.latency))
-
+	text.PrintAt(screen, fmt.Sprintf("FPS: %v", int(ebiten.ActualFPS())), 0, 0)
+	text.PrintAt(screen, fmt.Sprintf("Ping: %v", g.latency), 70, 0)
+	text.PrintAt(screen, fmt.Sprintf("Online: %v", g.onlines), 140, 0)
 	g.stats.Draw(screen)
 }
 
@@ -375,7 +375,8 @@ func (g *Game) WriteEventQueue() {
 		}
 		dim := GameMsg{E: im.Event}
 		switch im.Event {
-		case msgs.EPing:
+		case msgs.EPingOk:
+			dim.Data = binary.BigEndian.Uint16(im.Data[:2])
 		case msgs.EMoveOk:
 			dim.Data = im.Data
 		case msgs.EMeleeOk:
@@ -438,8 +439,9 @@ func (g *Game) ProcessEventQueue() error {
 		case msgs.EServerDisconnect:
 			log.Printf("Server disconnected\n")
 			return errors.New("server disconnected")
-		case msgs.EPing:
+		case msgs.EPingOk:
 			g.WaitingPong = false
+			g.onlines = fmt.Sprintf("%d", ev.Data.(uint16))
 			g.latency = fmt.Sprintf("%dms", time.Since(g.LastPing).Milliseconds()/2)
 		case msgs.EPlayerDespawned:
 			pid := ev.Data.(uint16)

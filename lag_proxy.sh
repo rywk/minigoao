@@ -1,1 +1,0 @@
-go run ./cmd/lag-proxy/main.go 192.168.0.66:$1 127.0.0.1:$2 $3
