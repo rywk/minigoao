@@ -2,7 +2,6 @@ package grid
 
 import (
 	"fmt"
-	"log"
 	"sync"
 
 	"github.com/rywk/minigoao/pkg/constants/direction"
@@ -241,9 +240,6 @@ func NewObserverRange(s *Grid, pos typ.P, w, h int32, fn func(*Tile)) *Obs {
 	if ey >= int32(s.h) {
 		ey = int32(s.h - 1)
 	}
-	log.Printf("pos [%v] ", pos)
-	log.Printf("start xy [%v %v] ", sx, sy)
-	log.Printf("end xy [%v %v] ", ex, ey)
 	o.View = typ.Rect{
 		Min: typ.P{X: sx, Y: sy},
 		Max: typ.P{X: ex, Y: ey},

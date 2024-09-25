@@ -160,8 +160,8 @@ func RandomShroomLayer(width, height int) [][]assets.Image {
 
 		}
 	}
-	arena1v1 := image.Rect(0, 0, 10, 10)
-	arena2v2 := image.Rect(0, 0, 22, 16)
+	arena1v1 := image.Rect(0, 0, 8, 8)
+	arena2v2 := image.Rect(0, 0, 16, 12)
 	arena1v1n1 := arena1v1.Add(image.Point{X: 25, Y: 29})
 	arena2v2n1 := arena2v2.Add(image.Point{X: 40, Y: 29})
 
@@ -174,7 +174,7 @@ func RandomShroomLayer(width, height int) [][]assets.Image {
 		layer[arena1v1n1.Max.Y][x] = assets.Shroom
 
 	}
-	layer[39][34] = assets.Nothing
+	layer[37][32] = assets.Nothing
 
 	for y := arena2v2n1.Min.Y; y < arena2v2n1.Max.Y; y++ {
 		layer[y][arena2v2n1.Min.X] = assets.Shroom
@@ -185,10 +185,10 @@ func RandomShroomLayer(width, height int) [][]assets.Image {
 		layer[arena2v2n1.Max.Y][x] = assets.Shroom
 
 	}
-	layer[45][61] = assets.Nothing
-	layer[45][60] = assets.Nothing
-	layer[45][40] = assets.Nothing
-	layer[45][41] = assets.Nothing
+	layer[41][55] = assets.Nothing
+	layer[41][54] = assets.Nothing
+	layer[41][40] = assets.Nothing
+	layer[41][41] = assets.Nothing
 	return layer
 }
 

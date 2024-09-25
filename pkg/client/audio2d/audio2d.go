@@ -23,8 +23,10 @@ const (
 )
 
 type SoundBoard struct {
+	web        bool
 	sampleRate beep.SampleRate
 	sounds     map[assets.Sound]*Sound
+	Volume     float64
 }
 
 func NewSound(bs []byte) *Sound {
@@ -52,16 +54,54 @@ func NewSoundCopies(n int, bs []byte) []*Sound {
 	}
 	return sounds
 }
-
-func (s *Sound) Play() {
-	leftCh, rightCh := beep.Dup(s.buffer.Streamer(0, s.buffer.Len()))
-	leftCh = effects.Mono(multiplyChannels(1, 0, leftCh))
-	rightCh = effects.Mono(multiplyChannels(0, 1, rightCh))
-	NewMovingStreamer(s.sampleRate, -1, 0, leftCh).Play()
-	NewMovingStreamer(s.sampleRate, +1, 0, rightCh).Play()
+func (s *Sound) PlayFlat(vol float64) {
+	// speaker.Play(&effects.Volume{
+	// 	Streamer: s.buffer.Streamer(0, s.buffer.Len()),
+	// 	Base:     2,
+	// 	Volume:   vol,
+	// 	Silent:   false,
+	// })
 }
 
-func (s *Sound) PlayFrom(x, y, sx, sy int) {
+func (s *Sound) Play(vol float64) {
+	leftCh, rightCh := beep.Dup(s.buffer.Streamer(0, s.buffer.Len()))
+
+	const earDistance = 0.16
+	const metersPerSecond = 343
+	samplesPerSecond := float64(s.sampleRate)
+	samplesPerMeter := samplesPerSecond / metersPerSecond
+
+	leftCh = effects.Mono(multiplyChannels(1, 0, leftCh))
+	leftEar1, rightEar1 := beep.Dup(leftCh)
+	s1 := effects.Doppler(2, samplesPerMeter, multiplyChannels(1, 0, leftEar1), func(delta int) float64 {
+		return math.Max(0.25, math.Hypot(1+earDistance/2, 0))
+	})
+	s2 := effects.Doppler(2, samplesPerMeter, multiplyChannels(0, 1, rightEar1), func(delta int) float64 {
+		return math.Max(0.25, math.Hypot(1-earDistance/2, 0))
+	})
+
+	rightCh = effects.Mono(multiplyChannels(0, 1, rightCh))
+	leftEar2, rightEar2 := beep.Dup(rightCh)
+	s3 := effects.Doppler(2, samplesPerMeter, multiplyChannels(1, 0, leftEar2), func(delta int) float64 {
+		return math.Max(0.25, math.Hypot(-1+earDistance/2, 0))
+	})
+	s4 := effects.Doppler(2, samplesPerMeter, multiplyChannels(0, 1, rightEar2), func(delta int) float64 {
+		return math.Max(0.25, math.Hypot(-1-earDistance/2, 0))
+	})
+	// silent := false
+	// if vol <= 0 {
+	// 	silent = true
+	// }
+
+	speaker.Play(&effects.Volume{
+		Streamer: beep.Mix(s1, s2, s3, s4),
+		Base:     2,
+		Volume:   vol,
+		Silent:   false,
+	})
+}
+
+func (s *Sound) PlayFrom(vol float64, x, y, sx, sy int) {
 	dx, dy := sx-x, sy-y
 	var mx, my float64
 	if dx < 0 {
@@ -74,18 +114,54 @@ func (s *Sound) PlayFrom(x, y, sx, sy int) {
 	} else {
 		my = mapValue(float64(dy), 0, 40, 1, 7)
 	}
+	s.PlayMovingStreamers(vol, mx, my)
+}
+
+func (s *Sound) PlayMovingStreamers(vol, mx, my float64) {
 	leftCh, rightCh := beep.Dup(s.buffer.Streamer(0, s.buffer.Len()))
+
+	const earDistance = 0.16
+	const metersPerSecond = 343
+	samplesPerSecond := float64(s.sampleRate)
+	samplesPerMeter := samplesPerSecond / metersPerSecond
+
 	leftCh = effects.Mono(multiplyChannels(1, 0, leftCh))
+	leftEar1, rightEar1 := beep.Dup(leftCh)
+	s1 := effects.Doppler(2, samplesPerMeter, multiplyChannels(1, 0, leftEar1), func(delta int) float64 {
+		return math.Max(0.25, math.Hypot(mx+earDistance/2, my))
+	})
+	s2 := effects.Doppler(2, samplesPerMeter, multiplyChannels(0, 1, rightEar1), func(delta int) float64 {
+		return math.Max(0.25, math.Hypot(mx-earDistance/2, my))
+	})
+
 	rightCh = effects.Mono(multiplyChannels(0, 1, rightCh))
-	NewMovingStreamer(s.sampleRate, mx, my, leftCh).Play()
-	NewMovingStreamer(s.sampleRate, mx, my, rightCh).Play()
+	leftEar2, rightEar2 := beep.Dup(rightCh)
+	s3 := effects.Doppler(2, samplesPerMeter, multiplyChannels(1, 0, leftEar2), func(delta int) float64 {
+		return math.Max(0.25, math.Hypot(mx+earDistance/2, my))
+	})
+	s4 := effects.Doppler(2, samplesPerMeter, multiplyChannels(0, 1, rightEar2), func(delta int) float64 {
+		return math.Max(0.25, math.Hypot(mx-earDistance/2, my))
+	})
+	// silent := false
+	// if vol <= 0 {
+	// 	silent = true
+	// }
+	speaker.Play(&effects.Volume{
+		Streamer: beep.Mix(s1, s2, s3, s4),
+		Base:     2,
+		Volume:   vol,
+		Silent:   false,
+	})
 }
 
 func NewSoundBoard(web bool) *SoundBoard {
-	sb := &SoundBoard{}
+	sb := &SoundBoard{
+		web:    web,
+		Volume: 0,
+	}
 	if web {
 		sb.sampleRate = SampleRateWeb
-		speaker.Init(sb.sampleRate, 2051)
+		speaker.Init(sb.sampleRate, 4099)
 		sb.sounds = map[assets.Sound]*Sound{
 			assets.Spawn:                NewOggSound(audiofile.SpawnLow_ogg),
 			assets.MeleeAir:             NewOggSound(audiofile.MeleeAirLow_ogg),
@@ -124,54 +200,30 @@ func NewSoundBoard(web bool) *SoundBoard {
 type AudioMixer interface {
 	Play(s assets.Sound)
 	PlayFrom(s assets.Sound, x, y, sx, sy int32)
+	SetVolume(float64)
 }
 
 var _ AudioMixer = (*SoundBoard)(nil)
 
-// var _ AudioMixer = (*SimpleSoundBoard)(nil)
+func (sb *SoundBoard) SetVolume(v float64) {
 
-// type SimpleSoundBoard struct {
-// 	assetFiles map[assets.Sound]*[]byte
-// 	ctx        *audio.Context
-// }
-
-// func (sb *SimpleSoundBoard) Play(s assets.Sound) {
-// 	sePlayer := sb.ctx.NewPlayerFromBytes(*sb.assetFiles[s])
-// 	sePlayer.SetVolume(.4)
-// 	sePlayer.Play()
-// }
-
-// func (sb *SimpleSoundBoard) PlayFrom(s assets.Sound, x, y, sx, sy int32) {
-// 	sb.Play(s)
-// }
-
-// func NewSimpleSoundBoard() *SimpleSoundBoard {
-// 	ssb := &SimpleSoundBoard{
-// 		ctx: audio.NewContext(22050),
-// 	}
-// 	ssb.assetFiles = map[assets.Sound]*[]byte{
-// 		assets.Spawn:                &audiofile.Spawn_wav,
-// 		assets.MeleeAir:             &audiofile.MeleeAir_wav,
-// 		assets.MeleeBlood:           &audiofile.MeleeHit_wav,
-// 		assets.Walk1:                &audiofile.Walk1_wav,
-// 		assets.Walk2:                &audiofile.Walk2_wav,
-// 		assets.SpellApocaSound:      &audiofile.SpellApoca_wav,
-// 		assets.SpellDescaSound:      &audiofile.SpellDesca_wav,
-// 		assets.SpellInmoSound:       &audiofile.SpellInmo_wav,
-// 		assets.SpellHealWoundsSound: &audiofile.SpellHealWounds_wav,
-// 		assets.SpellResurrectSound:  &audiofile.SpellResurrect_wav,
-// 		assets.SpellInmoRmSound:     &audiofile.SpellInmoRm_wav,
-// 		assets.Potion:               &audiofile.Potion_wav,
-// 	}
-// 	return ssb
-// }
-
+	sb.Volume = mapValue(v, 0, 200, -8, 2)
+	//log.Printf("vol %v", sb.Volume)
+}
 func (sb *SoundBoard) Play(s assets.Sound) {
-	sb.sounds[s].Play()
+	if sb.web {
+		sb.sounds[s].PlayFlat(sb.Volume)
+		return
+	}
+	sb.sounds[s].Play(sb.Volume)
 }
 
 func (sb *SoundBoard) PlayFrom(s assets.Sound, x, y, sx, sy int32) {
-	sb.sounds[s].PlayFrom(int(x), int(y), int(sx), int(sy))
+	if sb.web {
+		sb.sounds[s].PlayFlat(sb.Volume)
+		return
+	}
+	sb.sounds[s].PlayFrom(sb.Volume, int(x), int(y), int(sx), int(sy))
 }
 
 func multiplyChannels(left, right float64, s beep.Streamer) beep.Streamer {
@@ -188,42 +240,6 @@ func multiplyChannels(left, right float64, s beep.Streamer) beep.Streamer {
 type Sound struct {
 	sampleRate beep.SampleRate
 	buffer     *beep.Buffer
-}
-
-type MovingStreamer struct {
-	x, y float64
-	//velX, velY   float64
-	leftDoppler  beep.Streamer
-	rightDoppler beep.Streamer
-}
-
-func NewMovingStreamer(sr beep.SampleRate, x, y float64, streamer beep.Streamer) *MovingStreamer {
-	ms := &MovingStreamer{x: x, y: y}
-
-	const metersPerSecond = 343
-	samplesPerSecond := float64(sr)
-	samplesPerMeter := samplesPerSecond / metersPerSecond
-
-	leftEar, rightEar := beep.Dup(streamer)
-	leftEar = multiplyChannels(1, 0, leftEar)
-	rightEar = multiplyChannels(0, 1, rightEar)
-
-	const earDistance = 0.16
-	ms.leftDoppler = effects.Doppler(2, samplesPerMeter, leftEar, func(delta int) float64 {
-		// dt := sr.D(delta).Seconds()
-		// ms.x += ms.velX * dt
-		// ms.y += ms.velY * dt
-		return math.Max(0.25, math.Hypot(ms.x+earDistance/2, ms.y))
-	})
-	ms.rightDoppler = effects.Doppler(2, samplesPerMeter, rightEar, func(delta int) float64 {
-		return math.Max(0.25, math.Hypot(ms.x-earDistance/2, ms.y))
-	})
-
-	return ms
-}
-
-func (ms *MovingStreamer) Play() {
-	speaker.Play(ms.leftDoppler, ms.rightDoppler)
 }
 
 func report(err error) {

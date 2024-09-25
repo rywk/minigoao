@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rywk/minigoao/pkg/constants"
+	"github.com/rywk/minigoao/pkg/constants/direction"
 	"github.com/rywk/minigoao/pkg/constants/spell"
 	"github.com/rywk/minigoao/pkg/typ"
 )
@@ -135,11 +136,7 @@ const (
 
 func Melee(from, to *Player) int32 {
 	calc := MeleeBaseDamage + int32(rand.Intn(int(MeleeRNGRange)))
-	to.hp = to.hp - calc
-	if to.hp <= 0 {
-		to.hp = 0
-		to.dead = true
-	}
+	to.TakeDamage(calc)
 	return calc
 }
 
@@ -155,6 +152,31 @@ func (c *Cooldown) Try() bool {
 	}
 	c.Last = now
 	return true
+}
+
+var playerHitbox = typ.Rect{Min: typ.P{X: -16, Y: -48}, Max: typ.P{X: 16, Y: 16}}
+
+func (p *Player) CalcHitbox() typ.Rect {
+	tilePxCenter := typ.P{
+		X: (p.pos.X * constants.TileSize) + (constants.TileSize / 2),
+		Y: (p.pos.Y * constants.TileSize) + (constants.TileSize / 2),
+	}
+	sinceMoved := time.Since(p.lastMove)
+	if sinceMoved >= p.speedXTile {
+		return playerHitbox.OnPoint(tilePxCenter)
+	}
+	off := constants.TileSize - int32((sinceMoved/AverageGameFrame))*p.speedPxXFrame
+	switch p.dir {
+	case direction.Back:
+		tilePxCenter.Y = tilePxCenter.Y + off
+	case direction.Front:
+		tilePxCenter.Y = tilePxCenter.Y - off
+	case direction.Left:
+		tilePxCenter.X = tilePxCenter.X + off
+	case direction.Right:
+		tilePxCenter.X = tilePxCenter.X - off
+	}
+	return playerHitbox.OnPoint(tilePxCenter)
 }
 
 func (g *Game) CheckSpellTargets(px typ.P) uint16 {

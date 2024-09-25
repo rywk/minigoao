@@ -439,9 +439,9 @@ func (pfx *PEffects) NewSpellHit(s spell.Spell) {
 	}
 }
 
-func (pfx *PEffects) NewAttackNumber(dmg int) {
+func (pfx *PEffects) NewAttackNumber(dmg int, heal bool) {
 	if dmg > 0 {
-		pfx.active = append(pfx.active, &AtkDmgFxTxt{img: ebiten.NewImage(40, 40), dmg: strconv.FormatInt(int64(dmg), 10)})
+		pfx.active = append(pfx.active, &AtkDmgFxTxt{img: ebiten.NewImage(40, 40), dmg: strconv.FormatInt(int64(dmg), 10), heal: heal})
 	}
 }
 
@@ -478,19 +478,29 @@ func (as *SpellOffset) EffectOpt(op *ebiten.DrawImageOptions) *ebiten.DrawImageO
 }
 
 type AtkDmgFxTxt struct {
-	dmg string
-	img *ebiten.Image
-	y   int
+	dmg  string
+	heal bool
+	img  *ebiten.Image
+	y    int
+	c    int
 }
 
 func (adt *AtkDmgFxTxt) Play() bool {
 	adt.img.Clear()
-	ebitenutil.DebugPrintAt(adt.img, adt.dmg, 0, 20-adt.y)
-	if adt.y == 20 {
+	col := color.RGBA{194, 6, 6, 100}
+	if adt.heal {
+		col = color.RGBA{6, 153, 194, 100}
+	}
+	text.PrintColAt(adt.img, adt.dmg, 0, 10-adt.y, col)
+	if adt.y == 10 {
 		adt.y = 0
 		return false
 	}
-	adt.y++
+	if adt.c%2 == 0 {
+		adt.y++
+	}
+	adt.c++
+
 	return true
 }
 

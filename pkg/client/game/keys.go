@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/rywk/minigoao/pkg/client/game/text"
 	"github.com/rywk/minigoao/pkg/client/game/typing"
 	"github.com/rywk/minigoao/pkg/constants"
@@ -17,10 +16,10 @@ import (
 )
 
 type KeyConfig struct {
-	Front ebiten.Key
-	Back  ebiten.Key
-	Left  ebiten.Key
-	Right ebiten.Key
+	Front *Input
+	Back  *Input
+	Left  *Input
+	Right *Input
 
 	PotionHP *Input
 	PotionMP *Input
@@ -46,10 +45,10 @@ type KeyConfig struct {
 }
 
 var DefaultConfig = KeyConfig{
-	Front: ebiten.KeyS,
-	Back:  ebiten.KeyW,
-	Left:  ebiten.KeyA,
-	Right: ebiten.KeyD,
+	Front: NewInputPtr(ebiten.KeyS),
+	Back:  NewInputPtr(ebiten.KeyW),
+	Left:  NewInputPtr(ebiten.KeyA),
+	Right: NewInputPtr(ebiten.KeyD),
 
 	PickParalize:          NewInputPtr(ebiten.Key3),
 	PickParalizeRm:        NewInputPtr(ebiten.KeyShiftLeft),
@@ -79,9 +78,9 @@ var DefaultConfig = KeyConfig{
 type Keys struct {
 	g            *Game
 	cfg          *KeyConfig
-	last         ebiten.Key
-	pressed      map[ebiten.Key]bool
-	directionMap map[ebiten.Key]direction.D
+	last         *Input
+	pressed      map[*Input]bool
+	directionMap map[*Input]direction.D
 
 	keysLocked    bool
 	chatInputOpen bool
@@ -117,18 +116,18 @@ func NewKeys(g *Game, cfg *KeyConfig) *Keys {
 		cfg:          cfg,
 		typer:        typing.NewTyper(),
 		openCloseImg: ebiten.NewImage(8, 14),
-		pressed: map[ebiten.Key]bool{
+		pressed: map[*Input]bool{
 			cfg.Front: false,
 			cfg.Back:  false,
 			cfg.Left:  false,
 			cfg.Right: false,
 		},
-		directionMap: map[ebiten.Key]direction.D{
+		directionMap: map[*Input]direction.D{
 			cfg.Front: direction.Front,
 			cfg.Back:  direction.Back,
 			cfg.Left:  direction.Left,
 			cfg.Right: direction.Right,
-			-1:        direction.Still,
+			&NoInput:  direction.Still,
 		},
 
 		spell:      spell.None,
@@ -177,10 +176,10 @@ func (k *Keys) ListenMovement() {
 	if k.keysLocked {
 		return
 	}
-	front, back, left, right := ebiten.IsKeyPressed(k.cfg.Front),
-		ebiten.IsKeyPressed(k.cfg.Back),
-		ebiten.IsKeyPressed(k.cfg.Left),
-		ebiten.IsKeyPressed(k.cfg.Right)
+	front, back, left, right := k.cfg.Front.IsPressed(),
+		k.cfg.Back.IsPressed(),
+		k.cfg.Left.IsPressed(),
+		k.cfg.Right.IsPressed()
 
 	if front && !k.pressed[k.cfg.Front] {
 		k.pressed[k.cfg.Front] = true
@@ -219,7 +218,7 @@ func (k *Keys) ListenMovement() {
 	}
 
 	if !front && !back && !left && !right {
-		k.last = -1
+		k.last = &NoInput
 	}
 }
 
@@ -295,13 +294,14 @@ func (k *Keys) ListenSpell() {
 	} else if !resurrect && k.spellPressed[k.cfg.PickResurrect] {
 		k.spellPressed[k.cfg.PickResurrect] = false
 	}
-
-	k.spell = k.spellMap[k.lastSpellKey]
+	if apoca || inmo || inmoRm || desca || healWounds || resurrect {
+		k.spell = k.spellMap[k.lastSpellKey]
+	}
 }
 
 func (k *Keys) CastSpell() (bool, spell.Spell, int, int) {
 	// if spell is picked and mouse mode is not crosshair, activate and set
-	if k.spell != spell.None && k.cursorMode != ebiten.CursorShapeCrosshair {
+	if k.spell != spell.None && k.cursorMode != ebiten.CursorShapeCrosshair && k.g.mouseY < ScreenHeight-64 {
 		ebiten.SetCursorShape(ebiten.CursorShapeCrosshair)
 		k.cursorMode = ebiten.CursorShapeCrosshair
 	}
@@ -309,7 +309,7 @@ func (k *Keys) CastSpell() (bool, spell.Spell, int, int) {
 	if ebiten.IsMouseButtonPressed(ebiten.MouseButton0) {
 		k.clickDown = true
 	} else {
-		if k.clickDown && k.spell != spell.None &&
+		if k.clickDown && k.spell != spell.None && k.g.mouseY < ScreenHeight-64 &&
 			time.Since(k.LastSpells[k.spell]) > k.cfg.CooldownSpells[k.spell] &&
 			time.Since(k.LastAction) > k.cfg.CooldownAction {
 			k.LastAction = time.Now()
@@ -323,7 +323,7 @@ func (k *Keys) CastSpell() (bool, spell.Spell, int, int) {
 		k.clickDown = false
 	}
 
-	if k.spell == spell.None && k.cursorMode == ebiten.CursorShapeCrosshair {
+	if k.spell == spell.None && k.cursorMode == ebiten.CursorShapeCrosshair || k.g.mouseY >= ScreenHeight-64 {
 		ebiten.SetCursorShape(ebiten.CursorShapeDefault)
 		k.cursorMode = ebiten.CursorShapeDefault
 	}
@@ -380,14 +380,14 @@ func (k *Keys) DrawChat(screen *ebiten.Image, x, y int) {
 		off := len(k.sentChat) * 3
 		text.PrintAt(screen, k.sentChat, x-off, y)
 	}
-	if k.enterDown && k.sentChat == "" {
+	if k.enterDown {
 		op := &ebiten.DrawImageOptions{}
-		op.GeoM.Translate(float64(x), float64(y))
+		op.GeoM.Translate(float64(x-3), float64(y))
 		screen.DrawImage(k.openCloseImg, op)
 	}
 }
 func (k *Keys) ChatMessage() string {
-	if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
+	if ebiten.IsKeyPressed(ebiten.KeyEnter) {
 		if !k.enterDown {
 			k.enterDown = true
 			if k.chatInputOpen && k.typer.Text != "" {
@@ -398,16 +398,17 @@ func (k *Keys) ChatMessage() string {
 				k.keysLocked = !k.keysLocked
 				return k.sentChat
 			}
-			k.sentChat = ""
 			k.chatInputOpen = !k.chatInputOpen
 			k.keysLocked = !k.keysLocked
 		}
 	} else {
 		k.enterDown = false
 	}
+
 	if k.chatInputOpen {
+		r := strings.NewReplacer("\n", "")
 		k.typer.Update()
-		k.typer.Text = strings.TrimPrefix(k.typer.Text, "\n")
+		k.typer.Text = r.Replace(k.typer.Text)
 	}
 	if time.Since(k.lastChat) > constants.ChatMsgTTL {
 		k.sentChat = ""
@@ -429,12 +430,16 @@ type Input struct {
 type KBind interface {
 	comparable
 	V() Input
+	VPtr() *Input
 	IsPressed() bool
 	String() string
 	Empty() bool
 	Set(Input)
 }
 
+func (i *Input) VPtr() *Input {
+	return i
+}
 func (i *Input) V() Input {
 	return *i
 }
@@ -471,8 +476,14 @@ func (i *Input) String() string {
 	switch i.Mouse {
 	case ebiten.MouseButtonRight:
 		return "MouseButtonRight"
+	case ebiten.MouseButtonLeft:
+		return "MouseButtonLeft"
 	case ebiten.MouseButtonMiddle:
 		return "MouseButtonMiddle"
+	case ebiten.MouseButton3:
+		return "MouseButton3"
+	case ebiten.MouseButton4:
+		return "MouseButton4"
 	}
 	return "idk"
 }

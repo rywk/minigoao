@@ -111,6 +111,18 @@ func PrintBigAtBg(image *ebiten.Image, str string, x, y int) (int, int) {
 	})
 }
 
+func PrintImage(str string) *ebiten.Image {
+	img := ebiten.NewImage(len(str)*16, 36)
+	drawDebugTextOpt(img, str, 0, 0, options{
+		textimg: bigDebugPrintTextImage,
+		bgimg:   bigBgImage,
+		runemap: bigDebugPrintTextSubImages,
+		cw:      bcw, ch: bch,
+		bg: true,
+	})
+	return img
+}
+
 type options struct {
 	textimg *ebiten.Image
 	bgimg   *ebiten.Image

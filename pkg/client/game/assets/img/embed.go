@@ -128,4 +128,7 @@ var (
 
 	//go:embed cooldown_base.png
 	CooldownBase_png []byte
+
+	//go:embed config_icon.png
+	ConfigIcon_png []byte
 )

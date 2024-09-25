@@ -26,7 +26,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path"
 	"path/filepath"
@@ -54,47 +53,40 @@ const indexHTML = `<!DOCTYPE html>
     go.env = {{.Env}};
     go.run(result.instance);
   }
-  const reload = await fetch('_wait');
-  // The server sends a response for '_wait' when a request is sent to '_notify'.
-  if (reload.ok) {
-    location.reload();
-  }
 })();
 </script>
 `
 
 var (
 	flagHTTP        = flag.String("http", ":8080", "HTTP bind address to serve")
-	flagTags        = flag.String("tags", "", "Build tags")
 	flagAllowOrigin = flag.String("allow-origin", "", "Allow specified origin (or * for all origins) to make requests to this server")
-	flagOverlay     = flag.String("overlay", "", "Overwrite source files with a JSON file (see https://pkg.go.dev/cmd/go for more details)")
 )
 
 var (
-	tmpOutputDir = ""
-	waitChannel  = make(chan struct{})
+	waitChannel = make(chan struct{})
 
 	wasmFile   *os.File
 	gameClient *os.File
 	wasmExec   []byte
+
+	goVersion = "go1.23.1"
 )
 
 func init() {
 	var err error
-	wasmFile, err = os.Open("./" + mainWasm)
+	wasmFile, err = os.Open("./cmd/web-server/" + mainWasm)
+
 	if err != nil {
 		panic(err)
 	}
-	gameClient, err = os.Open("./" + miniaoExe)
-	if err != nil {
-		panic(err)
-	}
-	v, err := goVersion()
+
+	gameClient, err = os.Open("./cmd/web-server/" + miniaoExe)
+
 	if err != nil {
 		panic(err)
 	}
 	var resp *http.Response
-	url := fmt.Sprintf("https://go.googlesource.com/go/+/refs/tags/%s/misc/wasm/wasm_exec.js?format=TEXT", v)
+	url := fmt.Sprintf("https://go.googlesource.com/go/+/refs/tags/%s/misc/wasm/wasm_exec.js?format=TEXT", goVersion)
 	resp, err = http.Get(url)
 	if err != nil {
 		panic(err)
@@ -183,26 +175,6 @@ func target() string {
 		return flag.Args()[0]
 	}
 	return "."
-}
-
-// goVersion fetches the current using Go's version.
-// goVersion is different from runtime.Version(), which returns a Go version for this wasmserve build.
-func goVersion() (string, error) {
-	cmd := exec.Command("go", "list", "-f", "go{{.Module.GoVersion}}", target())
-
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	if stderr.Len() > 0 {
-		log.Print(stderr.String())
-	}
-
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("%s%w", stderr.String(), err)
-	}
-
-	return strings.TrimSpace(string(out)), nil
 }
 
 func waitForUpdate(w http.ResponseWriter, r *http.Request) {

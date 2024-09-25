@@ -9,12 +9,14 @@ import (
 	_ "image/png"
 	"log"
 	"math"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/rywk/minigoao/pkg/client/audio2d"
 	"github.com/rywk/minigoao/pkg/client/game/assets/img"
@@ -51,6 +53,14 @@ type Login struct {
 }
 
 type Game struct {
+	debug        bool
+	start        time.Time
+	memStats     *runtime.MemStats
+	totalRunTime time.Duration
+
+	// reduce mem ftp
+	worldImgOp *ebiten.DrawImageOptions
+
 	web  bool
 	mode Mode
 
@@ -89,6 +99,9 @@ type Game struct {
 
 	keys *Keys
 
+	dirOverwriteAttempt            bool
+	dirOverwriteAttemptLeftForMove float64
+
 	lastMove          time.Time
 	leftForMove       float64 // pixels left to complete tile change
 	lastDir           direction.D
@@ -122,17 +135,23 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 }
 
 func NewGame(web bool, serverAddr string) *Game {
+	start := time.Now()
 	g := &Game{
+		debug:       false,
+		start:       start,
+		memStats:    &runtime.MemStats{},
 		mode:        ModeRegister,
 		web:         web,
 		connected:   make(chan Login),
 		nickTyper:   typing.NewTyper(),
 		serverTyper: typing.NewTyper(serverAddr),
+		worldImgOp:  &ebiten.DrawImageOptions{},
 
 		inputBox: texture.Decode(img.InputBox_png),
 	}
 	g.fsBtn = NewCheckbox(g)
 	g.vsyncBtn = NewCheckbox(g)
+	g.vsyncBtn.On = true
 	g.SoundBoard = audio2d.NewSoundBoard(web)
 	return g
 }
@@ -145,6 +164,13 @@ func (g *Game) Update() error {
 		g.updateGame()
 	case ModeOptions:
 	}
+	if !g.debug {
+		return nil
+	}
+	if g.counter%30 == 0 {
+		runtime.ReadMemStats(g.memStats)
+		g.totalRunTime = time.Since(g.start)
+	}
 	return nil
 }
 
@@ -156,8 +182,38 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		g.drawGame(screen)
 	case ModeOptions:
 	}
+	if !g.debug {
+		return
+	}
+	ms := g.memStats
+	msg := fmt.Sprintf(`TPS: %0.2f (max: %d);
+Run time: %v
+ticks: %d
+Alloc: %s
+Total: %s
+Sys: %s
+NextGC: %s
+NumGC: %d`,
+		ebiten.ActualTPS(), ebiten.TPS(),
+		g.totalRunTime,
+		g.counter,
+		formatBytes(ms.Alloc), formatBytes(ms.TotalAlloc), formatBytes(ms.Sys),
+		formatBytes(ms.NextGC), ms.NumGC,
+	)
+	ebitenutil.DebugPrintAt(screen, msg, 20, 64)
 }
 
+func formatBytes(b uint64) string {
+	if b >= 1073741824 {
+		return fmt.Sprintf("%0.2f GiB", float64(b)/1073741824)
+	} else if b >= 1048576 {
+		return fmt.Sprintf("%0.2f MiB", float64(b)/1048576)
+	} else if b >= 1024 {
+		return fmt.Sprintf("%0.2f KiB", float64(b)/1024)
+	} else {
+		return fmt.Sprintf("%d B", b)
+	}
+}
 func (g *Game) updateRegister() {
 	if g.connErrorColorStart > 0 {
 		g.connErrorColorStart--
@@ -251,9 +307,8 @@ func (g *Game) updateGame() error {
 	}
 	g.pingServer()
 	g.SendChat()
+	g.UpdateGamePos()
 	g.ListenInputs()
-	g.ProcessMovement()
-	g.ProcessCombat()
 	g.world.Update()
 	g.player.Update(g.counter)
 	g.player.Effect.Update(g.counter)
@@ -301,15 +356,19 @@ func (g *Game) Connect(nick string, address string) {
 }
 
 func (g *Game) StartGame(login *msgs.EventPlayerLogin) {
+	if g.web {
+		g.vsync = true
+	}
 	ebiten.SetVsyncEnabled(g.vsync)
 	ebiten.SetFullscreen(g.fullscreen)
 	g.mode = ModeGame
 	g.Login(login)
 	g.ViewPort = f64.Vec2{ScreenWidth, ScreenHeight}
-	g.ZoomFactor = 1
+	//g.ZoomFactor = 1
 	g.lastMove = time.Now()
 	g.lastMoveConfirmed = true
 	g.keys = NewKeys(g, nil)
+	g.keys.enterDown = true
 	g.playersY = append(g.playersY, g.player)
 	g.stats = NewHud(g)
 
@@ -400,7 +459,7 @@ func (g *Game) Clear() {
 }
 
 func (g *Game) AddToGame(event *msgs.EventNewPlayer) {
-	g.world.Space.Set(0, event.Pos, event.ID)
+	g.world.Space.SetSlot(0, event.Pos, event.ID)
 	g.players[event.ID] = player.CreatePlayerSpawned(g.player, event)
 	g.players[event.ID].SetSoundboard(g.SoundBoard)
 	g.playersY = append(g.playersY, g.players[event.ID])
@@ -447,10 +506,12 @@ func (g *Game) ProcessEventQueue() error {
 			}
 			if !event.Hit {
 				g.SoundBoard.Play(assets.MeleeAir)
+				g.player.Direction = event.Dir
 				break
 			}
+			g.player.Direction = event.Dir
 			g.SoundBoard.Play(assets.MeleeBlood)
-			g.player.Effect.NewAttackNumber(int(event.Damage))
+			g.player.Effect.NewAttackNumber(int(event.Damage), false)
 			g.players[event.ID].Effect.NewMeleeHit()
 			g.players[event.ID].Dead = event.Killed
 		case msgs.EPlayerMeleeRecieved:
@@ -458,18 +519,23 @@ func (g *Game) ProcessEventQueue() error {
 			g.SoundBoard.Play(assets.MeleeBlood)
 			g.player.Effect.NewMeleeHit()
 			log.Printf("RecivedMelee m: %#v\n", event)
-			g.players[event.ID].Effect.NewAttackNumber(int(event.Damage))
+			g.players[event.ID].Effect.NewAttackNumber(int(event.Damage), false)
+			g.players[event.ID].Direction = event.Dir
 			g.player.Client.HP = int(event.NewHP)
+
 			if g.player.Client.HP == 0 {
 				g.player.Dead = true
+				g.player.Inmobilized = false
 			}
 		case msgs.EPlayerMelee:
 			event := ev.Data.(*msgs.EventPlayerMelee)
 			log.Printf("EPlayerMelee m: %#v\n", event)
 			if !event.Hit {
+				g.players[event.From].Direction = event.Dir
 				g.SoundBoard.PlayFrom(assets.MeleeAir, g.player.X, g.player.Y, g.players[event.From].X, g.players[event.From].Y)
 				break
 			}
+			g.players[event.ID].Direction = event.Dir
 			g.SoundBoard.PlayFrom(assets.MeleeBlood, g.player.X, g.player.Y, g.players[event.ID].X, g.players[event.ID].Y)
 			g.players[event.ID].Effect.NewMeleeHit()
 			g.players[event.ID].Dead = event.Killed
@@ -478,7 +544,7 @@ func (g *Game) ProcessEventQueue() error {
 			log.Printf("CastSpellOk m: %#v\n", event)
 			g.player.Client.MP = int(event.NewMP)
 			if uint32(event.ID) != g.sessionID {
-				g.player.Effect.NewAttackNumber(int(event.Damage))
+				g.player.Effect.NewAttackNumber(int(event.Damage), event.Spell == spell.HealWounds)
 				g.players[event.ID].Effect.NewSpellHit(event.Spell)
 				g.SoundBoard.PlayFrom(assets.SoundFromSpell(event.Spell), g.player.X, g.player.Y, g.players[event.ID].X, g.players[event.ID].Y)
 				g.players[event.ID].Dead = event.Killed
@@ -500,7 +566,7 @@ func (g *Game) ProcessEventQueue() error {
 			}
 			g.SoundBoard.Play(assets.SoundFromSpell(event.Spell))
 			g.player.Effect.NewSpellHit(event.Spell)
-			caster.Effect.NewAttackNumber(int(event.Damage))
+			caster.Effect.NewAttackNumber(int(event.Damage), event.Spell == spell.HealWounds)
 			g.player.Client.HP = int(event.NewHP)
 			if g.player.Client.HP == 0 {
 				g.player.Inmobilized = false
@@ -566,23 +632,6 @@ func (g *Game) SendChat() {
 	}
 }
 
-func (g *Game) ProcessCombat() {
-	if g.keys.MeleeHit() {
-		g.outQueue <- &GameMsg{E: msgs.EMelee}
-	}
-	if ok, spellType, x, y := g.keys.CastSpell(); ok {
-		worldX, worldY := g.ScreenToWorld(x, y)
-		g.outQueue <- &GameMsg{E: msgs.ECastSpell, Data: &msgs.EventCastSpell{
-			PX:    uint32(worldX),
-			PY:    uint32(worldY),
-			Spell: spellType,
-		}}
-	}
-	if pressedPotion := g.keys.PressedPotion(); pressedPotion != msgs.ItemNone {
-		g.outQueue <- &GameMsg{E: msgs.EUseItem, Data: pressedPotion}
-	}
-}
-
 func DirToNewPos(p *player.P, d direction.D) typ.P {
 	switch d {
 	case direction.Front:
@@ -598,9 +647,11 @@ func DirToNewPos(p *player.P, d direction.D) typ.P {
 }
 
 func (g *Game) MovementResponse(data []byte) {
+
 	g.lastMoveConfirmed = true
 	allowed := data[0] != 0
 	dir := direction.D(data[1])
+	log.Printf("MovementResponse %v  %v\n", allowed, dir)
 	if len(g.steps) == 0 {
 		g.player.Walking = false
 		log.Printf("move ok arrived without having a step sent\n")
@@ -647,7 +698,6 @@ func (g *Game) MovementResponse(data []byte) {
 }
 
 func (g *Game) TryMove(d direction.D, np typ.P, confident bool) {
-	g.lastDir = d
 	g.lastMoveConfirmed = false
 	g.outQueue <- &GameMsg{E: msgs.EMove, Data: d}
 	g.steps = append(g.steps, player.Step{
@@ -661,7 +711,7 @@ func (g *Game) TryMove(d direction.D, np typ.P, confident bool) {
 }
 
 func (g *Game) Move(d direction.D, np typ.P) {
-	g.leftForMove = constants.TileSize
+	g.leftForMove += constants.TileSize
 	g.player.Walking = true
 	g.player.X = np.X
 	g.player.Y = np.Y
@@ -698,16 +748,11 @@ func (g *Game) AddGameStep(d direction.D) {
 	playerLayer := g.world.Space.GetSlot(0, np)
 
 	confident := !outWorld && !g.player.Inmobilized && playerLayer == 0 && stuff == 0
-
+	g.lastDir = d
 	g.TryMove(d, np, confident)
 }
 
-func (g *Game) ListenInputs() {
-	g.keys.ListenMovement()
-	g.keys.ListenSpell()
-}
-
-func (g *Game) ProcessMovement() {
+func (g *Game) UpdateGamePos() {
 	if g.leftForMove > 0 {
 		vel := g.player.MoveSpeed
 		if g.leftForMove <= vel {
@@ -727,57 +772,58 @@ func (g *Game) ProcessMovement() {
 	} else {
 		g.player.Walking = false
 	}
+}
+
+func (g *Game) ListenInputs() {
+	g.keys.ListenMovement()
+	g.keys.ListenSpell()
+
 	d := g.keys.MovingTo()
-	if g.lastMoveConfirmed && g.leftForMove == 0 && d != direction.Still &&
-		(time.Since(g.startForStep).Milliseconds() > 60 || d != g.lastDir) {
+
+	if d == direction.Still {
+		goto COMBAT
+	}
+	if g.lastMoveConfirmed && g.leftForMove == 0 && (time.Since(g.startForStep).Milliseconds() > 60) {
 		g.AddGameStep(d)
 	}
-}
+COMBAT:
+	{
+		if g.keys.MeleeHit() {
+			g.outQueue <- &GameMsg{E: msgs.EMelee, Data: d}
+		}
+		if ok, spellType, x, y := g.keys.CastSpell(); ok {
+			worldX, worldY := g.ScreenToWorld(x, y)
+			g.outQueue <- &GameMsg{E: msgs.ECastSpell, Data: &msgs.EventCastSpell{
+				PX:    uint32(worldX),
+				PY:    uint32(worldY),
+				Spell: spellType,
+			}}
+		}
+		if pressedPotion := g.keys.PressedPotion(); pressedPotion != msgs.ItemNone {
+			g.outQueue <- &GameMsg{E: msgs.EUseItem, Data: pressedPotion}
+		}
 
-func (g *Game) String() string {
-	return fmt.Sprintf(
-		"T: [%d,%d], R: %d, S: %f",
-		g.player.X, g.player.Y,
-		g.Rotation, g.ZoomFactor,
-	)
-}
-
-func (g *Game) viewportCenter() f64.Vec2 {
-	return f64.Vec2{
-		g.ViewPort[0] * 0.5,
-		g.ViewPort[1] * 0.5,
 	}
 }
 
 const HalfScreenX, HalfScreenY = ScreenWidth / 2, ScreenHeight / 2
 
-func (g *Game) worldMatrix() ebiten.GeoM {
-	m := ebiten.GeoM{}
-	m.Translate(-g.player.Pos[0]+HalfScreenX-16, -g.player.Pos[1]+HalfScreenY-48)
-
-	// think of a spell that shakes the screen :O (rotation included with precise aim)
-	// // We want to scale and rotate around center of image / screen
-	// m.Translate(-g.viewportCenter()[0], -g.viewportCenter()[1])
-	// m.Scale(
-	// 	float64(g.ZoomFactor),
-	// 	float64(g.ZoomFactor),
-	// )
-	// m.Rotate(float64(g.Rotation) * 2 * math.Pi / 360)
-	// m.Translate(g.viewportCenter()[0], g.viewportCenter()[1])
-	return m
+func (g *Game) updateWorldMatrix() {
+	g.worldImgOp.GeoM.Reset()
+	g.worldImgOp.GeoM.Translate(-g.player.Pos[0]+HalfScreenX-16, -g.player.Pos[1]+HalfScreenY-48)
 }
 
 func (g *Game) Render(world, screen *ebiten.Image) {
-	screen.DrawImage(world, &ebiten.DrawImageOptions{
-		GeoM: g.worldMatrix(),
-	})
+	g.updateWorldMatrix()
+
+	screen.DrawImage(world, g.worldImgOp)
 }
 
 func (g *Game) ScreenToWorld(posX, posY int) (float64, float64) {
-	inverseMatrix := g.worldMatrix()
-	if inverseMatrix.IsInvertible() {
-		inverseMatrix.Invert()
-		return inverseMatrix.Apply(float64(posX), float64(posY))
+	g.updateWorldMatrix()
+	if g.worldImgOp.GeoM.IsInvertible() {
+		g.worldImgOp.GeoM.Invert()
+		return g.worldImgOp.GeoM.Apply(float64(posX), float64(posY))
 	} else {
 		// When scaling it can happened that matrix is not invertable
 		return math.NaN(), math.NaN()

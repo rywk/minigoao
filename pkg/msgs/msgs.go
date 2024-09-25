@@ -48,7 +48,7 @@ func (m *M) Close() {
 	m.c.Close()
 }
 
-var BadData = errors.New("bad data")
+var ErrBadData = errors.New("bad data")
 
 func readMsg(r io.Reader) (*IncomingData, error) {
 	eventByte := make([]byte, eventTypeLen)
@@ -57,14 +57,14 @@ func readMsg(r io.Reader) (*IncomingData, error) {
 	if err != nil {
 		return nil, err
 	}
-	if eventByte[0] >= byte(ELen) {
-		return nil, BadData
+	event := E(eventByte[0])
+	if !event.Valid() {
+		log.Printf("BAD DATA!!!! %d", event)
+		return nil, ErrBadData
 	}
 	incd := &IncomingData{Event: E(eventByte[0])}
 	if incd.Event.Len() == 0 {
-		if incd.Event == EMelee {
-			log.Print("reading melee")
-		}
+		log.Print("0b read")
 		return incd, nil
 	}
 	if incd.Event.Len() != -1 {
@@ -190,7 +190,7 @@ var eventLen = [ELen]int{
 	2,                 // EPingOk
 	2,                 // EMoveOk - 1 byte (bool) move, 1 byte (bool) direction
 	1 + 2 + 4 + 4 + 1, // ECastSpellOk - 1 byte (uint8) spell, 2 bytes (uint16) to define the player id, 4 bytes (uint32) damage,  4 bytes (uint32) new mp,  1 byte (bool) killed target
-	1 + 1 + 2 + 4,     // EMeleeOk -   1 byte (bool) hit/miss, 1 byte (bool) killed target, 2 bytes (uint16) to define the player id, 4 bytes (uint32) damage
+	1 + 1 + 1 + 2 + 4, // EMeleeOk -  1 byte (uint8) direction,  1 byte (bool) hit/miss, 1 byte (bool) killed target, 2 bytes (uint16) to define the player id, 4 bytes (uint32) damage
 	1 + 4,             // EUseItemOk - 1 byte (uint8) item, 4 byte (uint32) to define value changed (mana/health)
 
 	0,  // EPlayerConnect
@@ -202,11 +202,11 @@ var eventLen = [ELen]int{
 	2,  // EPlayerLeaveViewport - 2 bytes (uint16) to define the player id
 	-1, // EBroadcastChat
 
-	11,            // EPlayerMoved - 1 byte (uint8) direction, 2 bytes (uint16) player id, 8 bytes (uint32, uint32) x y
-	2 + 1 + 1,     // EPlayerSpell - 2 bytes (uint16) to define the target player id, 1 byte (uint8) to define the spell, 1 byte (bool) killed target
-	1 + 2 + 4 + 4, // EPlayerSpellRecieved - 1 byte (uint8) to define the spell, 2 bytes (uint16) to define the (caster) player id, 4 bytes (uint32) to define the new hp, 4 bytes (uint32) to define the damage
-	1 + 1 + 2 + 2, // EPlayerMelee - 1 byte (bool) hit/miss, 1 byte (bool) killed target, 2 bytes (uint16) to define the target player id, 2 bytes (uint16) to define the attacker
-	2 + 4 + 4,     // EPlayerMeleeRecieved - 2 bytes (uint16) to define the (caster) player id, 4 bytes (uint32) to define the new hp, 4 bytes (uint32) to define the damage
+	11,                // EPlayerMoved - 1 byte (uint8) direction, 2 bytes (uint16) player id, 8 bytes (uint32, uint32) x y
+	2 + 1 + 1,         // EPlayerSpell - 2 bytes (uint16) to define the target player id, 1 byte (uint8) to define the spell, 1 byte (bool) killed target
+	1 + 2 + 4 + 4,     // EPlayerSpellRecieved - 1 byte (uint8) to define the spell, 2 bytes (uint16) to define the (caster) player id, 4 bytes (uint32) to define the new hp, 4 bytes (uint32) to define the damage
+	1 + 1 + 1 + 2 + 2, // EPlayerMelee - 1 byte (bool) hit/miss, 1 byte (bool) killed target, 2 bytes (uint16) to define the target player id, 2 bytes (uint16) to define the attacker
+	1 + 2 + 4 + 4,     // EPlayerMeleeRecieved - 2 bytes (uint16) to define the (caster) player id, 4 bytes (uint32) to define the new hp, 4 bytes (uint32) to define the damage
 }
 
 var eventString = [ELen]string{
@@ -250,6 +250,7 @@ func (e E) Len() int {
 func (e E) String() string {
 	return eventString[e]
 }
+
 func encodeAndWrite(m Msgs, e E, msg interface{}) error {
 	switch e {
 	case EPing:
@@ -261,8 +262,7 @@ func encodeAndWrite(m Msgs, e E, msg interface{}) error {
 	case ECastSpell:
 		return m.Write(e, EncodeEventCastSpell(msg.(*EventCastSpell)))
 	case EMelee:
-		log.Print("writing melee")
-		return m.Write(e, make([]byte, EMelee.Len()))
+		return m.Write(e, []byte{msg.(uint8)})
 	case EUseItem:
 		return m.Write(e, []byte{byte(msg.(Item))})
 	case ESendChat:
@@ -342,12 +342,19 @@ type EventPlayerLogin struct {
 }
 
 func DecodeMsgpack[T any](data []byte, to *T) *T {
-	msgpack.Unmarshal(data, to)
+	log.Print(len(data))
+	err := msgpack.Unmarshal(data, to)
+	if err != nil {
+		panic(err)
+	}
 	return to
 }
 
 func EncodeMsgpack[T any](t *T) []byte {
-	data, _ := msgpack.Marshal(t)
+	data, err := msgpack.Marshal(t)
+	if err != nil {
+		panic(err)
+	}
 	return data
 }
 
@@ -430,6 +437,7 @@ type EventMeleeOk struct {
 	Damage uint32
 	Hit    bool
 	Killed bool
+	Dir    direction.D
 }
 
 func DecodeEventMeleeOk(data []byte) *EventMeleeOk {
@@ -438,6 +446,7 @@ func DecodeEventMeleeOk(data []byte) *EventMeleeOk {
 		Damage: binary.BigEndian.Uint32(data[2:6]),
 		Hit:    data[6] != 0,
 		Killed: data[7] != 0,
+		Dir:    data[8],
 	}
 }
 
@@ -445,12 +454,9 @@ func EncodeEventMeleeOk(c *EventMeleeOk) []byte {
 	bs := make([]byte, EMeleeOk.Len())
 	binary.BigEndian.PutUint16(bs[:2], c.ID)
 	binary.BigEndian.PutUint32(bs[2:6], c.Damage)
-	if c.Hit {
-		bs[6] = 1
-	}
-	if c.Killed {
-		bs[7] = 1
-	}
+	bs[6] = BoolByte(c.Hit)
+	bs[7] = BoolByte(c.Killed)
+	bs[8] = c.Dir
 	return bs
 }
 
@@ -528,6 +534,7 @@ type EventPlayerMelee struct {
 	ID     uint16
 	Hit    bool
 	Killed bool
+	Dir    direction.D
 }
 
 func DecodeEventPlayerMelee(data []byte) *EventPlayerMelee {
@@ -536,6 +543,7 @@ func DecodeEventPlayerMelee(data []byte) *EventPlayerMelee {
 		ID:     binary.BigEndian.Uint16(data[2:4]),
 		Hit:    data[4] != 0,
 		Killed: data[5] != 0,
+		Dir:    data[6],
 	}
 }
 
@@ -549,6 +557,7 @@ func EncodeEventPlayerMelee(c *EventPlayerMelee) []byte {
 	if c.Killed {
 		bs[5] = 1
 	}
+	bs[6] = c.Dir
 	return bs
 }
 
@@ -581,6 +590,7 @@ type EventPlayerMeleeRecieved struct {
 	ID     uint16
 	Damage uint32
 	NewHP  uint32
+	Dir    direction.D
 }
 
 func DecodeEventPlayerMeleeRecieved(data []byte) *EventPlayerMeleeRecieved {
@@ -588,6 +598,7 @@ func DecodeEventPlayerMeleeRecieved(data []byte) *EventPlayerMeleeRecieved {
 		ID:     binary.BigEndian.Uint16(data[:2]),
 		Damage: binary.BigEndian.Uint32(data[2:6]),
 		NewHP:  binary.BigEndian.Uint32(data[6:10]),
+		Dir:    data[10],
 	}
 }
 
@@ -596,5 +607,6 @@ func EncodeEventPlayerMeleeRecieved(c *EventPlayerMeleeRecieved) []byte {
 	binary.BigEndian.PutUint16(bs[:2], c.ID)
 	binary.BigEndian.PutUint32(bs[2:6], c.Damage)
 	binary.BigEndian.PutUint32(bs[6:10], c.NewHP)
+	bs[10] = c.Dir
 	return bs
 }
