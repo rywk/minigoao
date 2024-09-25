@@ -25,7 +25,8 @@ var ErrorTargetAlive = errors.New("target alive")
 var ErrorCasterDead = errors.New("caster dead")
 var ErrorSelfCast = errors.New("cant self cast")
 
-var spellProps = [spell.None]SpellProp{
+var spellProps = [spell.Len]SpellProp{
+	{Spell: spell.None},
 	{
 		Spell:    spell.Paralize,
 		ManaCost: 200,

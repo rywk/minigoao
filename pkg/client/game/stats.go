@@ -416,6 +416,9 @@ type Hud struct {
 	optionsButton *Button
 
 	keyBinders []*KeyBinder[*Input]
+
+	lastHudPotion     time.Time
+	hudPotionCooldown time.Duration
 }
 
 func NewHud(g *Game) *Hud {
@@ -444,29 +447,35 @@ func NewHud(g *Game) *Hud {
 		manaPotionSignalImg:   ebiten.NewImage(32, 32),
 		healthPotionSignalImg: ebiten.NewImage(32, 32),
 		potionAlpha:           0,
+
+		lastHudPotion:     time.Now(),
+		hudPotionCooldown: time.Millisecond * 250,
 	}
 	s.x = 0
 	s.y = float64(ScreenHeight - s.hudBg.Bounds().Dy())
 
 	cooldownBarImg := texture.Decode(img.CooldownBase_png)
 
-	// redPotionKeyBinder := KeyBinderOpt[*Input, msgs.Item, bool]{
-	// 	Desc:       "+30 Health",
-	// 	Rect:       image.Rect(304, int(s.y), 336, ScreenHeight-32),
-	// 	Active:     g.keys.cfg.PotionHP,
-	// 	actionMap:  g.keys.potionMap,
-	// 	pressedMap: g.keys.potionPressed,
-	// }.NewKeyBinder(EmptyInput())
-	// s.keyBinders = append(s.keyBinders, redPotionKeyBinder)
+	redPotionKeyBinder := KeyBinderOpt[*Input, msgs.Item, bool]{
+		Desc:       "+30 Health",
+		Rect:       image.Rect(304, int(s.y), 336, ScreenHeight-32),
+		Active:     g.keys.cfg.PotionHP,
+		Item:       msgs.ItemHealthPotion,
+		actionMap:  g.keys.potionMap,
+		pressedMap: g.keys.potionPressed,
+	}.NewKeyBinder(EmptyInput())
+	s.keyBinders = append(s.keyBinders, redPotionKeyBinder)
 
-	// bluePotionKeyBinder := KeyBinderOpt[*Input, msgs.Item, bool]{
-	// 	Desc:       "+5% Mana",
-	// 	Rect:       image.Rect(304, int(s.y+32), 336, ScreenHeight),
-	// 	Active:     g.keys.cfg.PotionMP,
-	// 	actionMap:  g.keys.potionMap,
-	// 	pressedMap: g.keys.potionPressed,
-	// }.NewKeyBinder(EmptyInput())
-	// s.keyBinders = append(s.keyBinders, bluePotionKeyBinder)
+	bluePotionKeyBinder := KeyBinderOpt[*Input, msgs.Item, bool]{
+		Desc:   "+5% Mana",
+		Rect:   image.Rect(304, int(s.y+32), 336, ScreenHeight),
+		Active: g.keys.cfg.PotionMP,
+		Item:   msgs.ItemManaPotion,
+
+		actionMap:  g.keys.potionMap,
+		pressedMap: g.keys.potionPressed,
+	}.NewKeyBinder(EmptyInput())
+	s.keyBinders = append(s.keyBinders, bluePotionKeyBinder)
 
 	actionsBarStart := 450
 
@@ -748,6 +757,7 @@ type KeyBinder[A KBind] struct {
 	Rect         image.Rectangle
 	Active       A
 	Spell        spell.Spell
+	Item         msgs.Item
 	Desc         string
 	Change       func(old, new A)
 	Open         bool
@@ -809,6 +819,7 @@ func (cd *Cooldown) Draw(screen *ebiten.Image, x, y int) {
 
 type KeyBinderOpt[A KBind, B any, C any] struct {
 	Spell        spell.Spell
+	Item         msgs.Item
 	Desc         string
 	CooldownInfo *Cooldown
 	IconImg      *ebiten.Image
@@ -821,6 +832,7 @@ type KeyBinderOpt[A KBind, B any, C any] struct {
 func (opt KeyBinderOpt[A, B, C]) NewKeyBinder(selected A) *KeyBinder[A] {
 	kb := &KeyBinder[A]{
 		Spell:        opt.Spell,
+		Item:         opt.Item,
 		IconImg:      opt.IconImg,
 		Desc:         opt.Desc,
 		Active:       opt.Active,
@@ -844,11 +856,14 @@ func (kb *KeyBinder[A]) Mouse() {
 		if ebiten.IsMouseButtonPressed(ebiten.MouseButton0) {
 			if !kb.Clicked {
 				kb.Clicked = true
-				if kb.Spell == spell.None {
-
-				} else {
+				if kb.Spell != spell.None {
 					kb.g.keys.spell = kb.Spell
 					kb.g.keys.lastSpellKey = kb.Active.VPtr()
+				} else if kb.Item != msgs.ItemNone {
+					if time.Since(kb.g.stats.lastHudPotion) > kb.g.stats.hudPotionCooldown {
+						kb.g.outQueue <- &GameMsg{E: msgs.EUseItem, Data: kb.Item}
+						kb.g.stats.lastHudPotion = time.Now()
+					}
 				}
 				kb.Open = !kb.Open
 			}

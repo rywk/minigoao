@@ -39,7 +39,7 @@ type KeyConfig struct {
 	// spells and melee attacks trigger this cd
 	CooldownAction time.Duration
 	// Cooldown for each spell
-	CooldownSpells [spell.None]time.Duration
+	CooldownSpells [spell.Len]time.Duration
 	// Cooldown for melee
 	CooldownMelee time.Duration
 }
@@ -65,7 +65,8 @@ var DefaultConfig = KeyConfig{
 
 	CooldownAction: time.Millisecond * 400,
 	CooldownMelee:  time.Millisecond * 900,
-	CooldownSpells: [spell.None]time.Duration{
+	CooldownSpells: [spell.Len]time.Duration{
+		0,
 		time.Millisecond * 950,   //Paralize
 		time.Millisecond * 950,   //RemoveParalize
 		time.Millisecond * 950,   //HealWounds
@@ -104,7 +105,7 @@ type Keys struct {
 
 	LastAction time.Time
 	LastMelee  time.Time
-	LastSpells [spell.None]time.Time
+	LastSpells [spell.Len]time.Time
 }
 
 func NewKeys(g *Game, cfg *KeyConfig) *Keys {
@@ -159,7 +160,7 @@ func NewKeys(g *Game, cfg *KeyConfig) *Keys {
 			&NoInput:     msgs.ItemNone,
 		},
 
-		LastSpells: [spell.None]time.Time{
+		LastSpells: [spell.Len]time.Time{
 			time.Now().Add(-time.Second * 10), //Paralize
 			time.Now().Add(-time.Second * 10), //RemoveParalize
 			time.Now().Add(-time.Second * 10), //HealWounds

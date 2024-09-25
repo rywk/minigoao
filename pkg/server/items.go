@@ -8,7 +8,8 @@ type Item struct {
 	Use  func(p *Player) uint32
 }
 
-var items = [msgs.ItemNone]Item{
+var items = [msgs.ItemLen]Item{
+	{Type: msgs.ItemNone},
 	{
 		Type: msgs.ItemManaPotion,
 		Use: func(p *Player) uint32 {

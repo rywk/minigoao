@@ -3,16 +3,18 @@ package spell
 type Spell uint8
 
 const (
-	Paralize Spell = iota
+	None Spell = iota
+	Paralize
 	RemoveParalize
 	HealWounds
 	Resurrect
 	ElectricDischarge
 	Explode
-	None
+	Len
 )
 
-var spells = [None]string{
+var spells = [Len]string{
+	"None",
 	"Paralize",
 	"RemoveParalize",
 	"HealWounds",

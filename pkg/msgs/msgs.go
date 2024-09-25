@@ -375,10 +375,10 @@ type EventPlayerEnterViewport = EventNewPlayer
 type Item uint8
 
 const (
-	ItemManaPotion Item = iota
+	ItemNone Item = iota
+	ItemManaPotion
 	ItemHealthPotion
-
-	ItemNone
+	ItemLen
 )
 
 type EventCastSpell struct {
