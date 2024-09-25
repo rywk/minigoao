@@ -79,7 +79,7 @@ func (s *Server) Start(exposed bool) error {
 		players:      []*Player{{id: 0}}, // no 0 id
 		playersIndex: make([]uint16, 0),
 		space:        grid.NewGrid(constants.WorldX, constants.WorldY, 2),
-		incomingData: make(chan IncomingMsg, 100),
+		incomingData: make(chan IncomingMsg, 1000),
 	}
 
 	go s.AcceptTCPConnections()

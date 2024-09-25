@@ -650,6 +650,10 @@ func (s *Hud) Update() {
 	}
 	if s.optionsOpen {
 		s.options.Update()
+		if (s.g.mouseX < ScreenWidth-300 || s.g.mouseY < ScreenHeight-664) &&
+			ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
+			s.optionsOpen = false
+		}
 	}
 }
 

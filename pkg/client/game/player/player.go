@@ -23,13 +23,13 @@ import (
 
 // Player
 type P struct {
-	local  *P
-	ID     uint32
-	Nick   string
-	X, Y   int32
-	DX, DY int
-	Pos    f64.Vec2
-
+	local       *P
+	ID          uint32
+	Nick        string
+	X, Y        int32
+	DX, DY      int
+	Pos         f64.Vec2
+	drawOp      *ebiten.DrawImageOptions
 	Dead        bool
 	Inmobilized bool
 
@@ -119,43 +119,43 @@ const PlayerDrawOffsetX, PlayerDrawOffsetY = 3, -14
 const PlayerHeadDrawOffsetX, PlayerHeadDrawOffsetY = 4, -9
 
 func (p *P) Draw(screen *ebiten.Image) {
-	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(p.Pos[0]+PlayerDrawOffsetX, p.Pos[1]+PlayerDrawOffsetY)
+	p.drawOp.GeoM.Reset()
+	p.drawOp.GeoM.Translate(p.Pos[0]+PlayerDrawOffsetX, p.Pos[1]+PlayerDrawOffsetY)
 	if p.Dead {
-		op.GeoM.Translate(2, 5)
-		screen.DrawImage(p.DeadBody.Frame(), op)
-		op.GeoM.Translate(PlayerHeadDrawOffsetX, PlayerHeadDrawOffsetY)
-		screen.DrawImage(p.DeadHead.Frame(), op)
+		p.drawOp.GeoM.Translate(2, 5)
+		screen.DrawImage(p.DeadBody.Frame(), p.drawOp)
+		p.drawOp.GeoM.Translate(PlayerHeadDrawOffsetX, PlayerHeadDrawOffsetY)
+		screen.DrawImage(p.DeadHead.Frame(), p.drawOp)
 		p.Effect.Draw(screen)
 		return
 	}
 	if p.Direction == direction.Left || p.Direction == direction.Front {
 		if p.Armor != nil {
-			screen.DrawImage(p.Armor.Frame(), op)
+			screen.DrawImage(p.Armor.Frame(), p.drawOp)
 		} else {
-			screen.DrawImage(p.NakedBody.Frame(), op)
+			screen.DrawImage(p.NakedBody.Frame(), p.drawOp)
 		}
 		if p.Shield != nil {
-			screen.DrawImage(p.Shield.Frame(), op)
+			screen.DrawImage(p.Shield.Frame(), p.drawOp)
 		}
 	} else {
 		if p.Shield != nil {
-			screen.DrawImage(p.Shield.Frame(), op)
+			screen.DrawImage(p.Shield.Frame(), p.drawOp)
 		}
 		if p.Armor != nil {
-			screen.DrawImage(p.Armor.Frame(), op)
+			screen.DrawImage(p.Armor.Frame(), p.drawOp)
 		} else {
-			screen.DrawImage(p.NakedBody.Frame(), op)
+			screen.DrawImage(p.NakedBody.Frame(), p.drawOp)
 		}
 	}
 	if p.Weapon != nil {
-		screen.DrawImage(p.Weapon.Frame(), op)
+		screen.DrawImage(p.Weapon.Frame(), p.drawOp)
 	}
-	op.GeoM.Translate(PlayerHeadDrawOffsetX, PlayerHeadDrawOffsetY)
-	screen.DrawImage(p.Head.Frame(), op)
+	p.drawOp.GeoM.Translate(PlayerHeadDrawOffsetX, PlayerHeadDrawOffsetY)
+	screen.DrawImage(p.Head.Frame(), p.drawOp)
 	if p.Helmet != nil {
-		op.GeoM.Translate(-3, -6)
-		screen.DrawImage(p.Helmet.Frame(), op)
+		p.drawOp.GeoM.Translate(-3, -6)
+		screen.DrawImage(p.Helmet.Frame(), p.drawOp)
 	}
 	if p.local == nil {
 		p.DrawPlayerHPMP(screen)
@@ -177,19 +177,19 @@ func (p *P) DrawNick(screen *ebiten.Image) {
 }
 
 func (p *P) DrawPlayerHPMP(screen *ebiten.Image) {
-	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(p.Pos[0]+PlayerDrawOffsetX, p.Pos[1]+PlayerDrawOffsetY)
-	op.GeoM.Translate(-2, 45)
+	p.drawOp.GeoM.Reset()
+	p.drawOp.GeoM.Translate(p.Pos[0]+PlayerDrawOffsetX, p.Pos[1]+PlayerDrawOffsetY)
+	p.drawOp.GeoM.Translate(-2, 45)
 	hpx, mpx := p.HPImg.Bounds().Max.X, p.MPImg.Bounds().Max.X
 	hpx, mpx = p.Client.HP*hpx/p.Client.MaxHP, p.Client.MP*mpx/p.Client.MaxMP
 	hpRect := image.Rect(p.HPImg.Bounds().Min.X, p.HPImg.Bounds().Min.Y, hpx, p.HPImg.Bounds().Max.Y)
 	mpRect := image.Rect(p.MPImg.Bounds().Min.X, p.MPImg.Bounds().Min.Y, mpx, p.MPImg.Bounds().Max.Y)
-	op.GeoM.Translate(-1, -1)
-	screen.DrawImage(p.HPMPBGImg, op)
-	op.GeoM.Translate(1, 1)
-	screen.DrawImage(p.HPImg.SubImage(hpRect).(*ebiten.Image), op)
-	op.GeoM.Translate(0, 5)
-	screen.DrawImage(p.MPImg.SubImage(mpRect).(*ebiten.Image), op)
+	p.drawOp.GeoM.Translate(-1, -1)
+	screen.DrawImage(p.HPMPBGImg, p.drawOp)
+	p.drawOp.GeoM.Translate(1, 1)
+	screen.DrawImage(p.HPImg.SubImage(hpRect).(*ebiten.Image), p.drawOp)
+	p.drawOp.GeoM.Translate(0, 5)
+	screen.DrawImage(p.MPImg.SubImage(mpRect).(*ebiten.Image), p.drawOp)
 	tx, ty := int(p.Pos[0]+14), int(p.Pos[1]+38)
 	xoff := (len(p.Nick) * 3) - 1
 	ebitenutil.DebugPrintAt(screen, p.Nick, tx-xoff, ty)
@@ -336,6 +336,7 @@ func NewLogin(e *msgs.EventPlayerLogin) *P {
 
 func Create(a *msgs.EventPlayerLogin) *P {
 	p := &P{
+		drawOp:    &ebiten.DrawImageOptions{},
 		ID:        uint32(a.ID),
 		X:         a.Pos.X,
 		Y:         a.Pos.Y,
@@ -356,6 +357,7 @@ func Create(a *msgs.EventPlayerLogin) *P {
 		DeadHead:  texture.LoadStill(assets.DeadHead),
 	}
 	p.Effect = &PEffects{
+		drawOp: &ebiten.DrawImageOptions{},
 		p:      p,
 		active: make([]texture.Effect, 0),
 	}
@@ -364,6 +366,7 @@ func Create(a *msgs.EventPlayerLogin) *P {
 
 func CreateFromLogin(local *P, a *msgs.EventNewPlayer) *P {
 	p := &P{
+		drawOp:    &ebiten.DrawImageOptions{},
 		local:     local,
 		ID:        uint32(a.ID),
 		X:         a.Pos.X,
@@ -385,6 +388,7 @@ func CreateFromLogin(local *P, a *msgs.EventNewPlayer) *P {
 		DeadHead:  texture.LoadStill(assets.DeadHead),
 	}
 	p.Effect = &PEffects{
+		drawOp: &ebiten.DrawImageOptions{},
 		p:      p,
 		active: make([]texture.Effect, 0),
 	}
@@ -393,6 +397,7 @@ func CreateFromLogin(local *P, a *msgs.EventNewPlayer) *P {
 
 func CreatePlayerSpawned(local *P, a *msgs.EventPlayerSpawned) *P {
 	p := &P{
+		drawOp:    &ebiten.DrawImageOptions{},
 		local:     local,
 		ID:        uint32(a.ID),
 		X:         a.Pos.X,
@@ -414,6 +419,7 @@ func CreatePlayerSpawned(local *P, a *msgs.EventPlayerSpawned) *P {
 		DeadHead:  texture.LoadStill(assets.DeadHead),
 	}
 	p.Effect = &PEffects{
+		drawOp: &ebiten.DrawImageOptions{},
 		p:      p,
 		active: make([]texture.Effect, 0),
 	}
@@ -426,6 +432,7 @@ func (p *P) ValueY() float64 { return p.Pos[1] }
 type PEffects struct {
 	p      *P
 	active []texture.Effect
+	drawOp *ebiten.DrawImageOptions
 }
 
 func (pfx *PEffects) NewMeleeHit() {
@@ -531,8 +538,8 @@ func (pfx *PEffects) Update(counter int) {
 
 func (pfx *PEffects) Draw(screen *ebiten.Image) {
 	for _, fx := range pfx.active {
-		op := &ebiten.DrawImageOptions{}
-		op.GeoM.Translate(pfx.p.Pos[0], pfx.p.Pos[1])
-		screen.DrawImage(fx.EffectFrame(), fx.EffectOpt(op))
+		pfx.drawOp.GeoM.Reset()
+		pfx.drawOp.GeoM.Translate(pfx.p.Pos[0], pfx.p.Pos[1])
+		screen.DrawImage(fx.EffectFrame(), fx.EffectOpt(pfx.drawOp))
 	}
 }

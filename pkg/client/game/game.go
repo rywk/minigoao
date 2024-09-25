@@ -137,7 +137,7 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 func NewGame(web bool, serverAddr string) *Game {
 	start := time.Now()
 	g := &Game{
-		debug:       false,
+		debug:       true,
 		start:       start,
 		memStats:    &runtime.MemStats{},
 		mode:        ModeRegister,
@@ -284,9 +284,8 @@ func (g *Game) drawGame(screen *ebiten.Image) {
 	g.keys.DrawChat(g.world.Image(), int(g.player.Pos[0]+16), int(g.player.Pos[1]-40))
 	g.Render(g.world.Image(), screen)
 	g.stats.Draw(screen)
-	text.PrintAt(screen, fmt.Sprintf("FPS: %v", int(ebiten.ActualFPS())), 0, 0)
-	text.PrintAt(screen, fmt.Sprintf("Ping: %v", g.latency), 60, 0)
-	text.PrintAt(screen, fmt.Sprintf("Online: %v", g.onlines), 128, 0)
+	text.PrintAt(screen, fmt.Sprintf("%vFPS\n%v", int(ebiten.ActualFPS()), g.latency), 0, 0)
+	text.PrintAt(screen, fmt.Sprintf("Online: %v", g.onlines), 50, 0)
 }
 
 func (g *Game) updateGame() error {

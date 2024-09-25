@@ -38,11 +38,13 @@ type Map struct {
 	floorTiles [][]texture.T
 	stuffTiles [][]texture.T
 	Space      *grid.Grid
+	drawOp     *ebiten.DrawImageOptions
 }
 
 func NewMap(c *MapConfig) *Map {
 	m := &Map{
-		Space: grid.NewGrid(int32(constants.WorldX), int32(constants.WorldY), 3),
+		drawOp: &ebiten.DrawImageOptions{},
+		Space:  grid.NewGrid(int32(constants.WorldX), int32(constants.WorldY), 3),
 	}
 	// Use config to load textures for floor tiles
 	m.floorTiles = make([][]texture.T, constants.PixelWorldX/texture.GrassTextureSize)
@@ -93,12 +95,12 @@ func (m *Map) Draw(pos typ.P) {
 			if xpx < minX || xpx > maxX {
 				continue
 			}
-			op := &ebiten.DrawImageOptions{}
-			op.GeoM.Translate(float64(xpx), float64(ypx))
+			m.drawOp.GeoM.Reset()
+			m.drawOp.GeoM.Translate(float64(xpx), float64(ypx))
 			if m.floorTiles[y][x] == nil {
 				continue
 			}
-			m.floorTiles[y][x].Draw(m.world, op)
+			m.floorTiles[y][x].Draw(m.world, m.drawOp)
 		}
 	}
 	for y := range m.stuffTiles {
@@ -111,9 +113,10 @@ func (m *Map) Draw(pos typ.P) {
 			if xpx < minX || xpx > maxX {
 				continue
 			}
-			op := &ebiten.DrawImageOptions{}
-			op.GeoM.Translate(float64(xpx), float64(ypx))
-			m.stuffTiles[y][x].Draw(m.world, op)
+
+			m.drawOp.GeoM.Reset()
+			m.drawOp.GeoM.Translate(float64(xpx), float64(ypx))
+			m.stuffTiles[y][x].Draw(m.world, m.drawOp)
 		}
 	}
 }
