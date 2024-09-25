@@ -55,12 +55,12 @@ func NewSoundCopies(n int, bs []byte) []*Sound {
 	return sounds
 }
 func (s *Sound) PlayFlat(vol float64) {
-	// speaker.Play(&effects.Volume{
-	// 	Streamer: s.buffer.Streamer(0, s.buffer.Len()),
-	// 	Base:     2,
-	// 	Volume:   vol,
-	// 	Silent:   false,
-	// })
+	speaker.Play(&effects.Volume{
+		Streamer: s.buffer.Streamer(0, s.buffer.Len()),
+		Base:     2,
+		Volume:   vol,
+		Silent:   false,
+	})
 }
 
 func (s *Sound) Play(vol float64) {
@@ -161,7 +161,7 @@ func NewSoundBoard(web bool) *SoundBoard {
 	}
 	if web {
 		sb.sampleRate = SampleRateWeb
-		speaker.Init(sb.sampleRate, 4099)
+		speaker.Init(sb.sampleRate, 2051)
 		sb.sounds = map[assets.Sound]*Sound{
 			assets.Spawn:                NewOggSound(audiofile.SpawnLow_ogg),
 			assets.MeleeAir:             NewOggSound(audiofile.MeleeAirLow_ogg),

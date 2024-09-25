@@ -170,11 +170,11 @@ func (b *Slider) Update() {
 	knobRect := b.Knob.Bounds().
 		Add(b.Pos).
 		Add(b.SliderPos).
-		Add(image.Pt(ScreenWidth-300, ScreenHeight-564))
+		Add(image.Pt(ScreenWidth-300, ScreenHeight-664))
 
 	sliderRect := b.Line.Bounds().
 		Add(b.SliderPos).
-		Add(image.Pt(ScreenWidth-300, ScreenHeight-564))
+		Add(image.Pt(ScreenWidth-300, ScreenHeight-664))
 	//	log.Printf("pos : %v ", knobRect)
 
 	if cx > int(knobRect.Min.X) && cx < int(knobRect.Max.X) && cy > int(knobRect.Min.Y) && cy < int(knobRect.Max.Y) {
@@ -468,25 +468,26 @@ func NewHud(g *Game) *Hud {
 	// }.NewKeyBinder(EmptyInput())
 	// s.keyBinders = append(s.keyBinders, bluePotionKeyBinder)
 
-	actionsBarStart := 410
+	actionsBarStart := 450
 
-	// meleeX := actionsBarStart
-	// meleeKeyBinder := KeyBinderOpt[*Input, struct{}, bool]{
-	// 	Desc:       "Piña",
-	// 	IconImg:    texture.Decode(img.IconMelee_png),
-	// 	Rect:       image.Rect(meleeX, int(s.y), meleeX+SpellIconWidth, ScreenHeight),
-	// 	Active:     g.keys.cfg.Melee,
-	// 	actionMap:  map[*Input]struct{}{},
-	// 	pressedMap: map[*Input]bool{},
-	// 	CooldownInfo: &Cooldown{
-	// 		BaseImg:    cooldownBarImg,
-	// 		CD:         g.keys.cfg.CooldownMelee,
-	// 		Last:       &g.keys.LastMelee,
-	// 		GlobalCD:   g.keys.cfg.CooldownAction,
-	// 		GlobalLast: &g.keys.LastAction,
-	// 	},
-	// }.NewKeyBinder(EmptyInput())
-	// s.keyBinders = append(s.keyBinders, meleeKeyBinder)
+	meleeX := actionsBarStart
+	meleeKeyBinder := KeyBinderOpt[*Input, struct{}, bool]{
+		Desc:       "Piña",
+		IconImg:    texture.Decode(img.IconMelee_png),
+		Rect:       image.Rect(meleeX, int(s.y), meleeX+SpellIconWidth, ScreenHeight),
+		Active:     g.keys.cfg.Melee,
+		Spell:      spell.None,
+		actionMap:  map[*Input]struct{}{},
+		pressedMap: map[*Input]bool{},
+		CooldownInfo: &Cooldown{
+			BaseImg:    cooldownBarImg,
+			CD:         g.keys.cfg.CooldownMelee,
+			Last:       &g.keys.LastMelee,
+			GlobalCD:   g.keys.cfg.CooldownAction,
+			GlobalLast: &g.keys.LastAction,
+		},
+	}.NewKeyBinder(EmptyInput())
+	s.keyBinders = append(s.keyBinders, meleeKeyBinder)
 
 	iconX := actionsBarStart + SpellIconWidth + 10
 	resurrectSpellKeyBinder := KeyBinderOpt[*Input, spell.Spell, bool]{
@@ -694,7 +695,7 @@ const (
 
 func (s *Hud) ShowSpellPicker(screen *ebiten.Image) {
 	op := &ebiten.DrawImageOptions{}
-	spellsX, spellsY := float64(470), s.y
+	spellsX, spellsY := float64(510), s.y
 	op.GeoM.Translate(spellsX, spellsY)
 	opselect := &ebiten.DrawImageOptions{}
 	switch s.g.keys.spell {
@@ -843,8 +844,12 @@ func (kb *KeyBinder[A]) Mouse() {
 		if ebiten.IsMouseButtonPressed(ebiten.MouseButton0) {
 			if !kb.Clicked {
 				kb.Clicked = true
-				kb.g.keys.spell = kb.Spell
-				kb.g.keys.lastSpellKey = kb.Active.VPtr()
+				if kb.Spell == spell.None {
+
+				} else {
+					kb.g.keys.spell = kb.Spell
+					kb.g.keys.lastSpellKey = kb.Active.VPtr()
+				}
 				kb.Open = !kb.Open
 			}
 		} else {

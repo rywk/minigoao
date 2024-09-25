@@ -104,6 +104,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", *flagAllowOrigin)
 	}
 
+	log.Printf("Request \n%v\n", *r)
 	upath := r.URL.Path[1:]
 	fpath := path.Base(upath)
 	file := filepath.Base(fpath)
