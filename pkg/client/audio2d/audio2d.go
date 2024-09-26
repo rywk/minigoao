@@ -160,22 +160,22 @@ func NewSoundBoard(web bool) *SoundBoard {
 		Volume: 0,
 	}
 	if web {
-		sb.sampleRate = SampleRateWeb
-		speaker.Init(sb.sampleRate, 2051)
-		sb.sounds = map[assets.Sound]*Sound{
-			assets.Spawn:                NewOggSound(audiofile.SpawnLow_ogg),
-			assets.MeleeAir:             NewOggSound(audiofile.MeleeAirLow_ogg),
-			assets.MeleeBlood:           NewOggSound(audiofile.MeleeHitLow_ogg),
-			assets.Walk1:                NewOggSound(audiofile.Walk1Low_ogg),
-			assets.Walk2:                NewOggSound(audiofile.Walk2Low_ogg),
-			assets.SpellApocaSound:      NewOggSound(audiofile.SpellApocaLow_ogg),
-			assets.SpellDescaSound:      NewOggSound(audiofile.SpellDescaLow_ogg),
-			assets.SpellInmoSound:       NewOggSound(audiofile.SpellInmoLow_ogg),
-			assets.SpellHealWoundsSound: NewOggSound(audiofile.SpellHealWoundsLow_ogg),
-			assets.SpellResurrectSound:  NewOggSound(audiofile.SpellResurrectLow_ogg),
-			assets.SpellInmoRmSound:     NewOggSound(audiofile.SpellInmoRmLow_ogg),
-			assets.Potion:               NewOggSound(audiofile.PotionLow_ogg),
-		}
+		// sb.sampleRate = SampleRateWeb
+		// speaker.Init(sb.sampleRate, 514)
+		// sb.sounds = map[assets.Sound]*Sound{
+		// 	assets.Spawn:                NewOggSound(audiofile.SpawnLow_ogg),
+		// 	assets.MeleeAir:             NewOggSound(audiofile.MeleeAirLow_ogg),
+		// 	assets.MeleeBlood:           NewOggSound(audiofile.MeleeHitLow_ogg),
+		// 	assets.Walk1:                NewOggSound(audiofile.Walk1Low_ogg),
+		// 	assets.Walk2:                NewOggSound(audiofile.Walk2Low_ogg),
+		// 	assets.SpellApocaSound:      NewOggSound(audiofile.SpellApocaLow_ogg),
+		// 	assets.SpellDescaSound:      NewOggSound(audiofile.SpellDescaLow_ogg),
+		// 	assets.SpellInmoSound:       NewOggSound(audiofile.SpellInmoLow_ogg),
+		// 	assets.SpellHealWoundsSound: NewOggSound(audiofile.SpellHealWoundsLow_ogg),
+		// 	assets.SpellResurrectSound:  NewOggSound(audiofile.SpellResurrectLow_ogg),
+		// 	assets.SpellInmoRmSound:     NewOggSound(audiofile.SpellInmoRmLow_ogg),
+		// 	assets.Potion:               NewOggSound(audiofile.PotionLow_ogg),
+		// }
 		return sb
 	}
 	sb.sampleRate = SampleRate
@@ -212,7 +212,7 @@ func (sb *SoundBoard) SetVolume(v float64) {
 }
 func (sb *SoundBoard) Play(s assets.Sound) {
 	if sb.web {
-		sb.sounds[s].PlayFlat(sb.Volume)
+		//sb.sounds[s].PlayFlat(sb.Volume)
 		return
 	}
 	sb.sounds[s].Play(sb.Volume)
@@ -220,7 +220,7 @@ func (sb *SoundBoard) Play(s assets.Sound) {
 
 func (sb *SoundBoard) PlayFrom(s assets.Sound, x, y, sx, sy int32) {
 	if sb.web {
-		sb.sounds[s].PlayFlat(sb.Volume)
+		//sb.sounds[s].PlayFlat(sb.Volume)
 		return
 	}
 	sb.sounds[s].PlayFrom(sb.Volume, int(x), int(y), int(sx), int(sy))

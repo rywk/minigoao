@@ -140,18 +140,18 @@ func NewGame(web bool, serverAddr string) *Game {
 		debug:       true,
 		start:       start,
 		memStats:    &runtime.MemStats{},
+		vsync:       true,
 		mode:        ModeRegister,
 		web:         web,
 		connected:   make(chan Login),
 		nickTyper:   typing.NewTyper(),
 		serverTyper: typing.NewTyper(serverAddr),
 		worldImgOp:  &ebiten.DrawImageOptions{},
-
-		inputBox: texture.Decode(img.InputBox_png),
+		inputBox:    texture.Decode(img.InputBox_png),
 	}
 	g.fsBtn = NewCheckbox(g)
 	g.vsyncBtn = NewCheckbox(g)
-	g.vsyncBtn.On = true
+	g.vsyncBtn.On = false
 	g.SoundBoard = audio2d.NewSoundBoard(web)
 	return g
 }
@@ -220,8 +220,8 @@ func (g *Game) updateRegister() {
 	}
 	g.fullscreen = g.fsBtn.On
 	g.fsBtn.Update()
-	g.vsync = g.vsyncBtn.On
-	g.vsyncBtn.Update()
+	// g.vsync = g.vsyncBtn.On
+	// g.vsyncBtn.Update()
 	if g.typingServer {
 		g.serverTyper.Update()
 	} else {
@@ -265,14 +265,15 @@ func (g *Game) drawRegister(screen *ebiten.Image) {
 	g.nickTyper.Draw(screen, HalfScreenX-130, HalfScreenY-42)
 	text.PrintBigAt(screen, "Fullscreen", HalfScreenX-95, HalfScreenY+93)
 	g.fsBtn.Draw(screen, HalfScreenX+46, HalfScreenY+92)
-	text.PrintBigAt(screen, "Vsync", HalfScreenX-95, HalfScreenY+135)
-	g.vsyncBtn.Draw(screen, HalfScreenX+46, HalfScreenY+132)
+	// text.PrintBigAt(screen, "Vsync", HalfScreenX-95, HalfScreenY+135)
+	// g.vsyncBtn.Draw(screen, HalfScreenX+46, HalfScreenY+132)
 	if g.connErrorColorStart > 0 {
 		text.PrintBigAtCol(screen, "Server offline", HalfScreenX-90, HalfScreenY+5, color.RGBA{178, 0, 16, uint8(g.connErrorColorStart)})
 	}
 }
 
 func (g *Game) drawGame(screen *ebiten.Image) {
+
 	g.mouseX, g.mouseY = ebiten.CursorPosition()
 	g.world.Draw(typ.P{X: g.player.X, Y: g.player.Y})
 	for _, p := range g.playersY {

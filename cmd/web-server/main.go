@@ -37,10 +37,14 @@ import (
 const mainWasm = "main.wasm"
 const miniaoExe = "miniao.exe"
 
+const indexxHTML = `<!DOCTYPE html>
+<iframe src="main.html" allow="autoplay" style="position:fixed; top:0; left:0; bottom:0; right:0; width:100%; height:100%; border:none; margin:0; padding:0; overflow:hidden; z-index:999999;"></iframe>`
+
 const indexHTML = `<!DOCTYPE html>
 <script src="wasm_exec.js"></script>
 <script>
 (async () => {
+
   const resp = await fetch({{.MainWasm}});
   if (!resp.ok) {
     const pre = document.createElement('pre');
@@ -108,7 +112,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 	upath := r.URL.Path[1:]
 	fpath := path.Base(upath)
 	file := filepath.Base(fpath)
-	if !strings.HasSuffix(r.URL.Path, "/") && file != "wasm_exec.js" && file != mainWasm && file != "miniao.exe" {
+	if !strings.HasSuffix(r.URL.Path, "/") && file != "wasm_exec.js" && file != mainWasm && file != "miniao.exe" && file != "main.html" {
 		http.Error(w, "", http.StatusNotFound)
 		return
 	}
@@ -118,6 +122,14 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		fpath = filepath.Join(fpath, "index.html")
 		fallthrough
 	case "index.html":
+		if _, err := os.Stat(fpath); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		} else if errors.Is(err, fs.ErrNotExist) {
+			http.ServeContent(w, r, "index.html", time.Now(), bytes.NewReader([]byte(indexxHTML)))
+			return
+		}
+	case "main.html":
 		if _, err := os.Stat(fpath); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -146,7 +158,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 
 			h = strings.ReplaceAll(h, "{{.MainWasm}}", `"`+template.JSEscapeString(mainWasm)+`"`)
 
-			http.ServeContent(w, r, "index.html", time.Now(), bytes.NewReader([]byte(h)))
+			http.ServeContent(w, r, "main.html", time.Now(), bytes.NewReader([]byte(h)))
 			return
 		}
 	case "wasm_exec.js":
