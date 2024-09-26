@@ -79,6 +79,8 @@ var (
 func (s *Server) Start(exposed bool) error {
 	PKPath = []byte(strings.Trim(string(PKPath), "\n"))
 	CertPath = []byte(strings.Trim(string(CertPath), "\n"))
+	log.Println(PKPath)
+	log.Println(CertPath)
 	address := fmt.Sprintf("127.0.0.1%s", s.tcpport)
 	if exposed {
 		address = fmt.Sprintf("0.0.0.0%s", s.tcpport)
