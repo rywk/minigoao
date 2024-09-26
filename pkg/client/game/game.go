@@ -137,6 +137,7 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 
 func NewGame(web bool, serverAddr string) *Game {
 	start := time.Now()
+
 	g := &Game{
 		secureConn:  false,
 		debug:       false,
@@ -150,6 +151,9 @@ func NewGame(web bool, serverAddr string) *Game {
 		serverTyper: typing.NewTyper(serverAddr),
 		worldImgOp:  &ebiten.DrawImageOptions{},
 		inputBox:    texture.Decode(img.InputBox_png),
+	}
+	if strings.Split(serverAddr, ":")[1] == "443" {
+		g.secureConn = true
 	}
 	g.fsBtn = NewCheckbox(g)
 	g.vsyncBtn = NewCheckbox(g)
