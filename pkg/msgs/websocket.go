@@ -2,9 +2,11 @@ package msgs
 
 import (
 	"context"
+	"crypto/tls"
 	"log"
 	"net"
 	"net/http"
+	"time"
 
 	wswasm "github.com/coder/websocket"
 	"github.com/gorilla/websocket"
@@ -104,14 +106,29 @@ func (s *WSServer) NewConn() (Msgs, error) {
 	return <-s.newConns, nil
 }
 
+func SkipVerification() (*tls.Config, error) {
+	return &tls.Config{InsecureSkipVerify: true}, nil
+}
+
 func DialWS2(address string, secure bool) (Msgs, error) {
+	tlsConf, err := SkipVerification()
+	if err != nil {
+		log.Fatalf("Error creating TLS configuration: %v", err)
+	}
+
+	client := &http.Client{
+		Timeout:   time.Second * 10,
+		Transport: &http.Transport{TLSClientConfig: tlsConf},
+	}
 	pref := "ws://"
 	if secure {
 		pref = "wss://"
 	}
 	address = pref + address + "/upgrader"
 	ctx := context.TODO()
-	c, _, err := wswasm.Dial(ctx, address, nil)
+	c, _, err := wswasm.Dial(ctx, address, &wswasm.DialOptions{
+		HTTPClient: client,
+	})
 	if err != nil {
 		return nil, err
 	}
