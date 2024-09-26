@@ -254,7 +254,9 @@ func main() {
 	mux.HandleFunc("/", handle)
 	server.Handler = mux
 	server.Addr = *flagHTTP
-
+	log.Println("Paths configured")
+	log.Println(string(CertPath))
+	log.Println(string(PKPath))
 	log.Printf("Listening on %v", *flagHTTP)
 	err := server.ListenAndServeTLS(string(CertPath), string(PKPath))
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
