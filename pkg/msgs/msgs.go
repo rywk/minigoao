@@ -55,14 +55,22 @@ func readMsg(r io.Reader) (*IncomingData, error) {
 
 	_, err := r.Read(eventByte)
 	if err != nil {
+		log.Printf("BAD 0 byte!!!! %d", err)
+
 		return nil, err
 	}
 	event := E(eventByte[0])
 	if !event.Valid() {
-		log.Printf("BAD DATA!!!! %d", event)
+		log.Printf("Invalid event byte!!!! %d", event)
 		return nil, ErrBadData
 	}
+
 	incd := &IncomingData{Event: E(eventByte[0])}
+	if event == ENone {
+		log.Printf("Event none error %s %s", incd.Event.String(), err)
+
+		return nil, nil
+	}
 	if incd.Event.Len() == 0 {
 		log.Print("0b read")
 		return incd, nil
@@ -142,7 +150,8 @@ type IncomingMsg struct {
 type E uint8
 
 const (
-	EPing E = iota
+	ENone E = iota
+	EPing
 	ERegister
 	EServerDisconnect
 	EMove
@@ -178,6 +187,7 @@ const (
 const mapCoordinateSize = int(unsafe.Sizeof(uint32(0)))
 
 var eventLen = [ELen]int{
+	0,
 	1,       // EPing
 	-1,      // ERegister
 	0,       // EServerDisconnect
@@ -210,6 +220,7 @@ var eventLen = [ELen]int{
 }
 
 var eventString = [ELen]string{
+	"ENone",
 	"EPing",
 	"ERegister",
 	"EServerDisconnect",
@@ -254,7 +265,7 @@ func (e E) String() string {
 func encodeAndWrite(m Msgs, e E, msg interface{}) error {
 	switch e {
 	case EPing:
-		return m.Write(e, nil)
+		return m.Write(e, make([]byte, 1))
 	case ERegister:
 		return m.WriteWithLen(e, EncodeMsgpack(msg.(*EventRegister)))
 	case EMove:

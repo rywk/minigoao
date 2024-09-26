@@ -9,6 +9,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/hajimehoshi/ebiten/v2 v2.6.2
 	github.com/stretchr/testify v1.9.0
+	github.com/tarndt/wasmws v0.0.0-20211231175046-02849cc2d4d2
 	github.com/vmihailenco/msgpack/v5 v5.4.1
 	golang.org/x/image v0.13.0
 )
@@ -28,4 +29,5 @@ require (
 	golang.org/x/sync v0.3.0 // indirect
 	golang.org/x/sys v0.18.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
+	nhooyr.io/websocket v1.7.4 // indirect
 )
