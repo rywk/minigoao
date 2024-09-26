@@ -217,9 +217,9 @@ func notifyWaiters(w http.ResponseWriter, r *http.Request) {
 }
 
 var (
-	// go:embed pk_path.txt
+	//go:embed pk_path.txt
 	PKPath []byte
-	// go:embed cert_path.txt
+	//go:embed cert_path.txt
 	CertPath []byte
 )
 
