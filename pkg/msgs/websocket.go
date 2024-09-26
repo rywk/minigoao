@@ -15,9 +15,9 @@ type MMsgs interface {
 	NewConn() (Msgs, error)
 }
 
-func DialServer(address string, web bool) (Msgs, error) {
+func DialServer(address string, web, secure bool) (Msgs, error) {
 	if web {
-		return DialWS2(address)
+		return DialWS2(address, secure)
 	}
 	return DialTCP(address)
 }
@@ -63,23 +63,38 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-func ListenWS(address string) (MMsgs, error) {
-	wss := &WSServer{addr: address}
+func NewUpgraderMiddleware() (MMsgs, http.HandlerFunc) {
+	wss := &WSServer{}
 	wss.newConns = make(chan Msgs, 100)
-	http.HandleFunc("/upgrader", func(w http.ResponseWriter, r *http.Request) {
+	return wss, func(w http.ResponseWriter, r *http.Request) {
 		c, err := upgrader.Upgrade(w, r, nil)
+
 		if err != nil {
 			log.Print("upgrade:", err)
 			return
 		}
 		wss.newConns <- &WSM{c}
-
-	})
-	go func() {
-		log.Fatal(http.ListenAndServe(address, nil))
-	}()
-	return wss, nil
+		log.Print("upgraded")
+	}
 }
+
+// func ListenWS(address string, mux *http.ServeMux) (MMsgs, error) {
+// 	wss := &WSServer{addr: address}
+// 	wss.newConns = make(chan Msgs, 100)
+// 	mux.HandleFunc("/upgrader", func(w http.ResponseWriter, r *http.Request) {
+// 		c, err := upgrader.Upgrade(w, r, nil)
+// 		if err != nil {
+// 			log.Print("upgrade:", err)
+// 			return
+// 		}
+// 		wss.newConns <- &WSM{c}
+
+// 	})
+// 	// go func() {
+// 	// 	log.Fatal(http.ListenAndServe(address, nil))
+// 	// }()
+// 	return wss, nil
+// }
 
 func (s *WSServer) Address() string {
 	return s.addr
@@ -89,8 +104,12 @@ func (s *WSServer) NewConn() (Msgs, error) {
 	return <-s.newConns, nil
 }
 
-func DialWS2(address string) (Msgs, error) {
-	address = "ws://" + address + "/upgrader"
+func DialWS2(address string, secure bool) (Msgs, error) {
+	pref := "ws://"
+	if secure {
+		pref = "wss://"
+	}
+	address = pref + address + "/upgrader"
 	ctx := context.TODO()
 	c, _, err := wswasm.Dial(ctx, address, nil)
 	if err != nil {

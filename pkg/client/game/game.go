@@ -53,6 +53,7 @@ type Login struct {
 }
 
 type Game struct {
+	secureConn   bool
 	debug        bool
 	start        time.Time
 	memStats     *runtime.MemStats
@@ -137,6 +138,7 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 func NewGame(web bool, serverAddr string) *Game {
 	start := time.Now()
 	g := &Game{
+		secureConn:  false,
 		debug:       false,
 		start:       start,
 		memStats:    &runtime.MemStats{},
@@ -235,6 +237,7 @@ func (g *Game) updateRegister() {
 		}
 		g.connecting = false
 		if login.err != nil {
+			log.Println(login.err)
 			g.connErrorColorStart = 255
 			return
 		}
@@ -330,7 +333,7 @@ func (g *Game) updateGame() error {
 
 func (g *Game) Connect(nick string, address string) {
 	var err error
-	g.ms, err = msgs.DialServer(address, g.web)
+	g.ms, err = msgs.DialServer(address, g.web, g.secureConn)
 	if err != nil {
 		g.connected <- Login{data: nil, err: err}
 		return

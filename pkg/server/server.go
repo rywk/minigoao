@@ -1,10 +1,16 @@
 package server
 
 import (
+	"context"
+	_ "embed"
 	"errors"
 	"fmt"
 	"image"
 	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -13,21 +19,25 @@ import (
 	"github.com/rywk/minigoao/pkg/constants/direction"
 	"github.com/rywk/minigoao/pkg/grid"
 	"github.com/rywk/minigoao/pkg/msgs"
+	"github.com/rywk/minigoao/pkg/server/webpage"
 	"github.com/rywk/minigoao/pkg/typ"
 )
 
 type Server struct {
+	web       *http.Server
 	mms       msgs.MMsgs
 	mws       msgs.MMsgs
-	port      int
+	tcpport   string
+	webport   string
 	connCount atomic.Int32
 	newConn   chan msgs.Msgs
 	game      *Game
 }
 
-func NewServer(port int) *Server {
+func NewServer(tcpport string, webport string) *Server {
 	return &Server{
-		port:    port,
+		tcpport: tcpport,
+		webport: webport,
 		newConn: make(chan msgs.Msgs, 100),
 	}
 }
@@ -58,18 +68,66 @@ func (s *Server) AcceptWSConnections() {
 	}
 }
 
+var (
+	//go:embed pk_path.txt
+	PKPath []byte
+
+	//go:embed cert_path.txt
+	CertPath []byte
+)
+
 func (s *Server) Start(exposed bool) error {
-	address := fmt.Sprintf("127.0.0.1:%d", s.port)
-	addressws := fmt.Sprintf("127.0.0.1:%d", s.port+1)
+	PKPath = []byte(strings.Trim(string(PKPath), "\n"))
+	CertPath = []byte(strings.Trim(string(CertPath), "\n"))
+	address := fmt.Sprintf("127.0.0.1%s", s.tcpport)
 	if exposed {
-		address = fmt.Sprintf("0.0.0.0:%d", s.port)
-		addressws = fmt.Sprintf("0.0.0.0:%d", s.port+1)
+		address = fmt.Sprintf("0.0.0.0%s", s.tcpport)
 	}
+
+	var web http.Server
+	shutdown := make(chan struct{})
+	go func() {
+		sigint := make(chan os.Signal, 1)
+		signal.Notify(sigint, os.Interrupt)
+		<-sigint
+
+		log.Printf("Shutting down web...")
+
+		// Received an interrupt signal, shut down.
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		defer cancel()
+		err := web.Shutdown(ctx)
+		if err != nil && !errors.Is(err, context.DeadlineExceeded) {
+			log.Printf("Error at server.Shutdown: %v", err)
+		}
+		close(shutdown)
+
+		<-sigint
+		// Hard exit on the second ctrl-c.
+		os.Exit(0)
+	}()
+
+	mux := http.NewServeMux()
+	var upgraderFunc http.HandlerFunc
+	s.mws, upgraderFunc = msgs.NewUpgraderMiddleware()
+	mux.HandleFunc("/", webpage.Handle(upgraderFunc))
+	web.Handler = mux
+	web.Addr = s.webport
+	go func() {
+		if exposed {
+			err := web.ListenAndServeTLS(string(CertPath), string(PKPath))
+			if err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Fatalf("Error at server.ListenAndServe: %v", err)
+			}
+		} else {
+			err := web.ListenAndServe()
+			if err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Fatalf("Error at server.ListenAndServe: %v", err)
+			}
+		}
+	}()
+
 	var err error
-	s.mws, err = msgs.ListenWS(addressws)
-	if err != nil {
-		return err
-	}
 	s.mms, err = msgs.ListenTCP(address)
 	if err != nil {
 		return err
@@ -85,7 +143,9 @@ func (s *Server) Start(exposed bool) error {
 	go s.AcceptTCPConnections()
 	go s.AcceptWSConnections()
 
-	s.game.Run()
+	go s.game.Run()
+
+	<-shutdown
 
 	return nil
 }
@@ -265,7 +325,7 @@ func (g *Game) consumeIncomingData() {
 			g.playerMelee(player, incomingData.Data.(direction.D))
 		case msgs.EUseItem:
 			item := incomingData.Data.(msgs.Item)
-			log.Printf("[%v][%v] USE ITEM %v\n", player.id, player.nick, item)
+			//log.Printf("[%v][%v] USE ITEM %v\n", player.id, player.nick, item)
 			changed := UseItem(item, player)
 			player.Send <- OutMsg{Event: msgs.EUseItemOk, Data: &msgs.EventUseItemOk{
 				Item:   msgs.Item(item),
@@ -361,10 +421,10 @@ func (g *Game) playerMove(player *Player, incomingData IncomingMsg) {
 
 func (g *Game) playerCastSpell(player *Player, incomingData IncomingMsg) {
 	ev := incomingData.Data.(*msgs.EventCastSpell)
-	//log.Printf("[%v][%v] SPELL %v at [%v %v]\n", player.id, player.nick, ev.Spell.String(), ev.PX, ev.PY)
+	defer log.Printf("[%v][%v] SPELL %v at [%v %v]\n", player.id, player.nick, ev.Spell.String(), ev.PX, ev.PY)
 	hitPlayer := g.CheckSpellTargets(typ.P{X: int32(ev.PX), Y: int32(ev.PY)})
 	if hitPlayer == 0 {
-		//log.Printf("missed all hitboxs\n")
+		log.Printf("missed all hitboxs\n")
 		return
 	}
 	targetPlayer := g.players[hitPlayer]
