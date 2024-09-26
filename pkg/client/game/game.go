@@ -137,7 +137,7 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 func NewGame(web bool, serverAddr string) *Game {
 	start := time.Now()
 	g := &Game{
-		debug:       true,
+		debug:       false,
 		start:       start,
 		memStats:    &runtime.MemStats{},
 		vsync:       true,
