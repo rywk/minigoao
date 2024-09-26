@@ -225,7 +225,8 @@ var (
 
 func main() {
 	flag.Parse()
-
+	PKPath = []byte(strings.Trim(string(PKPath), "\n"))
+	CertPath = []byte(strings.Trim(string(CertPath), "\n"))
 	var server http.Server
 
 	shutdown := make(chan struct{})
