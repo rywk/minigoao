@@ -17,6 +17,7 @@ package main
 import (
 	"bytes"
 	"context"
+	_ "embed"
 	"encoding/base64"
 	"errors"
 	"flag"
@@ -215,6 +216,13 @@ func notifyWaiters(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+var (
+	// go:embed pk_path.txt
+	PKPath []byte
+	// go:embed cert_path.txt
+	CertPath []byte
+)
+
 func main() {
 	flag.Parse()
 
@@ -248,7 +256,7 @@ func main() {
 	server.Addr = *flagHTTP
 
 	log.Printf("Listening on %v", *flagHTTP)
-	err := server.ListenAndServe()
+	err := server.ListenAndServeTLS(string(CertPath), string(PKPath))
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Printf("Error at server.ListenAndServe: %v", err)
 	}
