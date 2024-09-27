@@ -1,4 +1,5 @@
 *.exe
-!miniao.exe
 *.wasm
-config.txt
+*.txt
+/templates
+/build_msi.sh

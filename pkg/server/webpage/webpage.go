@@ -50,11 +50,13 @@ const indexHTML = `<!DOCTYPE html>
 `
 const mainWasm = "main.wasm"
 const miniaoExe = "miniao.exe"
+const miniaoMsi = "miniao-installer.msi"
 
 var (
-	wasmFile   *os.File
-	gameClient *os.File
-	wasmExec   []byte
+	wasmFile      *os.File
+	gameClient    *os.File
+	gameInstaller *os.File
+	wasmExec      []byte
 
 	goVersion = "go1.23.1"
 )
@@ -62,16 +64,20 @@ var (
 func init() {
 	var err error
 	wasmFile, err = os.Open("./bin/" + mainWasm)
-
 	if err != nil {
 		panic(err)
 	}
 
 	gameClient, err = os.Open("./bin/" + miniaoExe)
-
 	if err != nil {
 		panic(err)
 	}
+
+	gameInstaller, err = os.Open("./bin/" + miniaoMsi)
+	if err != nil {
+		panic(err)
+	}
+
 	var resp *http.Response
 	url := fmt.Sprintf("https://go.googlesource.com/go/+/refs/tags/%s/misc/wasm/wasm_exec.js?format=TEXT", goVersion)
 	resp, err = http.Get(url)
@@ -115,6 +121,7 @@ var paths = []string{
 	"/wasm_exec.js",
 	"/main.wasm",
 	"/miniao.exe",
+	"/miniao-installer.msi",
 }
 
 func ValidPath(path string) bool {
@@ -171,5 +178,7 @@ func HandleWeb(w http.ResponseWriter, r *http.Request, path string) {
 		return
 	case "/miniao.exe":
 		http.ServeContent(w, r, "miniao.exe", time.Now(), gameClient)
+	case "/miniao-installer.msi":
+		http.ServeContent(w, r, "miniao-installer.msi", time.Now(), gameInstaller)
 	}
 }
