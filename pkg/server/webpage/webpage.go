@@ -14,6 +14,8 @@ import (
 	"strings"
 	"text/template"
 	"time"
+
+	"github.com/andybalholm/brotli"
 )
 
 const indexxHTML = `<!DOCTYPE html>
@@ -55,12 +57,13 @@ const iconIco = "icon.ico"
 
 var (
 	wasmFileBs      []byte
+	wasmFileBrBs    []byte
 	gameClientBs    []byte
 	gameInstallerBs []byte
 	iconImgBs       []byte
 	wasmExecBs      []byte
-
-	goVersion = "go1.23.1"
+	mainHtml        string
+	goVersion       = "go1.23.1"
 )
 
 func init() {
@@ -73,6 +76,16 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+	buf := bytes.NewBuffer(make([]byte, 0))
+	compr := brotli.NewWriter(buf)
+	_, err = compr.Write(wasmFileBs)
+	if err != nil {
+		panic(err)
+	}
+	compr.Close()
+
+	wasmFileBrBs = buf.Bytes()
+
 	gameClient, err := os.Open("./bin/" + miniaoExe)
 	if err != nil {
 		panic(err)
@@ -109,6 +122,32 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+
+	firstArg := filepath.Join("/bin/", mainWasm)
+	fargs := make([]string, flag.NArg())
+	copy(fargs, flag.Args())
+	if len(fargs) == 0 {
+		fargs = append(fargs, firstArg)
+	} else {
+		fargs[0] = firstArg
+	}
+	argv := make([]string, 0, len(fargs))
+	for _, a := range fargs {
+		argv = append(argv, `"`+template.JSEscapeString(a)+`"`)
+	}
+
+	oenv := os.Environ()
+	env := make([]string, 0, len(oenv))
+	for _, e := range oenv {
+		split := strings.SplitN(e, "=", 2)
+		env = append(env, `"`+template.JSEscapeString(split[0])+`": "`+template.JSEscapeString(split[1])+`"`)
+	}
+	rpl := strings.NewReplacer(
+		"{{.Argv}}", "["+strings.Join(argv, ", ")+"]",
+		"{{.Env}}", "{"+strings.Join(env, ", ")+"}",
+		"{{.MainWasm}}", `"`+template.JSEscapeString(mainWasm)+`"`,
+	)
+	mainHtml = rpl.Replace(indexHTML)
 }
 
 func Handle(upgrader func(w http.ResponseWriter, r *http.Request)) http.HandlerFunc {
@@ -162,38 +201,12 @@ func HandleWeb(w http.ResponseWriter, r *http.Request, path string) {
 	case "/":
 		http.ServeContent(w, r, "index.html", time.Now(), bytes.NewReader([]byte(indexxHTML)))
 	case "/main.html":
-		firstArg := filepath.Join("/bin/", mainWasm)
-		fargs := make([]string, flag.NArg())
-		copy(fargs, flag.Args())
-		if len(fargs) == 0 {
-			fargs = append(fargs, firstArg)
-		} else {
-			fargs[0] = firstArg
-		}
-		argv := make([]string, 0, len(fargs))
-		for _, a := range fargs {
-			argv = append(argv, `"`+template.JSEscapeString(a)+`"`)
-		}
-		h := strings.ReplaceAll(indexHTML, "{{.Argv}}", "["+strings.Join(argv, ", ")+"]")
-
-		oenv := os.Environ()
-		env := make([]string, 0, len(oenv))
-		for _, e := range oenv {
-			split := strings.SplitN(e, "=", 2)
-			env = append(env, `"`+template.JSEscapeString(split[0])+`": "`+template.JSEscapeString(split[1])+`"`)
-		}
-		h = strings.ReplaceAll(h, "{{.Env}}", "{"+strings.Join(env, ", ")+"}")
-
-		h = strings.ReplaceAll(h, "{{.MainWasm}}", `"`+template.JSEscapeString(mainWasm)+`"`)
-
-		http.ServeContent(w, r, "main.html", time.Now(), bytes.NewReader([]byte(h)))
-		return
+		http.ServeContent(w, r, "main.html", time.Now(), bytes.NewReader([]byte(mainHtml)))
 	case "/wasm_exec.js":
 		http.ServeContent(w, r, "wasm_exec.js", time.Time{}, bytes.NewReader(wasmExecBs))
-		return
-	case "/" + mainWasm:
-		http.ServeContent(w, r, mainWasm, time.Now(), bytes.NewReader(wasmFileBs))
-		return
+	case "/main.wasm":
+		w.Header().Add("Content-Encoding", "br")
+		http.ServeContent(w, r, "main.wasm", time.Now(), bytes.NewReader(wasmFileBrBs))
 	case "/miniao.exe":
 		http.ServeContent(w, r, "miniao.exe", time.Now(), bytes.NewReader(gameClientBs))
 	case "/miniao-installer.msi":
