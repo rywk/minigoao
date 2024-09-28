@@ -51,33 +51,52 @@ const indexHTML = `<!DOCTYPE html>
 const mainWasm = "main.wasm"
 const miniaoExe = "miniao.exe"
 const miniaoMsi = "miniao-installer.msi"
+const iconIco = "icon.ico"
 
 var (
-	wasmFile      *os.File
-	gameClient    *os.File
-	gameInstaller *os.File
-	wasmExec      []byte
+	wasmFileBs      []byte
+	gameClientBs    []byte
+	gameInstallerBs []byte
+	iconImgBs       []byte
+	wasmExecBs      []byte
 
 	goVersion = "go1.23.1"
 )
 
 func init() {
 	var err error
-	wasmFile, err = os.Open("./bin/" + mainWasm)
+	wasmFile, err := os.Open("./bin/" + mainWasm)
 	if err != nil {
 		panic(err)
 	}
-
-	gameClient, err = os.Open("./bin/" + miniaoExe)
+	wasmFileBs, err = io.ReadAll(wasmFile)
 	if err != nil {
 		panic(err)
 	}
-
-	gameInstaller, err = os.Open("./bin/" + miniaoMsi)
+	gameClient, err := os.Open("./bin/" + miniaoExe)
 	if err != nil {
 		panic(err)
 	}
-
+	gameClientBs, err = io.ReadAll(gameClient)
+	if err != nil {
+		panic(err)
+	}
+	gameInstaller, err := os.Open("./bin/" + miniaoMsi)
+	if err != nil {
+		panic(err)
+	}
+	gameInstallerBs, err = io.ReadAll(gameInstaller)
+	if err != nil {
+		panic(err)
+	}
+	iconImg, err := os.Open("./pkg/server/webpage/" + iconIco)
+	if err != nil {
+		panic(err)
+	}
+	iconImgBs, err = io.ReadAll(iconImg)
+	if err != nil {
+		panic(err)
+	}
 	var resp *http.Response
 	url := fmt.Sprintf("https://go.googlesource.com/go/+/refs/tags/%s/misc/wasm/wasm_exec.js?format=TEXT", goVersion)
 	resp, err = http.Get(url)
@@ -86,7 +105,7 @@ func init() {
 	}
 	defer resp.Body.Close()
 
-	wasmExec, err = io.ReadAll(base64.NewDecoder(base64.StdEncoding, resp.Body))
+	wasmExecBs, err = io.ReadAll(base64.NewDecoder(base64.StdEncoding, resp.Body))
 	if err != nil {
 		panic(err)
 	}
@@ -122,6 +141,7 @@ var paths = []string{
 	"/main.wasm",
 	"/miniao.exe",
 	"/miniao-installer.msi",
+	"/favicon.ico",
 }
 
 func ValidPath(path string) bool {
@@ -135,13 +155,12 @@ func ValidPath(path string) bool {
 
 func HandleWeb(w http.ResponseWriter, r *http.Request, path string) {
 	defer func() {
-		log.Printf("WEB:%v %v %v\n", r.Method, r.Host, r.URL.String())
+		log.Printf("WEB:%v %v %v %v\n", r.RemoteAddr, r.Method, r.Host, r.URL.String())
 	}()
 
 	switch path {
 	case "/":
 		http.ServeContent(w, r, "index.html", time.Now(), bytes.NewReader([]byte(indexxHTML)))
-		return
 	case "/main.html":
 		firstArg := filepath.Join("/bin/", mainWasm)
 		fargs := make([]string, flag.NArg())
@@ -170,15 +189,16 @@ func HandleWeb(w http.ResponseWriter, r *http.Request, path string) {
 		http.ServeContent(w, r, "main.html", time.Now(), bytes.NewReader([]byte(h)))
 		return
 	case "/wasm_exec.js":
-		http.ServeContent(w, r, "wasm_exec.js", time.Time{}, bytes.NewReader(wasmExec))
+		http.ServeContent(w, r, "wasm_exec.js", time.Time{}, bytes.NewReader(wasmExecBs))
 		return
 	case "/" + mainWasm:
-		//w.Header().Add("Content-Type", "application/wasm")
-		http.ServeContent(w, r, mainWasm, time.Now(), wasmFile)
+		http.ServeContent(w, r, mainWasm, time.Now(), bytes.NewReader(wasmFileBs))
 		return
 	case "/miniao.exe":
-		http.ServeContent(w, r, "miniao.exe", time.Now(), gameClient)
+		http.ServeContent(w, r, "miniao.exe", time.Now(), bytes.NewReader(gameClientBs))
 	case "/miniao-installer.msi":
-		http.ServeContent(w, r, "miniao-installer.msi", time.Now(), gameInstaller)
+		http.ServeContent(w, r, "miniao-installer.msi", time.Now(), bytes.NewReader(gameInstallerBs))
+	case "/favicon.ico":
+		http.ServeContent(w, r, "favicon.ico", time.Now(), bytes.NewReader(iconImgBs))
 	}
 }

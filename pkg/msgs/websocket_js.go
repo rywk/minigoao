@@ -10,11 +10,11 @@ func DialServer(address string, web, secure bool) (Msgs, error) {
 	return DialWS3(address, secure)
 }
 func DialWS3(address string, secure bool) (Msgs, error) {
-	pref := "ws://"
+	address = "ws://" + address + "/upgrader"
 	if secure {
-		pref = "wss://"
+		address = "wss://" + "miniao.online" + "/upgrader"
 	}
-	address = pref + "miniao.online" + "/upgrader"
+
 	c, err := owss.Dial("websocket", address)
 	if err != nil {
 		return nil, err
