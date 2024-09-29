@@ -19,6 +19,9 @@ import (
 )
 
 const indexxHTML = `<!DOCTYPE html>
+<meta property="og:image" content="thumbnail.jpg">
+<meta property="og:title" content="MiniAo Online">
+<meta property="og:description" content="alpha beta v0.0.1">
 <script>
 addEventListener(
     'beforeunload',
@@ -54,8 +57,10 @@ const mainWasm = "main.wasm"
 const miniaoExe = "miniao.exe"
 const miniaoMsi = "miniao-installer.msi"
 const iconIco = "icon.ico"
+const thumbnailJpg = "thumbnail.jpg"
 
 var (
+	thumbnailBs     []byte
 	wasmFileBs      []byte
 	wasmFileBrBs    []byte
 	gameClientBs    []byte
@@ -107,6 +112,14 @@ func init() {
 		panic(err)
 	}
 	iconImgBs, err = io.ReadAll(iconImg)
+	if err != nil {
+		panic(err)
+	}
+	thumbnailImg, err := os.Open("./pkg/server/webpage/" + thumbnailJpg)
+	if err != nil {
+		panic(err)
+	}
+	thumbnailBs, err = io.ReadAll(thumbnailImg)
 	if err != nil {
 		panic(err)
 	}
@@ -181,6 +194,7 @@ var paths = []string{
 	"/miniao.exe",
 	"/miniao-installer.msi",
 	"/favicon.ico",
+	"/thumbnail.jpg",
 }
 
 func ValidPath(path string) bool {
@@ -213,5 +227,7 @@ func HandleWeb(w http.ResponseWriter, r *http.Request, path string) {
 		http.ServeContent(w, r, "miniao-installer.msi", time.Now(), bytes.NewReader(gameInstallerBs))
 	case "/favicon.ico":
 		http.ServeContent(w, r, "favicon.ico", time.Now(), bytes.NewReader(iconImgBs))
+	case "/thumbnail.jpg":
+		http.ServeContent(w, r, "thumbnail.jpg", time.Now(), bytes.NewReader(thumbnailBs))
 	}
 }
