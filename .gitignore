@@ -1,5 +1,6 @@
 *.exe
 *.wasm
 *.txt
+wix.json
 /templates
 /build_msi.sh
