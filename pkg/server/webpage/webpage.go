@@ -19,7 +19,7 @@ import (
 )
 
 const indexxHTML = `<!DOCTYPE html>
-<meta property="og:image" content="thumbnail.jpg">
+<meta property="og:image" content="https://miniao.online/thumbnail.jpg">
 <meta property="og:title" content="MiniAo Online">
 <meta property="og:description" content="alpha beta v0.0.1">
 <script>
