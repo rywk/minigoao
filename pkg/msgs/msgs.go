@@ -57,7 +57,7 @@ func readMsg(r io.Reader) (*IncomingData, error) {
 
 	_, err := r.Read(eventByte)
 	if err != nil {
-		log.Printf("BAD 0 byte!!!! %d", err)
+		log.Printf("BAD 0 byte!!!! %v", err)
 
 		return nil, err
 	}

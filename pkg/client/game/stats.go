@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"log"
 	"strings"
 	"time"
 
@@ -562,7 +561,7 @@ func (b *Skills) Update() {
 			b.FreePoints = int(b.g.player.Exp.Skills.FreePoints) + total
 		} else {
 			//b.FreePoints = int(b.g.player.Exp.Skills.FreePoints)
-			log.Print("asd")
+			//log.Print("asd")
 		}
 	}
 	b.Agility.Update()

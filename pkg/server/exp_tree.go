@@ -297,18 +297,18 @@ type MagicAffinity struct {
 var magicReducers = [MagicAffinityTypeLen]MagicAffinity{
 	{}, // None
 	{ // MagicAffinityTypeFire
-		DamageMult:    0.028,
-		ManaCostReduc: 0.01,
+		DamageMult:    0.033,
+		ManaCostReduc: 0.014,
 		SpellCDReduc:  0.016,
 	},
 	{ // MagicAffinityTypeElectric
-		DamageMult:    0.023,
-		ManaCostReduc: 0.015,
+		DamageMult:    0.028,
+		ManaCostReduc: 0.019,
 		SpellCDReduc:  0.01,
 	},
 	{ // MagicAffinityTypeCleric
 		DamageMult:    0.09,
-		ManaCostReduc: 0.014,
+		ManaCostReduc: 0.017,
 		SpellCDReduc:  0.022,
 	},
 }

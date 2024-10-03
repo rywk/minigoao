@@ -85,8 +85,8 @@ var (
 func (s *Server) Start(exposed bool) error {
 	PKPath = []byte(strings.Trim(string(PKPath), "\n"))
 	CertPath = []byte(strings.Trim(string(CertPath), "\n"))
-	log.Println(PKPath)
-	log.Println(CertPath)
+	//log.Println(PKPath)
+	//log.Println(CertPath)
 	address := fmt.Sprintf("127.0.0.1%s", s.tcpport)
 	if exposed {
 		address = fmt.Sprintf("0.0.0.0%s", s.tcpport)
@@ -443,7 +443,7 @@ func (g *Game) consumeIncomingData() {
 				player.exp.SetItemBuffs(player.inv.GetWeapon())
 				player.exp.ApplyPlayer()
 				nexp := player.exp.ToMsgs()
-				log.Println(nexp)
+				//log.Println(nexp)
 				//log.Println(nexp == temp)
 
 				player.Send <- OutMsg{Event: msgs.EUpdateSkillsOk, Data: &nexp}
@@ -480,12 +480,12 @@ func (g *Game) consumeIncomingData() {
 		// 	}, player.id)
 		case msgs.EUpdateSkills:
 			skills := incomingData.Data.(*msgs.Skills)
-			temp := player.exp.ToMsgs()
-			log.Println(temp)
+			//temp := player.exp.ToMsgs()
+			//log.Println(temp)
 			player.exp.ApplySkills(*skills)
 			player.exp.ApplyPlayer()
 			nexp := player.exp.ToMsgs()
-			log.Println(nexp)
+			//log.Println(nexp)
 			//log.Println(nexp == temp)
 
 			player.Send <- OutMsg{Event: msgs.EUpdateSkillsOk, Data: &nexp}
@@ -508,6 +508,7 @@ func (g *Game) playerMove(player *Player, incomingData IncomingMsg) {
 	case direction.Right:
 		np.X++
 	}
+
 	var err error
 	if np.Out(g.space.Rect) {
 		err = errors.New("map edge")
@@ -518,6 +519,7 @@ func (g *Game) playerMove(player *Player, incomingData IncomingMsg) {
 	} else {
 		err = g.space.Move(0, player.pos, np)
 	}
+	log.Printf("[%v][%v] MOVE %v->%v err:%v\n", player.id, player.nick, player.pos, np, err)
 	if err != nil {
 		player.Send <- OutMsg{Event: msgs.EMoveOk, Data: []byte{msgs.BoolByte(false), player.dir}}
 		g.space.Notify(player.pos, msgs.EPlayerMoved, &msgs.EventPlayerMoved{
@@ -529,7 +531,6 @@ func (g *Game) playerMove(player *Player, incomingData IncomingMsg) {
 		return
 	}
 	player.lastMove = time.Now()
-	//log.Printf("[%v][%v] MOVE %v->%v\n", player.id, player.nick, player.pos, np)
 	player.obs.MoveOne(player.dir, func(x, y int32) {
 		newPlayerInSight := g.space.GetSlot(0, typ.P{X: x, Y: y})
 		if newPlayerInSight == 0 {
@@ -800,7 +801,7 @@ func (p *Player) Login() {
 		Inv:   msgs.Inventory(*p.inv),
 		Speed: uint8(p.speedPxXFrame),
 	}
-	log.Printf("login %#v", *loginEvent)
+	//log.Printf("login %#v", *loginEvent)
 
 	p.obs = grid.NewObserverRange(p.g.space, p.pos,
 		constants.GridViewportX, constants.GridViewportY,

@@ -22,6 +22,24 @@ const indexxHTML = `<!DOCTYPE html>
 <meta property="og:image" content="https://miniao.online/thumbnail.jpg">
 <meta property="og:title" content="MiniAo Online">
 <meta property="og:description" content="alpha beta v0.0.1">
+<style>
+.iframe-container {
+    display: flex;
+    justify-content: center; /* Centers horizontally */
+    align-items: center;    /* Centers vertically */
+    height: 100vh;          /* Makes the container take full viewport height */
+}
+
+iframe {
+    width: 1280px;  /* Set fixed width */
+    height: 720px; /* Set fixed height */
+}
+html, body {
+    overflow: hidden; /* Disables scrolling for the entire page */
+    height: 100%;     /* Ensures full height for the page */
+	background-color: #1c1c23;
+}
+</style>
 <script>
 addEventListener(
     'beforeunload',
@@ -31,7 +49,9 @@ addEventListener(
     true
 );
 </script>
-<iframe src="main.html" allow="autoplay" style="position:fixed; top:0; left:0; bottom:0; right:0; width:100%; height:100%; border:none; margin:0; padding:0; overflow:hidden; z-index:999999;"></iframe>`
+<div class="iframe-container"  frameborder="0" scrolling="no">
+<iframe src="main.html" allow="autoplay" frameborder="0" scrolling="no"></iframe>
+</div>`
 
 const indexHTML = `<!DOCTYPE html>
 <script src="wasm_exec.js"></script>
