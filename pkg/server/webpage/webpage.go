@@ -171,13 +171,13 @@ func Handle(upgrader func(w http.ResponseWriter, r *http.Request)) http.HandlerF
 		}
 
 		if r.Method != "GET" {
-			log.Printf("NON GET:%v %v %v\n", r.Method, r.Host, r.URL.String())
+			log.Printf("NON GET:%v %v %v %v\n", r.RemoteAddr, r.Method, r.Host, r.URL.String())
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
 		if !ValidPath(r.URL.Path) {
-			log.Printf("INVALID GET:%v %v %v\n", r.Method, r.Host, r.URL.String())
+			log.Printf("INVALID GET:%v %v %v %v\n", r.RemoteAddr, r.Method, r.Host, r.URL.String())
 			http.NotFound(w, r)
 			return
 		}

@@ -3,7 +3,7 @@ package assets
 import (
 	"reflect"
 
-	"github.com/rywk/minigoao/pkg/constants/spell"
+	"github.com/rywk/minigoao/pkg/constants/attack"
 )
 
 type Image = uint32
@@ -26,6 +26,8 @@ const (
 	SilverShield
 	TowerShield
 
+	// items
+
 	// Effects
 	MeleeHit
 	SpellInmo
@@ -33,6 +35,7 @@ const (
 	SpellApoca
 	SpellDesca
 	SpellHealWounds
+	SpellHealArea
 	SpellResurrect
 	Tiletest
 
@@ -73,19 +76,19 @@ const (
 	SpellDescaSound
 )
 
-func SoundFromSpell(s spell.Spell) Sound {
+func SoundFromSpell(s attack.Spell) Sound {
 	switch s {
-	case spell.Explode:
+	case attack.SpellExplode:
 		return SpellApocaSound
-	case spell.Paralize:
+	case attack.SpellParalize:
 		return SpellInmoSound
-	case spell.RemoveParalize:
+	case attack.SpellRemoveParalize:
 		return SpellInmoRmSound
-	case spell.ElectricDischarge:
+	case attack.SpellElectricDischarge:
 		return SpellDescaSound
-	case spell.HealWounds:
+	case attack.SpellHealWounds:
 		return SpellHealWoundsSound
-	case spell.Resurrect:
+	case attack.SpellResurrect:
 		return SpellResurrectSound
 
 	}

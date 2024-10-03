@@ -10,9 +10,9 @@ import (
 	"github.com/rywk/minigoao/pkg/client/game/text"
 	"github.com/rywk/minigoao/pkg/client/game/typing"
 	"github.com/rywk/minigoao/pkg/constants"
+	"github.com/rywk/minigoao/pkg/constants/attack"
 	"github.com/rywk/minigoao/pkg/constants/direction"
-	"github.com/rywk/minigoao/pkg/constants/spell"
-	"github.com/rywk/minigoao/pkg/msgs"
+	"github.com/rywk/minigoao/pkg/constants/item"
 )
 
 type KeyConfig struct {
@@ -35,13 +35,6 @@ type KeyConfig struct {
 	PickHealWounds        *Input
 
 	PotionCooldown time.Duration
-	// Cooldown to cast spells or do a melee attack
-	// spells and melee attacks trigger this cd
-	CooldownAction time.Duration
-	// Cooldown for each spell
-	CooldownSpells [spell.Len]time.Duration
-	// Cooldown for melee
-	CooldownMelee time.Duration
 }
 
 var DefaultConfig = KeyConfig{
@@ -60,20 +53,8 @@ var DefaultConfig = KeyConfig{
 	PotionHP: NewInputPtr(ebiten.MouseButtonRight),
 	PotionMP: NewInputPtr(ebiten.KeyF),
 
-	Melee:          NewInputPtr(ebiten.KeySpace),
+	Melee:          NewInputPtr(ebiten.MouseButton4),
 	PotionCooldown: time.Millisecond * 300,
-
-	CooldownAction: time.Millisecond * 400,
-	CooldownMelee:  time.Millisecond * 900,
-	CooldownSpells: [spell.Len]time.Duration{
-		0,
-		time.Millisecond * 950,   //Paralize
-		time.Millisecond * 950,   //RemoveParalize
-		time.Millisecond * 950,   //HealWounds
-		time.Millisecond * 10000, //Resurrect
-		time.Millisecond * 750,   //ElectricDischarge
-		time.Millisecond * 1000,  //Explode
-	},
 }
 
 type Keys struct {
@@ -91,21 +72,20 @@ type Keys struct {
 	lastChat      time.Time
 	openCloseImg  *ebiten.Image
 
-	spell           spell.Spell
 	clickDown       bool
-	potion          msgs.Item
+	potion          item.Item
 	lastSpellKey    *Input
 	lastPotionInput *Input
 	lastPotion      time.Time
 	spellPressed    map[*Input]bool
-	spellMap        map[*Input]spell.Spell
+	spellMap        map[*Input]attack.Spell
 	potionPressed   map[*Input]bool
-	potionMap       map[*Input]msgs.Item
+	potionMap       map[*Input]item.Item
 	cursorMode      ebiten.CursorShapeType
 
 	LastAction time.Time
 	LastMelee  time.Time
-	LastSpells [spell.Len]time.Time
+	LastSpells [attack.SpellLen]time.Time
 }
 
 func NewKeys(g *Game, cfg *KeyConfig) *Keys {
@@ -131,7 +111,6 @@ func NewKeys(g *Game, cfg *KeyConfig) *Keys {
 			&NoInput:  direction.Still,
 		},
 
-		spell:      spell.None,
 		lastPotion: time.Now(),
 		spellPressed: map[*Input]bool{
 			cfg.PickExplode:           false,
@@ -141,26 +120,26 @@ func NewKeys(g *Game, cfg *KeyConfig) *Keys {
 			cfg.PickResurrect:         false,
 			cfg.PickHealWounds:        false,
 		},
-		spellMap: map[*Input]spell.Spell{
-			cfg.PickExplode:           spell.Explode,
-			cfg.PickParalize:          spell.Paralize,
-			cfg.PickParalizeRm:        spell.RemoveParalize,
-			cfg.PickElectricDischarge: spell.ElectricDischarge,
-			cfg.PickResurrect:         spell.Resurrect,
-			cfg.PickHealWounds:        spell.HealWounds,
-			&NoInput:                  spell.None,
+		spellMap: map[*Input]attack.Spell{
+			cfg.PickExplode:           attack.SpellExplode,
+			cfg.PickParalize:          attack.SpellParalize,
+			cfg.PickParalizeRm:        attack.SpellRemoveParalize,
+			cfg.PickElectricDischarge: attack.SpellElectricDischarge,
+			cfg.PickResurrect:         attack.SpellResurrect,
+			cfg.PickHealWounds:        attack.SpellHealWounds,
+			&NoInput:                  attack.SpellNone,
 		},
 		potionPressed: map[*Input]bool{
 			cfg.PotionHP: false,
 			cfg.PotionMP: false,
 		},
-		potionMap: map[*Input]msgs.Item{
-			cfg.PotionHP: msgs.ItemHealthPotion,
-			cfg.PotionMP: msgs.ItemManaPotion,
-			&NoInput:     msgs.ItemNone,
+		potionMap: map[*Input]item.Item{
+			cfg.PotionHP: item.HealthPotion,
+			cfg.PotionMP: item.ManaPotion,
+			&NoInput:     item.None,
 		},
 
-		LastSpells: [spell.Len]time.Time{
+		LastSpells: [attack.SpellLen]time.Time{
 			time.Now().Add(-time.Second * 10), //Paralize
 			time.Now().Add(-time.Second * 10), //RemoveParalize
 			time.Now().Add(-time.Second * 10), //HealWounds
@@ -233,8 +212,8 @@ func (k *Keys) MeleeHit() bool {
 	}
 	hit := false
 	if k.cfg.Melee.IsPressed() &&
-		time.Since(k.LastMelee) > k.cfg.CooldownMelee &&
-		time.Since(k.LastAction) > k.cfg.CooldownAction {
+		time.Since(k.LastMelee) > k.g.player.Exp.Items[k.g.player.Inv.GetWeapon()].WeaponData.Cooldown &&
+		time.Since(k.LastAction) > k.g.player.Exp.ActionCooldown {
 		k.LastMelee = time.Now()
 		k.LastAction = k.LastMelee
 		hit = true
@@ -242,9 +221,9 @@ func (k *Keys) MeleeHit() bool {
 	return hit
 }
 
-func (k *Keys) ListenSpell() {
+func (k *Keys) ListenSpell() attack.Spell {
 	if k.keysLocked {
-		return
+		return attack.SpellNone
 	}
 
 	apoca, inmo, inmoRm, desca, healWounds, resurrect := k.cfg.PickExplode.IsPressed(),
@@ -296,13 +275,24 @@ func (k *Keys) ListenSpell() {
 		k.spellPressed[k.cfg.PickResurrect] = false
 	}
 	if apoca || inmo || inmoRm || desca || healWounds || resurrect {
-		k.spell = k.spellMap[k.lastSpellKey]
+		return k.spellMap[k.lastSpellKey]
+		//k.spell = k.spellMap[k.lastSpellKey]
 	}
+	return attack.SpellNone
 }
 
-func (k *Keys) CastSpell() (bool, spell.Spell, int, int) {
+func (k *Keys) CastSpell() (bool, int, int) {
+	selectedSpell := k.g.player.Exp.SelectedSpell
+	if selectedSpell == attack.SpellNone {
+		if k.cursorMode == ebiten.CursorShapeCrosshair || k.g.mouseY >= ScreenHeight-64 {
+			ebiten.SetCursorShape(ebiten.CursorShapeDefault)
+			k.cursorMode = ebiten.CursorShapeDefault
+		}
+		return false, 0, 0
+	}
+
 	// if spell is picked and mouse mode is not crosshair, activate and set
-	if k.spell != spell.None && k.cursorMode != ebiten.CursorShapeCrosshair && k.g.mouseY < ScreenHeight-64 {
+	if selectedSpell != attack.SpellNone && k.cursorMode != ebiten.CursorShapeCrosshair && k.g.mouseY < ScreenHeight-64 {
 		ebiten.SetCursorShape(ebiten.CursorShapeCrosshair)
 		k.cursorMode = ebiten.CursorShapeCrosshair
 	}
@@ -310,30 +300,24 @@ func (k *Keys) CastSpell() (bool, spell.Spell, int, int) {
 	if ebiten.IsMouseButtonPressed(ebiten.MouseButton0) {
 		k.clickDown = true
 	} else {
-		if k.clickDown && k.spell != spell.None && k.g.mouseY < ScreenHeight-64 &&
-			time.Since(k.LastSpells[k.spell]) > k.cfg.CooldownSpells[k.spell] &&
-			time.Since(k.LastAction) > k.cfg.CooldownAction {
+		if k.clickDown && selectedSpell != attack.SpellNone && k.g.mouseY < ScreenHeight-64 &&
+			time.Since(k.LastSpells[selectedSpell]) > k.g.player.Exp.Spells[selectedSpell].Cooldown &&
+			time.Since(k.LastAction) > k.g.player.Exp.ActionCooldown {
 			k.LastAction = time.Now()
-			k.LastSpells[k.spell] = k.LastAction
+			k.LastSpells[selectedSpell] = k.LastAction
 			k.clickDown = false
-			pspell := k.spell
-			k.spell = spell.None
 			k.lastSpellKey = &NoInput
-			return true, pspell, k.g.mouseX, k.g.mouseY
+			k.g.player.Exp.SelectedSpell = attack.SpellNone
+			return true, k.g.mouseX, k.g.mouseY
 		}
 		k.clickDown = false
 	}
-
-	if k.spell == spell.None && k.cursorMode == ebiten.CursorShapeCrosshair || k.g.mouseY >= ScreenHeight-64 {
-		ebiten.SetCursorShape(ebiten.CursorShapeDefault)
-		k.cursorMode = ebiten.CursorShapeDefault
-	}
-	return false, spell.None, 0, 0
+	return false, 0, 0
 }
 
-func (k *Keys) PressedPotion() msgs.Item {
+func (k *Keys) PressedPotion() item.Item {
 	if k.keysLocked {
-		return msgs.ItemNone
+		return item.None
 	}
 	red, blue := k.cfg.PotionHP.IsPressed(),
 		k.cfg.PotionMP.IsPressed()
@@ -361,12 +345,12 @@ func (k *Keys) PressedPotion() msgs.Item {
 		k.lastPotionInput = &NoInput
 	}
 	p := k.potionMap[k.lastPotionInput]
-	if p != msgs.ItemNone && time.Since(k.lastPotion) > k.cfg.PotionCooldown {
+	if p != item.None && time.Since(k.lastPotion) > k.cfg.PotionCooldown {
 		k.lastPotion = time.Now()
 		return p
 	}
 
-	return msgs.ItemNone
+	return item.None
 }
 func (k *Keys) DrawChat(screen *ebiten.Image, x, y int) {
 	// Blink the cursor.

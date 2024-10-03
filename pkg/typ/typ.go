@@ -5,6 +5,13 @@ type P struct {
 	X, Y int32
 }
 
+func (p *P) Add(x, y int32) P {
+	return P{
+		X: p.X + x,
+		Y: p.Y + y,
+	}
+}
+
 func (p *P) Set(x, y int32) {
 	p.X, p.Y = x, y
 }

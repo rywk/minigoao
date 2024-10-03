@@ -3,11 +3,14 @@ module github.com/rywk/minigoao
 go 1.23.1
 
 require (
+	github.com/andybalholm/brotli v1.1.0
 	github.com/coder/websocket v1.8.12
+	github.com/google/uuid v1.6.0
 	github.com/gopxl/beep v1.2.1-0.20231109160934-624d2853e716
 	github.com/gopxl/beep/v2 v2.1.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/hajimehoshi/ebiten/v2 v2.6.2
+	github.com/mattn/go-sqlite3 v1.14.23
 	github.com/stretchr/testify v1.9.0
 	github.com/tarndt/wasmws v0.0.0-20211231175046-02849cc2d4d2
 	github.com/vmihailenco/msgpack/v5 v5.4.1
@@ -15,7 +18,6 @@ require (
 )
 
 require (
-	github.com/andybalholm/brotli v1.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/ebitengine/oto/v3 v3.2.0 // indirect
 	github.com/ebitengine/purego v0.7.1 // indirect

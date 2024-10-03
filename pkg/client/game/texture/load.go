@@ -8,9 +8,12 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/rywk/minigoao/pkg/client/game/assets/img"
+	"github.com/rywk/minigoao/pkg/client/game/assets/img/body"
+	"github.com/rywk/minigoao/pkg/client/game/assets/img/spellimg"
 	asset "github.com/rywk/minigoao/pkg/constants/assets"
+	"github.com/rywk/minigoao/pkg/constants/attack"
 	"github.com/rywk/minigoao/pkg/constants/direction"
-	"github.com/rywk/minigoao/pkg/constants/spell"
+	"github.com/rywk/minigoao/pkg/constants/item"
 )
 
 const GrassTextureSize = 128
@@ -49,7 +52,7 @@ var (
 					direction.Right: 5,
 				},
 			},
-			img: img.MeleeHit_png,
+			img: spellimg.MeleeHit_png,
 		},
 		asset.SpellApoca: {
 			c: SpriteConfig{
@@ -59,18 +62,9 @@ var (
 				GridH:      4,
 				FrameCount: 16,
 			},
-			img: img.SpellApoca_png,
+			img: spellimg.SpellApoca_png,
 		},
-		// asset.SpellApoca: {
-		// 	c: SpriteConfig{
-		// 		Width:  128,
-		// 		Height: 100,
-		// 		DirectionLength: map[direction.D]int{
-		// 			direction.Right: 11,
-		// 		},
-		// 	},
-		// 	img: img.SpellLastTrial_png,
-		// },
+
 		asset.SpellDesca: {
 			c: SpriteConfig{
 				Width:      127,
@@ -79,18 +73,9 @@ var (
 				GridH:      3,
 				FrameCount: 15,
 			},
-			img: img.SpellDesca_png,
+			img: spellimg.SpellDesca_png,
 		},
-		// asset.SpellInmo: {
-		// 	c: SpriteConfig{
-		// 		Width:  128,
-		// 		Height: 128,
-		// 		DirectionLength: map[direction.D]int{
-		// 			direction.Right: 15,
-		// 		},
-		// 	},
-		// 	img: img.SpellInmo_png,
-		// },
+
 		asset.SpellInmo: {
 			c: SpriteConfig{
 				Width:  96,
@@ -99,7 +84,7 @@ var (
 					direction.Right: 10,
 				},
 			},
-			img: img.SpellParalize_png,
+			img: spellimg.SpellParalize_png,
 		},
 		asset.SpellInmoRm: {
 			c: SpriteConfig{
@@ -109,28 +94,9 @@ var (
 				GridH:      4,
 				FrameCount: 20,
 			},
-			img: img.SpellInmoRm_png,
+			img: spellimg.SpellInmoRm_png,
 		},
-		// asset.SpellHealWounds: {
-		// 	c: SpriteConfig{
-		// 		Width:      68,
-		// 		Height:     68,
-		// 		GridW:      5,
-		// 		GridH:      4,
-		// 		FrameCount: 20,
-		// 	},
-		// 	img: img.SpellHealWounds_png,
-		// },
-		// asset.SpellHealWounds: {
-		// 	c: SpriteConfig{
-		// 		Width:  100,
-		// 		Height: 100,
-		// 		DirectionLength: map[direction.D]int{
-		// 			direction.Right: 10,
-		// 		},
-		// 	},
-		// 	img: img.SpellHealWounds2_png,
-		// },
+
 		asset.SpellHealWounds: {
 			c: SpriteConfig{
 				Width:  95,
@@ -139,7 +105,7 @@ var (
 					direction.Right: 10,
 				},
 			},
-			img: img.SpellHealWoundsNew_png,
+			img: spellimg.SpellHealWoundsNew_png,
 		},
 		asset.SpellResurrect: {
 			c: SpriteConfig{
@@ -149,12 +115,12 @@ var (
 				GridH:      6,
 				FrameCount: 30,
 			},
-			img: img.SpellResurrect_png,
+			img: spellimg.SpellResurrect_png,
 		},
 		asset.NakedBody: {
 			c: SpriteConfig{
-				Width:  25,
-				Height: 45,
+				Width:  26,
+				Height: 46,
 				DirectionLength: map[direction.D]int{
 					direction.Front: 6,
 					direction.Back:  6,
@@ -168,7 +134,7 @@ var (
 					direction.Right: direction.Right,
 				},
 			},
-			img: img.BodyNaked_png,
+			img: body.BodyNaked_png,
 		},
 		asset.Head: {
 			c: SpriteConfig{
@@ -181,7 +147,7 @@ var (
 					direction.Right: direction.Right,
 				},
 			},
-			img: img.Head_png,
+			img: body.Head_png,
 		},
 		asset.DeadBody: {
 			c: SpriteConfig{
@@ -200,7 +166,7 @@ var (
 					direction.Right: direction.Right,
 				},
 			},
-			img: img.DeadBody_png,
+			img: body.DeadBody_png,
 		},
 		asset.DeadHead: {
 			c: SpriteConfig{
@@ -213,115 +179,7 @@ var (
 					direction.Right: direction.Right,
 				},
 			},
-			img: img.DeadHead_png,
-		},
-		asset.ProHat: {
-			c: SpriteConfig{
-				Width:  25,
-				Height: 32,
-				RealDirMap: map[direction.D]direction.D{
-					direction.Front: direction.Right,
-					direction.Back:  direction.Right,
-					direction.Left:  direction.Right,
-					direction.Right: direction.Right,
-				},
-			},
-			img: img.HatPro_png,
-		},
-		asset.DarkArmour: {
-			c: SpriteConfig{
-				Width:  25,
-				Height: 45,
-				DirectionLength: map[direction.D]int{
-					direction.Front: 6,
-					direction.Back:  6,
-					direction.Left:  5,
-					direction.Right: 5,
-				},
-				RealDirMap: map[direction.D]direction.D{
-					direction.Front: direction.Right,
-					direction.Back:  direction.Right,
-					direction.Left:  direction.Right,
-					direction.Right: direction.Right,
-				},
-			},
-			img: img.DarkArmor_png,
-		},
-		asset.WarAxe: {
-			c: SpriteConfig{
-				Width:  25,
-				Height: 45,
-				DirectionLength: map[direction.D]int{
-					direction.Front: 6,
-					direction.Back:  6,
-					direction.Left:  5,
-					direction.Right: 5,
-				},
-				RealDirMap: map[direction.D]direction.D{
-					direction.Front: direction.Right,
-					direction.Back:  direction.Right,
-					direction.Left:  direction.Right,
-					direction.Right: direction.Right,
-				},
-			},
-			img: img.Axe_png,
-		},
-		asset.SpecialSword: {
-			c: SpriteConfig{
-				Width:  25,
-				Height: 45,
-				DirectionLength: map[direction.D]int{
-					direction.Front: 6,
-					direction.Back:  6,
-					direction.Left:  5,
-					direction.Right: 5,
-				},
-				RealDirMap: map[direction.D]direction.D{
-					direction.Front: direction.Right,
-					direction.Back:  direction.Right,
-					direction.Left:  direction.Right,
-					direction.Right: direction.Right,
-				},
-			},
-			img: img.SwordSpecial_png,
-		},
-		asset.TowerShield: {
-			c: SpriteConfig{
-				Width:  42,
-				Height: 64,
-				DirectionLength: map[direction.D]int{
-					direction.Front: 6,
-					direction.Back:  6,
-					direction.Left:  5,
-					direction.Right: 5,
-				},
-				RealDirMap: map[direction.D]direction.D{
-					direction.Front: direction.Right,
-					direction.Back:  direction.Right,
-					direction.Left:  direction.Right,
-					direction.Right: direction.Right,
-				},
-			},
-			img: img.ShieldTower_png,
-		},
-		asset.SilverShield: {
-			c: SpriteConfig{
-				Width:  25,
-				Height: 45,
-				DirectionLength: map[direction.D]int{
-					direction.Front: 6,
-					direction.Back:  6,
-					direction.Left:  5,
-					direction.Right: 5,
-				},
-				RealDirMap: map[direction.D]direction.D{
-					direction.Front: direction.Right,
-					direction.Back:  direction.Right,
-					direction.Left:  direction.Right,
-					direction.Right: direction.Right,
-				},
-			},
-			img: img.ShieldSilver_png,
+			img: body.DeadHead_png,
 		},
 	}
 )
@@ -399,20 +257,236 @@ func Decode(bs []byte) *ebiten.Image {
 	return ebiten.NewImageFromImage(img)
 }
 
-func AssetFromSpell(s spell.Spell) asset.Image {
+func DecodeIconFromImage(bs []byte) *ebiten.Image {
+	img, _, err := image.Decode(bytes.NewReader(bs))
+	if err != nil {
+
+		log.Fatal(err)
+	}
+	return ebiten.NewImageFromImage(ebiten.NewImageFromImage(img).SubImage(image.Rect(0, img.Bounds().Dy()-32, 32, 32)))
+}
+
+func AssetFromSpell(s attack.Spell) asset.Image {
 	switch s {
-	case spell.Explode:
+	case attack.SpellExplode:
 		return asset.SpellApoca
-	case spell.Paralize:
+	case attack.SpellParalize:
 		return asset.SpellInmo
-	case spell.RemoveParalize:
+	case attack.SpellRemoveParalize:
 		return asset.SpellInmoRm
-	case spell.ElectricDischarge:
+	case attack.SpellElectricDischarge:
 		return asset.SpellDesca
-	case spell.Resurrect:
+	case attack.SpellResurrect:
 		return asset.SpellResurrect
-	case spell.HealWounds:
+	case attack.SpellHealWounds:
 		return asset.SpellHealWounds
 	}
 	return 0
+}
+
+var itemAssetConfig = map[item.Item]SpriteConfig{
+	item.WeaponWindSword: {
+		Width:  28,
+		Height: 48,
+		DirectionLength: map[direction.D]int{
+			direction.Front: 6,
+			direction.Back:  6,
+			direction.Left:  5,
+			direction.Right: 5,
+		},
+		RealDirMap: map[direction.D]direction.D{
+			direction.Front: direction.Right,
+			direction.Back:  direction.Right,
+			direction.Left:  direction.Right,
+			direction.Right: direction.Right,
+		},
+	},
+	item.WeaponMightySword: {
+		Width:  28,
+		Height: 48,
+		DirectionLength: map[direction.D]int{
+			direction.Front: 6,
+			direction.Back:  6,
+			direction.Left:  5,
+			direction.Right: 5,
+		},
+		RealDirMap: map[direction.D]direction.D{
+			direction.Front: direction.Right,
+			direction.Back:  direction.Right,
+			direction.Left:  direction.Right,
+			direction.Right: direction.Right,
+		},
+	},
+	item.WeaponFireStaff: {
+		Width:  28,
+		Height: 48,
+		DirectionLength: map[direction.D]int{
+			direction.Front: 6,
+			direction.Back:  6,
+			direction.Left:  5,
+			direction.Right: 5,
+		},
+		RealDirMap: map[direction.D]direction.D{
+			direction.Front: direction.Right,
+			direction.Back:  direction.Right,
+			direction.Left:  direction.Right,
+			direction.Right: direction.Right,
+		},
+	},
+	item.WeaponDarkDagger: {
+		Width:  28,
+		Height: 48,
+		DirectionLength: map[direction.D]int{
+			direction.Front: 6,
+			direction.Back:  6,
+			direction.Left:  5,
+			direction.Right: 5,
+		},
+		RealDirMap: map[direction.D]direction.D{
+			direction.Front: direction.Right,
+			direction.Back:  direction.Right,
+			direction.Left:  direction.Right,
+			direction.Right: direction.Right,
+		},
+	},
+	item.ArmorDark: {
+		Width:  26,
+		Height: 46,
+		DirectionLength: map[direction.D]int{
+			direction.Front: 6,
+			direction.Back:  6,
+			direction.Left:  5,
+			direction.Right: 5,
+		},
+		RealDirMap: map[direction.D]direction.D{
+			direction.Front: direction.Right,
+			direction.Back:  direction.Right,
+			direction.Left:  direction.Right,
+			direction.Right: direction.Right,
+		},
+	},
+	item.ArmorShadow: {
+		Width:  28,
+		Height: 48,
+		DirectionLength: map[direction.D]int{
+			direction.Front: 6,
+			direction.Back:  6,
+			direction.Left:  5,
+			direction.Right: 5,
+		},
+		RealDirMap: map[direction.D]direction.D{
+			direction.Front: direction.Right,
+			direction.Back:  direction.Right,
+			direction.Left:  direction.Right,
+			direction.Right: direction.Right,
+		},
+	},
+	item.ShieldArcane: {
+		Width:  28,
+		Height: 46,
+		DirectionLength: map[direction.D]int{
+			direction.Front: 6,
+			direction.Back:  6,
+			direction.Left:  5,
+			direction.Right: 5,
+		},
+		RealDirMap: map[direction.D]direction.D{
+			direction.Front: direction.Right,
+			direction.Back:  direction.Right,
+			direction.Left:  direction.Right,
+			direction.Right: direction.Right,
+		},
+	},
+	item.ShieldTower: {
+		Width:  28,
+		Height: 46,
+		DirectionLength: map[direction.D]int{
+			direction.Front: 6,
+			direction.Back:  6,
+			direction.Left:  5,
+			direction.Right: 5,
+		},
+		RealDirMap: map[direction.D]direction.D{
+			direction.Front: direction.Right,
+			direction.Back:  direction.Right,
+			direction.Left:  direction.Right,
+			direction.Right: direction.Right,
+		},
+	},
+	item.HatMage: {
+		Width:  26,
+		Height: 32,
+		RealDirMap: map[direction.D]direction.D{
+			direction.Front: direction.Right,
+			direction.Back:  direction.Right,
+			direction.Left:  direction.Right,
+			direction.Right: direction.Right,
+		},
+	},
+	item.HelmetPaladin: {
+		Width:  26,
+		Height: 32,
+		RealDirMap: map[direction.D]direction.D{
+			direction.Front: direction.Right,
+			direction.Back:  direction.Right,
+			direction.Left:  direction.Right,
+			direction.Right: direction.Right,
+		},
+	},
+}
+
+type ItemData struct {
+	SD        SpriteConfig
+	Animation *ebiten.Image
+	Icon      *ebiten.Image
+}
+
+var itemAssetLoaded = map[item.Item]*ItemData{
+	item.None: {Animation: ebiten.NewImage(1, 1), Icon: ebiten.NewImage(1, 1)},
+}
+
+func init() {
+	for i := range item.ItemLen {
+		if i == item.None {
+			continue
+		}
+		itemAssetLoaded[i] = &ItemData{
+			Animation: DecodeItem(i, false),
+			Icon:      DecodeItem(i, true),
+		}
+	}
+
+}
+func DecodeItem(i item.Item, icon bool) *ebiten.Image {
+	if i == item.None {
+		return nil
+	}
+	log.Printf("decoding item %v icon:%v", i.String(), icon)
+	img, _, err := image.Decode(bytes.NewReader(item.GetAsset(i, icon)))
+	if err != nil {
+		log.Fatal(err)
+	}
+	return ebiten.NewImageFromImage(img)
+}
+func LoadItemIcon(a item.Item) *ebiten.Image {
+	if a == item.None {
+		return nil
+	}
+	return itemAssetLoaded[a].Icon
+}
+
+// for wearable items weapon, shield armor
+func LoadItemAninmatio(a item.Item) A {
+	if a == item.None {
+		return nil
+	}
+	return NewBodyAnimation(itemAssetLoaded[a].Animation, itemAssetConfig[a])
+}
+
+// for head items, doesnt animate, just direction change
+func LoadItemHead(a item.Item) A {
+	if a == item.None {
+		return nil
+	}
+	return NewHeadStill(itemAssetLoaded[a].Animation, itemAssetConfig[a])
 }

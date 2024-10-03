@@ -4,16 +4,21 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"log"
+	"strings"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/rywk/minigoao/pkg/client/game/assets/img"
+	"github.com/rywk/minigoao/pkg/client/game/assets/img/itemimg"
+	"github.com/rywk/minigoao/pkg/client/game/assets/img/spellimg"
 	"github.com/rywk/minigoao/pkg/client/game/text"
 	"github.com/rywk/minigoao/pkg/client/game/texture"
+	"github.com/rywk/minigoao/pkg/constants/attack"
 	"github.com/rywk/minigoao/pkg/constants/direction"
-	"github.com/rywk/minigoao/pkg/constants/spell"
+	"github.com/rywk/minigoao/pkg/constants/item"
 	"github.com/rywk/minigoao/pkg/msgs"
 	"github.com/rywk/minigoao/pkg/typ"
 )
@@ -64,28 +69,31 @@ func (b *Checkbox) Update() {
 }
 
 type Button struct {
-	g       *Game
-	Pos     typ.P
-	W, H    int32
-	Img     *ebiten.Image
-	Icon    *ebiten.Image
-	Over    bool
-	pressed bool
+	g        *Game
+	Pos      typ.P
+	W, H     int32
+	Img      *ebiten.Image
+	Icon     *ebiten.Image
+	Over     bool
+	pressed  bool
+	pressed2 bool
 }
 
-func NewButton(g *Game, i *ebiten.Image) *Button {
+func NewButton(g *Game, icon *ebiten.Image, bg *ebiten.Image, pos typ.P) *Button {
 	return &Button{
 		g:    g,
-		W:    int32(i.Bounds().Dx()),
-		H:    int32(i.Bounds().Dy()),
-		Img:  i,
-		Icon: texture.Decode(img.ConfigIcon_png),
+		Pos:  pos,
+		W:    int32(bg.Bounds().Dx()),
+		H:    int32(bg.Bounds().Dy()),
+		Img:  bg,
+		Icon: icon,
 	}
 }
+
 func (b *Button) Draw(screen *ebiten.Image, x, y int) {
-	b.Pos = typ.P{X: int32(x), Y: int32(y)}
+
 	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(float64(b.Pos.X), float64(b.Pos.Y))
+	op.GeoM.Translate(float64(x), float64(y))
 	if b.Over {
 		op.ColorScale.ScaleAlpha(.6)
 	}
@@ -100,12 +108,20 @@ func (b *Button) Pressed() bool {
 	if cx > int(b.Pos.X) && cx < int(b.Pos.X+b.W) && cy > int(b.Pos.Y) && cy < int(b.Pos.Y+b.H) {
 		b.Over = true
 		if ebiten.IsMouseButtonPressed(ebiten.MouseButton0) {
-			if !b.pressed {
-				v = true
-			}
 			b.pressed = true
 		} else {
+			if b.pressed {
+				v = true
+			}
 			b.pressed = false
+		}
+		if ebiten.IsMouseButtonPressed(ebiten.MouseButton2) {
+			b.pressed2 = true
+		} else {
+			if b.pressed2 {
+				v = true
+			}
+			b.pressed2 = false
 		}
 	} else {
 		b.Over = false
@@ -201,6 +217,406 @@ func (b *Slider) Update() {
 	}
 }
 
+type SkillInput struct {
+	g          *Game
+	Less, More *Button
+	Value      *uint16
+}
+
+func NewSkillInput(g *Game, value *uint16, pos typ.P) *SkillInput {
+	subIcon := texture.Decode(img.IconSubstract_png)
+	plusIcon := texture.Decode(img.IconPlus_png)
+	btnImg := ebiten.NewImage(24, 24)
+	btnImg.Fill(color.RGBA{101, 32, 133, 0})
+	return &SkillInput{
+		g:     g,
+		Value: value,
+		Less:  NewButton(g, subIcon, btnImg, pos.Add(-40, 0)),
+		More:  NewButton(g, plusIcon, btnImg, pos.Add(30, 0)),
+	}
+}
+
+func (ni *SkillInput) Update() {
+	if *ni.Value > 0 && ni.Less.Pressed() {
+		*ni.Value--
+		ni.g.stats.skills.FreePoints++
+	}
+	if ni.g.stats.skills.FreePoints > 0 && ni.More.Pressed() {
+		*ni.Value++
+		ni.g.stats.skills.FreePoints--
+	}
+}
+
+func (ni *SkillInput) Draw(screen *ebiten.Image, x int, y int) {
+	ni.Less.Draw(screen, x-40, y)
+	text.PrintBigAt(screen, fmt.Sprintf("%d", *ni.Value), x, y)
+	ni.More.Draw(screen, x+30, y)
+}
+
+type Inventory struct {
+	g               *Game
+	drawOp          *ebiten.DrawImageOptions
+	ItemSize        int32
+	slotBtns        [8][2]*Button
+	lockButton      *Button
+	unlockButton    *Button
+	locked          bool
+	itemEquippedImg *ebiten.Image
+	items           map[item.Item]*ebiten.Image
+}
+
+func NewInventory(g *Game) *Inventory {
+	btnImg := ebiten.NewImage(32, 32)
+	btnBgImg := ebiten.NewImage(32, 32)
+	btnBgImg.Fill(color.RGBA{79, 90, 105, 200})
+	lockBtnBgImg := ebiten.NewImage(24, 24)
+	lockBtnBgImg.Fill(color.RGBA{60, 60, 60, 200})
+	lockedImg := texture.Decode(img.IconLockLocked_png)
+	unlockedImg := texture.Decode(img.IconLockOpen_png)
+	inv := &Inventory{
+		g:               g,
+		drawOp:          &ebiten.DrawImageOptions{},
+		locked:          true,
+		ItemSize:        32,
+		lockButton:      NewButton(g, lockedImg, lockBtnBgImg, typ.P{X: 312, Y: ScreenHeight - 44}),
+		unlockButton:    NewButton(g, unlockedImg, lockBtnBgImg, typ.P{X: 312, Y: ScreenHeight - 44}),
+		items:           map[item.Item]*ebiten.Image{},
+		itemEquippedImg: texture.Decode(img.EquippedItem_png),
+	}
+
+	for i := range item.ItemLen {
+		inv.items[i] = texture.DecodeItem(item.Item(i), true)
+	}
+	for i := range inv.slotBtns {
+		inv.slotBtns[i][0] = NewButton(g, btnImg, btnBgImg, typ.P{X: 344 + int32(i)*inv.ItemSize, Y: ScreenHeight - 64})
+		inv.slotBtns[i][1] = NewButton(g, btnImg, btnBgImg, typ.P{X: 344 + int32(i)*inv.ItemSize, Y: ScreenHeight - 32})
+	}
+	return inv
+}
+
+func (inv *Inventory) Update() {
+	lock, unlock := inv.lockButton.Pressed(), inv.unlockButton.Pressed()
+	if inv.locked {
+		if lock {
+			inv.locked = false
+		}
+	} else {
+		if unlock {
+			inv.locked = true
+		}
+	}
+	for i := range inv.slotBtns {
+		if inv.slotBtns[i][0].Pressed() {
+			it := inv.g.player.Inv.Slots[i][0]
+			if it.Item != item.None {
+				if it.Item == item.HealthPotion || it.Item == item.ManaPotion {
+					if time.Since(inv.g.stats.lastHudPotion) > inv.g.stats.hudPotionCooldown {
+						inv.g.stats.lastHudPotion = time.Now()
+						inv.g.outQueue <- &GameMsg{E: msgs.EUseItem, Data: &msgs.EventUseItem{byte(i), 0}}
+					}
+				} else {
+					inv.g.outQueue <- &GameMsg{E: msgs.EUseItem, Data: &msgs.EventUseItem{byte(i), 0}}
+				}
+			}
+		}
+		if inv.slotBtns[i][0].Over {
+			up := inv.g.player.Inv.Slots[i][0]
+
+			if w, ok := inv.g.player.Exp.Items[up.Item]; ok {
+				switch up.Item.Type() {
+				case item.TypeConsumable:
+					if up.Item == item.HealthPotion {
+						inv.g.stats.ChangeSetTooltip(fmt.Sprintf("%v\nHeals +30 HP", up.Item.Name()))
+					} else {
+						inv.g.stats.ChangeSetTooltip(fmt.Sprintf("%v\nRestores %%5 of max MP", up.Item.Name()))
+
+					}
+				case item.TypeWeapon:
+					inv.g.stats.ChangeSetTooltip(fmt.Sprintf("%v\n%v\nDamage: %d\nCrit Range: %d",
+						up.Item.Name(),
+						w.WeaponData.Cooldown,
+						w.WeaponData.Damage,
+						w.WeaponData.CriticRange,
+					))
+				case item.TypeArmor:
+					inv.g.stats.ChangeSetTooltip(fmt.Sprintf("%v\nPhysical Def: %d\nMagic Def: %d",
+						up.Item.Name(),
+						w.ArmorData.PhysicalDef,
+						w.ArmorData.MagicDef,
+					))
+				case item.TypeHelmet:
+					inv.g.stats.ChangeSetTooltip(fmt.Sprintf("%v\nPhysical Def: %d\nMagic Def: %d",
+						up.Item.Name(),
+						w.HelmetData.PhysicalDef,
+						w.HelmetData.MagicDef,
+					))
+				case item.TypeShield:
+					inv.g.stats.ChangeSetTooltip(fmt.Sprintf("%v\nPhysical Def: %d\nMagic Def: %d",
+						up.Item.Name(),
+						w.ShieldData.PhysicalDef,
+						w.ShieldData.MagicDef,
+					))
+				}
+
+			}
+		}
+		if inv.slotBtns[i][1].Pressed() {
+			it := inv.g.player.Inv.Slots[i][1]
+			if it.Item != item.None {
+				if it.Item == item.HealthPotion || it.Item == item.ManaPotion {
+					if time.Since(inv.g.stats.lastHudPotion) > inv.g.stats.hudPotionCooldown {
+						inv.g.stats.lastHudPotion = time.Now()
+						inv.g.outQueue <- &GameMsg{E: msgs.EUseItem, Data: &msgs.EventUseItem{byte(i), 1}}
+					}
+				} else {
+					inv.g.outQueue <- &GameMsg{E: msgs.EUseItem, Data: &msgs.EventUseItem{byte(i), 1}}
+				}
+			}
+		}
+		if inv.slotBtns[i][1].Over {
+			down := inv.g.player.Inv.Slots[i][1]
+
+			if w, ok := inv.g.player.Exp.Items[down.Item]; ok {
+				switch down.Item.Type() {
+				case item.TypeConsumable:
+					if down.Item == item.HealthPotion {
+						inv.g.stats.ChangeSetTooltip(fmt.Sprintf("%v\nHeals +30 HP", down.Item.Name()))
+					} else {
+						inv.g.stats.ChangeSetTooltip(fmt.Sprintf("%v\nRestores %%5 of max MP", down.Item.Name()))
+
+					}
+				case item.TypeWeapon:
+					inv.g.stats.ChangeSetTooltip(fmt.Sprintf("%v\n%v\nDamage: %d\nCrit Range: %d",
+						down.Item.Name(),
+						w.WeaponData.Cooldown,
+						w.WeaponData.Damage,
+						w.WeaponData.CriticRange,
+					))
+				case item.TypeArmor:
+					inv.g.stats.ChangeSetTooltip(fmt.Sprintf("%v\nPhysical Def: %d\nMagic Def: %d",
+						down.Item.Name(),
+						w.ArmorData.PhysicalDef,
+						w.ArmorData.MagicDef,
+					))
+				case item.TypeHelmet:
+					inv.g.stats.ChangeSetTooltip(fmt.Sprintf("%v\nPhysical Def: %d\nMagic Def: %d",
+						down.Item.Name(),
+						w.HelmetData.PhysicalDef,
+						w.HelmetData.MagicDef,
+					))
+				case item.TypeShield:
+					inv.g.stats.ChangeSetTooltip(fmt.Sprintf("%v\nPhysical Def: %d\nMagic Def: %d",
+						down.Item.Name(),
+						w.ShieldData.PhysicalDef,
+						w.ShieldData.MagicDef,
+					))
+				}
+
+			}
+		}
+	}
+}
+
+func (inv *Inventory) Draw(screen *ebiten.Image) {
+	if inv.locked {
+		inv.lockButton.Draw(screen, 312, ScreenHeight-44)
+	} else {
+		inv.unlockButton.Draw(screen, 312, ScreenHeight-44)
+	}
+	for i := range inv.slotBtns {
+		inv.slotBtns[i][0].Draw(screen, int(344+int32(i)*inv.ItemSize), ScreenHeight-64)
+		inv.slotBtns[i][1].Draw(screen, int(344+int32(i)*inv.ItemSize), ScreenHeight-32)
+	}
+	equipped := map[msgs.InventoryPos]struct{}{}
+	if inv.g.player.Inv.EquippedBody.X != 255 {
+		equipped[inv.g.player.Inv.EquippedBody] = struct{}{}
+	}
+	if inv.g.player.Inv.EquippedHead.X != 255 {
+		equipped[inv.g.player.Inv.EquippedHead] = struct{}{}
+	}
+	if inv.g.player.Inv.EquippedShield.X != 255 {
+		equipped[inv.g.player.Inv.EquippedShield] = struct{}{}
+	}
+	if inv.g.player.Inv.EquippedWeapon.X != 255 {
+		equipped[inv.g.player.Inv.EquippedWeapon] = struct{}{}
+	}
+	op := &ebiten.DrawImageOptions{}
+	for i := range inv.g.player.Inv.Slots {
+		op.GeoM.Reset()
+		op.GeoM.Translate(float64(344+int32(i)*inv.ItemSize), ScreenHeight-64)
+		up := inv.g.player.Inv.Slots[i][0]
+		if up.Item != item.None {
+			if _, ok := equipped[msgs.InventoryPos{uint8(i), 0}]; ok {
+				screen.DrawImage(inv.itemEquippedImg, op)
+			}
+			screen.DrawImage(inv.items[up.Item], op)
+			text.PrintAt(screen, fmt.Sprintf("%d", up.Count), int(344+int32(i)*inv.ItemSize), ScreenHeight-64)
+		}
+
+		down := inv.g.player.Inv.Slots[i][1]
+		if down.Item != item.None {
+			op.GeoM.Translate(0, 32)
+			if _, ok := equipped[msgs.InventoryPos{uint8(i), 1}]; ok {
+				screen.DrawImage(inv.itemEquippedImg, op)
+			}
+			screen.DrawImage(inv.items[down.Item], op)
+			text.PrintAt(screen, fmt.Sprintf("%d", down.Count), int(344+int32(i)*inv.ItemSize), ScreenHeight-32)
+		}
+
+	}
+
+}
+
+type Skills struct {
+	g          *Game
+	drawOp     *ebiten.DrawImageOptions
+	W, H       int32
+	Background *ebiten.Image
+
+	updatedSkills msgs.Skills
+	saveButton    *Button
+	zeroButton    *Button
+
+	FreePoints int
+
+	Agility            *SkillInput
+	Intelligence       *SkillInput
+	Vitality           *SkillInput
+	FireAffinity       *SkillInput
+	ElectricAffinity   *SkillInput
+	ClericAffinity     *SkillInput
+	AssasinAffinity    *SkillInput
+	WarriorAffinity    *SkillInput
+	MartialArtAffinity *SkillInput
+}
+
+func NewSkills(g *Game) *Skills {
+	bg := ebiten.NewImage(600, 340)
+	xoff := int32(60)
+	height := int32(90)
+	yoff := int32(60)
+
+	btnImg := ebiten.NewImage(32, 32)
+	btnImg.Fill(color.RGBA{101, 32, 133, 0})
+	windowStart := typ.P{X: 340, Y: ScreenHeight - 404}
+	s := &Skills{
+		drawOp:        &ebiten.DrawImageOptions{},
+		g:             g,
+		W:             int32(bg.Bounds().Dx()),
+		H:             int32(bg.Bounds().Dy()),
+		saveButton:    NewButton(g, texture.Decode(img.IconDisk_png), btnImg, windowStart.Add(400, 10)),
+		zeroButton:    NewButton(g, texture.Decode(img.IconX_png), btnImg, windowStart.Add(442, 10)),
+		Background:    bg,
+		FreePoints:    int(g.player.Exp.Skills.FreePoints),
+		updatedSkills: g.player.Exp.Skills,
+	}
+	s.Agility = NewSkillInput(g, &s.updatedSkills.Agility, windowStart.Add(xoff+10, yoff+yoff/2))
+	s.Intelligence = NewSkillInput(g, &s.updatedSkills.Intelligence, windowStart.Add(xoff+10, yoff+height+yoff/2))
+	s.Vitality = NewSkillInput(g, &s.updatedSkills.Vitality, windowStart.Add(xoff+10, yoff+height*2+yoff/2))
+
+	s.FireAffinity = NewSkillInput(g, &s.updatedSkills.FireAffinity, windowStart.Add(xoff*4+35, yoff+yoff+yoff/2))
+	s.ElectricAffinity = NewSkillInput(g, &s.updatedSkills.ElectricAffinity, windowStart.Add(xoff*6+40, yoff+yoff+yoff/2))
+	s.ClericAffinity = NewSkillInput(g, &s.updatedSkills.ClericAffinity, windowStart.Add(xoff*8+40, yoff+yoff+yoff/2))
+
+	s.AssasinAffinity = NewSkillInput(g, &s.updatedSkills.AssasinAffinity, windowStart.Add(xoff*4+35, yoff+yoff*2+yoff+yoff/2))
+	s.WarriorAffinity = NewSkillInput(g, &s.updatedSkills.WarriorAffinity, windowStart.Add(xoff*6+40, yoff+yoff*2+yoff+yoff/2))
+	s.MartialArtAffinity = NewSkillInput(g, &s.updatedSkills.MartialArtAffinity, windowStart.Add(xoff*8+40, yoff+yoff*2+yoff+yoff/2))
+	return s
+}
+
+func (b *Skills) Update() {
+	if b.saveButton.Pressed() {
+		//b.g.player.Exp.Skills = *b.updatedSkills
+		b.g.outQueue <- &GameMsg{E: msgs.EUpdateSkills, Data: &b.updatedSkills}
+		b.g.stats.skillsOpen = false
+	}
+	if b.zeroButton.Pressed() {
+		total := 0
+		total += int(b.updatedSkills.Agility) - int(b.g.player.Exp.ItemSkills.Agility)
+		b.updatedSkills.Agility = 0 + b.g.player.Exp.ItemSkills.Agility
+
+		total += int(b.updatedSkills.Intelligence) - int(b.g.player.Exp.ItemSkills.Intelligence)
+		b.updatedSkills.Intelligence = 0 + b.g.player.Exp.ItemSkills.Intelligence
+
+		total += int(b.updatedSkills.Vitality) - int(b.g.player.Exp.ItemSkills.Vitality)
+		b.updatedSkills.Vitality = 0 + b.g.player.Exp.ItemSkills.Vitality
+
+		total += int(b.updatedSkills.FireAffinity) - int(b.g.player.Exp.ItemSkills.FireAffinity)
+		b.updatedSkills.FireAffinity = 0 + b.g.player.Exp.ItemSkills.FireAffinity
+
+		total += int(b.updatedSkills.ElectricAffinity) - int(b.g.player.Exp.ItemSkills.ElectricAffinity)
+		b.updatedSkills.ElectricAffinity = 0 + b.g.player.Exp.ItemSkills.ElectricAffinity
+
+		total += int(b.updatedSkills.ClericAffinity) - int(b.g.player.Exp.ItemSkills.ClericAffinity)
+		b.updatedSkills.ClericAffinity = 0 + b.g.player.Exp.ItemSkills.ClericAffinity
+
+		total += int(b.updatedSkills.AssasinAffinity) - int(b.g.player.Exp.ItemSkills.AssasinAffinity)
+		b.updatedSkills.AssasinAffinity = 0 + b.g.player.Exp.ItemSkills.AssasinAffinity
+
+		total += int(b.updatedSkills.WarriorAffinity) - int(b.g.player.Exp.ItemSkills.WarriorAffinity)
+		b.updatedSkills.WarriorAffinity = 0 + b.g.player.Exp.ItemSkills.WarriorAffinity
+
+		total += int(b.updatedSkills.MartialArtAffinity) - int(b.g.player.Exp.ItemSkills.MartialArtAffinity)
+		b.updatedSkills.MartialArtAffinity = 0 + b.g.player.Exp.ItemSkills.MartialArtAffinity
+		if total > 0 {
+			b.FreePoints = int(b.g.player.Exp.Skills.FreePoints) + total
+		} else {
+			//b.FreePoints = int(b.g.player.Exp.Skills.FreePoints)
+			log.Print("asd")
+		}
+	}
+	b.Agility.Update()
+	b.Intelligence.Update()
+	b.Vitality.Update()
+
+	b.FireAffinity.Update()
+	b.ElectricAffinity.Update()
+	b.ClericAffinity.Update()
+
+	b.AssasinAffinity.Update()
+	b.WarriorAffinity.Update()
+	b.MartialArtAffinity.Update()
+}
+func (b *Skills) Draw(screen *ebiten.Image) {
+	b.Background.Fill(color.RGBA{0, 0, 0, 170})
+	b.saveButton.Draw(b.Background, 400, 10)
+	b.zeroButton.Draw(b.Background, 442, 10)
+
+	text.PrintBigAt(b.Background, "Free points", 200, 0)
+	text.PrintBigAt(b.Background, fmt.Sprintf("%d", b.FreePoints), 240, 28)
+
+	xoff := 60
+	height := 90
+	yoff := 60
+	text.PrintBigAt(b.Background, "Agility", xoff-20, yoff)
+	b.Agility.Draw(b.Background, xoff+10, yoff+yoff/2)
+	text.PrintBigAt(b.Background, "Intelligence", xoff-44, yoff+height)
+	b.Intelligence.Draw(b.Background, xoff+10, yoff+height+yoff/2)
+	text.PrintBigAt(b.Background, "Vitality", xoff-20, yoff+height*2)
+	b.Vitality.Draw(b.Background, xoff+10, yoff+height*2+yoff/2)
+
+	text.PrintBigAt(b.Background, "Magic", xoff*3+xoff/6, yoff+yoff/2)
+	//offY := 50
+	text.PrintBigAt(b.Background, "Fire", xoff*4+20, yoff+yoff)
+	b.FireAffinity.Draw(b.Background, xoff*4+35, yoff+yoff+yoff/2)
+	text.PrintBigAt(b.Background, "Electric", xoff*6, yoff+yoff)
+	b.ElectricAffinity.Draw(b.Background, xoff*6+40, yoff+yoff+yoff/2)
+	text.PrintBigAt(b.Background, "Cleric", xoff*8+10, yoff+yoff)
+	b.ClericAffinity.Draw(b.Background, xoff*8+40, yoff+yoff+yoff/2)
+
+	text.PrintBigAt(b.Background, "Melee", xoff*3+xoff/6, yoff+yoff*2+yoff/2)
+	text.PrintBigAt(b.Background, "Assasin", xoff*4, yoff+yoff*2+yoff)
+	b.AssasinAffinity.Draw(b.Background, xoff*4+35, yoff+yoff*2+yoff+yoff/2)
+	text.PrintBigAt(b.Background, "Warrior", xoff*6, yoff+yoff*2+yoff)
+	b.WarriorAffinity.Draw(b.Background, xoff*6+40, yoff+yoff*2+yoff+yoff/2)
+	text.PrintBigAt(b.Background, "MartialArt", xoff*8, yoff+yoff*2+yoff)
+	b.MartialArtAffinity.Draw(b.Background, xoff*8+40, yoff+yoff*2+yoff+yoff/2)
+
+	b.drawOp.GeoM.Reset()
+	b.drawOp.GeoM.Translate(340, ScreenHeight-404)
+	screen.DrawImage(b.Background, b.drawOp)
+}
+
 type Options struct {
 	g          *Game
 	drawOp     *ebiten.DrawImageOptions
@@ -238,7 +654,7 @@ func NewOptions(g *Game) *Options {
 	}.NewKeyBinder(EmptyInput())
 	s.keyBinders = append(s.keyBinders, meleeKeyBinder)
 
-	resuKeyBinder := NKeyBinderOpt[*Input, spell.Spell, bool]{
+	resuKeyBinder := NKeyBinderOpt[*Input, attack.Spell, bool]{
 		g:          g,
 		Rect:       image.Rect(keyBindXStart, start+height, keyBindXStart+keyBindWidth, start+height*2),
 		Active:     g.keys.cfg.PickResurrect,
@@ -247,7 +663,7 @@ func NewOptions(g *Game) *Options {
 	}.NewKeyBinder(EmptyInput())
 	s.keyBinders = append(s.keyBinders, resuKeyBinder)
 
-	healKeyBinder := NKeyBinderOpt[*Input, spell.Spell, bool]{
+	healKeyBinder := NKeyBinderOpt[*Input, attack.Spell, bool]{
 		g:          g,
 		Rect:       image.Rect(keyBindXStart, start+height*2, keyBindXStart+keyBindWidth, start+height*3),
 		Active:     g.keys.cfg.PickHealWounds,
@@ -256,7 +672,7 @@ func NewOptions(g *Game) *Options {
 	}.NewKeyBinder(EmptyInput())
 	s.keyBinders = append(s.keyBinders, healKeyBinder)
 
-	remoKeyBinder := NKeyBinderOpt[*Input, spell.Spell, bool]{
+	remoKeyBinder := NKeyBinderOpt[*Input, attack.Spell, bool]{
 		g:          g,
 		Rect:       image.Rect(keyBindXStart, start+height*3, keyBindXStart+keyBindWidth, start+height*4),
 		Active:     g.keys.cfg.PickParalizeRm,
@@ -265,7 +681,7 @@ func NewOptions(g *Game) *Options {
 	}.NewKeyBinder(EmptyInput())
 	s.keyBinders = append(s.keyBinders, remoKeyBinder)
 
-	paraKeyBinder := NKeyBinderOpt[*Input, spell.Spell, bool]{
+	paraKeyBinder := NKeyBinderOpt[*Input, attack.Spell, bool]{
 		g:          g,
 		Rect:       image.Rect(keyBindXStart, start+height*4, keyBindXStart+keyBindWidth, start+height*5),
 		Active:     g.keys.cfg.PickParalize,
@@ -274,7 +690,7 @@ func NewOptions(g *Game) *Options {
 	}.NewKeyBinder(EmptyInput())
 	s.keyBinders = append(s.keyBinders, paraKeyBinder)
 
-	descaKeyBinder := NKeyBinderOpt[*Input, spell.Spell, bool]{
+	descaKeyBinder := NKeyBinderOpt[*Input, attack.Spell, bool]{
 		g:          g,
 		Rect:       image.Rect(keyBindXStart, start+height*5, keyBindXStart+keyBindWidth, start+height*6),
 		Active:     g.keys.cfg.PickElectricDischarge,
@@ -283,7 +699,7 @@ func NewOptions(g *Game) *Options {
 	}.NewKeyBinder(EmptyInput())
 	s.keyBinders = append(s.keyBinders, descaKeyBinder)
 
-	apocaKeyBinder := NKeyBinderOpt[*Input, spell.Spell, bool]{
+	apocaKeyBinder := NKeyBinderOpt[*Input, attack.Spell, bool]{
 		g:          g,
 		Rect:       image.Rect(keyBindXStart, start+height*6, keyBindXStart+keyBindWidth, start+height*7),
 		Active:     g.keys.cfg.PickExplode,
@@ -328,7 +744,7 @@ func NewOptions(g *Game) *Options {
 	}.NewKeyBinder(EmptyInput())
 	s.keyBinders = append(s.keyBinders, rightKeyBinder)
 
-	redsKeyBinder := NKeyBinderOpt[*Input, msgs.Item, bool]{
+	redsKeyBinder := NKeyBinderOpt[*Input, item.Item, bool]{
 		g:          g,
 		Rect:       image.Rect(keyBindXStart, start+height*11, keyBindXStart+keyBindWidth, start+height*12),
 		Active:     g.keys.cfg.PotionHP,
@@ -337,7 +753,7 @@ func NewOptions(g *Game) *Options {
 	}.NewKeyBinder(EmptyInput())
 	s.keyBinders = append(s.keyBinders, redsKeyBinder)
 
-	bluesKeyBinder := NKeyBinderOpt[*Input, msgs.Item, bool]{
+	bluesKeyBinder := NKeyBinderOpt[*Input, item.Item, bool]{
 		g:          g,
 		Rect:       image.Rect(keyBindXStart, start+height*12, keyBindXStart+keyBindWidth, start+height*13),
 		Active:     g.keys.cfg.PotionMP,
@@ -357,10 +773,7 @@ func (b *Options) Update() {
 
 }
 func (b *Options) Draw(screen *ebiten.Image) {
-	b.drawOp.GeoM.Reset()
-	b.drawOp.GeoM.Translate(ScreenWidth-300, ScreenHeight-664)
 	b.Background.Fill(color.Black)
-
 	start := 18
 	height := 38
 	text.PrintBigAt(b.Background, "Vol", 18, start-2)
@@ -383,7 +796,11 @@ func (b *Options) Draw(screen *ebiten.Image) {
 	inputX := keyX + 40
 	b.volumeSlider.Draw(b.Background, inputX+8, start)
 
+	b.drawOp.GeoM.Reset()
+	b.drawOp.GeoM.Translate(ScreenWidth-300, ScreenHeight-664)
+
 	screen.DrawImage(b.Background, b.drawOp)
+
 	for _, kb := range b.keyBinders {
 		kb.Draw(screen)
 	}
@@ -415,15 +832,39 @@ type Hud struct {
 	options       *Options
 	optionsButton *Button
 
+	skillsOpen   bool
+	skills       *Skills
+	skillsButton *Button
+
+	inventory *Inventory
+
 	keyBinders []*KeyBinder[*Input]
 
 	lastHudPotion     time.Time
 	hudPotionCooldown time.Duration
+
+	infoTooltipData string
+	infoTooltipBg   *ebiten.Image
+	infoTooltipSet  bool
+
+	meleeCooldownInfo *Cooldown
 }
 
+func (h *Hud) ChangeSetTooltip(s string) {
+	h.infoTooltipSet = true
+	h.infoTooltipData = s
+}
+
+func (h *Hud) RefreshTooltip() {
+	if !h.infoTooltipSet {
+		h.infoTooltipData = ""
+	}
+	h.infoTooltipSet = false
+}
 func NewHud(g *Game) *Hud {
 	btnImg := ebiten.NewImage(32, 32)
 	btnImg.Fill(color.RGBA{101, 32, 133, 0})
+
 	s := &Hud{
 		g:                  g,
 		lastSwitch:         time.Now(),
@@ -431,9 +872,12 @@ func NewHud(g *Game) *Hud {
 		barOffsetStart:     32,
 		barOffsetEnd:       6,
 
-		optionsOpen:   false,
-		optionsButton: NewButton(g, btnImg),
-		options:       NewOptions(g),
+		optionsOpen: false,
+
+		options: NewOptions(g),
+
+		skillsOpen: false,
+		skills:     NewSkills(g),
 
 		hpBar: texture.Decode(img.HpBar_png),
 		mpBar: texture.Decode(img.MpBar_png),
@@ -441,173 +885,157 @@ func NewHud(g *Game) *Hud {
 		hudBg: texture.Decode(img.HudBg_png),
 		//spellIconImgs:    texture.Decode(img.SpellbarIcons2_png),
 		selectedSpellImg: texture.Decode(img.SpellSelector_png),
-		bluePotionImg:    texture.Decode(img.BluePotion_png),
-		redPotionImg:     texture.Decode(img.RedPotion_png),
+		bluePotionImg:    texture.Decode(itemimg.ManaPotion_png),
+		redPotionImg:     texture.Decode(itemimg.HealthPotion_png),
 
 		manaPotionSignalImg:   ebiten.NewImage(32, 32),
 		healthPotionSignalImg: ebiten.NewImage(32, 32),
 		potionAlpha:           0,
 
+		inventory: NewInventory(g),
+
 		lastHudPotion:     time.Now(),
 		hudPotionCooldown: time.Millisecond * 250,
+
+		infoTooltipData: "",
+		infoTooltipBg:   ebiten.NewImage(210, 160),
 	}
+	s.infoTooltipBg.Fill(color.RGBA{43, 33, 74, 255})
 	s.x = 0
 	s.y = float64(ScreenHeight - s.hudBg.Bounds().Dy())
+	s.optionsButton = NewButton(g, texture.Decode(img.ConfigIcon_png), btnImg, typ.P{X: ScreenWidth - 64, Y: int32(s.y) + 16})
+	s.skillsButton = NewButton(g, texture.Decode(img.Icon_png), btnImg, typ.P{X: ScreenWidth - 128, Y: int32(s.y) + 16})
 
 	cooldownBarImg := texture.Decode(img.CooldownBase_png)
+	s.meleeCooldownInfo = &Cooldown{
+		g:          g,
+		BaseImg:    cooldownBarImg,
+		Weapon:     item.None,
+		Last:       &g.keys.LastMelee,
+		GlobalLast: &g.keys.LastAction,
+	}
 
-	redPotionKeyBinder := KeyBinderOpt[*Input, msgs.Item, bool]{
-		Desc:       "+30 Health",
-		Rect:       image.Rect(304, int(s.y), 336, ScreenHeight-32),
-		Active:     g.keys.cfg.PotionHP,
-		Item:       msgs.ItemHealthPotion,
-		actionMap:  g.keys.potionMap,
-		pressedMap: g.keys.potionPressed,
-	}.NewKeyBinder(EmptyInput())
-	s.keyBinders = append(s.keyBinders, redPotionKeyBinder)
-
-	bluePotionKeyBinder := KeyBinderOpt[*Input, msgs.Item, bool]{
-		Desc:   "+5% Mana",
-		Rect:   image.Rect(304, int(s.y+32), 336, ScreenHeight),
-		Active: g.keys.cfg.PotionMP,
-		Item:   msgs.ItemManaPotion,
-
-		actionMap:  g.keys.potionMap,
-		pressedMap: g.keys.potionPressed,
-	}.NewKeyBinder(EmptyInput())
-	s.keyBinders = append(s.keyBinders, bluePotionKeyBinder)
-
-	actionsBarStart := 450
-
+	actionsBarStart := 400
 	meleeX := actionsBarStart
-	meleeKeyBinder := KeyBinderOpt[*Input, struct{}, bool]{
-		Desc:       "Piña",
-		IconImg:    texture.Decode(img.IconMelee_png),
-		Rect:       image.Rect(meleeX, int(s.y), meleeX+SpellIconWidth, ScreenHeight),
-		Active:     g.keys.cfg.Melee,
-		Spell:      spell.None,
-		actionMap:  map[*Input]struct{}{},
-		pressedMap: map[*Input]bool{},
-		CooldownInfo: &Cooldown{
-			BaseImg:    cooldownBarImg,
-			CD:         g.keys.cfg.CooldownMelee,
-			Last:       &g.keys.LastMelee,
-			GlobalCD:   g.keys.cfg.CooldownAction,
-			GlobalLast: &g.keys.LastAction,
-		},
-	}.NewKeyBinder(EmptyInput())
-	s.keyBinders = append(s.keyBinders, meleeKeyBinder)
+	meleeX = meleeX + SpellIconWidth
+	meleeX = meleeX + SpellIconWidth
+	meleeX = meleeX + SpellIconWidth
 
-	iconX := actionsBarStart + SpellIconWidth + 10
-	resurrectSpellKeyBinder := KeyBinderOpt[*Input, spell.Spell, bool]{
+	iconX := meleeX + SpellIconWidth*2
+	resurrectSpellKeyBinder := KeyBinderOpt[*Input, attack.Spell, bool]{
 		Desc:       "Resu",
-		IconImg:    texture.Decode(img.IconResurrect_png),
+		IconImg:    texture.Decode(spellimg.IconResurrect_png),
 		Rect:       image.Rect(iconX, int(s.y), iconX+SpellIconWidth, ScreenHeight),
 		Active:     g.keys.cfg.PickResurrect,
-		Spell:      spell.Resurrect,
+		Spell:      attack.SpellResurrect,
+		Exp:        &g.player.Exp,
 		actionMap:  g.keys.spellMap,
 		pressedMap: g.keys.spellPressed,
 		CooldownInfo: &Cooldown{
+			g:          g,
+			Spell:      attack.SpellResurrect,
 			BaseImg:    cooldownBarImg,
-			CD:         g.keys.cfg.CooldownSpells[spell.Resurrect],
-			Last:       &g.keys.LastSpells[spell.Resurrect],
-			GlobalCD:   g.keys.cfg.CooldownAction,
+			Last:       &g.keys.LastSpells[attack.SpellResurrect],
 			GlobalLast: &g.keys.LastAction,
 		},
 	}.NewKeyBinder(EmptyInput())
 	s.keyBinders = append(s.keyBinders, resurrectSpellKeyBinder)
 
 	iconX += SpellIconWidth
-	healSpellKeyBinder := KeyBinderOpt[*Input, spell.Spell, bool]{
-		Desc:    "Cura",
-		IconImg: texture.Decode(img.IconHeal_png),
-
+	healSpellKeyBinder := KeyBinderOpt[*Input, attack.Spell, bool]{
+		Desc:       "Cura",
+		IconImg:    texture.Decode(spellimg.IconHeal_png),
 		Rect:       image.Rect(iconX, int(s.y), iconX+SpellIconWidth, ScreenHeight),
 		Active:     g.keys.cfg.PickHealWounds,
-		Spell:      spell.HealWounds,
+		Spell:      attack.SpellHealWounds,
+		Exp:        &g.player.Exp,
 		actionMap:  g.keys.spellMap,
 		pressedMap: g.keys.spellPressed,
 		CooldownInfo: &Cooldown{
+			g:          g,
+			Spell:      attack.SpellHealWounds,
 			BaseImg:    cooldownBarImg,
-			CD:         g.keys.cfg.CooldownSpells[spell.HealWounds],
-			Last:       &g.keys.LastSpells[spell.HealWounds],
-			GlobalCD:   g.keys.cfg.CooldownAction,
+			Last:       &g.keys.LastSpells[attack.SpellHealWounds],
 			GlobalLast: &g.keys.LastAction,
 		},
 	}.NewKeyBinder(EmptyInput())
 	s.keyBinders = append(s.keyBinders, healSpellKeyBinder)
 
 	iconX += SpellIconWidth
-	rmParalizeSpellKeyBinder := KeyBinderOpt[*Input, spell.Spell, bool]{
+	rmParalizeSpellKeyBinder := KeyBinderOpt[*Input, attack.Spell, bool]{
 		Desc:       "Remo",
-		IconImg:    texture.Decode(img.IconRmParalize_png),
+		IconImg:    texture.Decode(spellimg.IconRmParalize_png),
 		Rect:       image.Rect(iconX, int(s.y), iconX+SpellIconWidth, ScreenHeight),
 		Active:     g.keys.cfg.PickParalizeRm,
-		Spell:      spell.RemoveParalize,
+		Spell:      attack.SpellRemoveParalize,
+		Exp:        &g.player.Exp,
 		actionMap:  g.keys.spellMap,
 		pressedMap: g.keys.spellPressed,
 		CooldownInfo: &Cooldown{
+			g:          g,
+			Spell:      attack.SpellRemoveParalize,
 			BaseImg:    cooldownBarImg,
-			CD:         g.keys.cfg.CooldownSpells[spell.RemoveParalize],
-			Last:       &g.keys.LastSpells[spell.RemoveParalize],
-			GlobalCD:   g.keys.cfg.CooldownAction,
+			Last:       &g.keys.LastSpells[attack.SpellRemoveParalize],
 			GlobalLast: &g.keys.LastAction,
 		},
 	}.NewKeyBinder(EmptyInput())
 	s.keyBinders = append(s.keyBinders, rmParalizeSpellKeyBinder)
 
 	iconX += SpellIconWidth
-	paralizeSpellKeyBinder := KeyBinderOpt[*Input, spell.Spell, bool]{
+	paralizeSpellKeyBinder := KeyBinderOpt[*Input, attack.Spell, bool]{
 		Desc:       "Para",
-		IconImg:    texture.Decode(img.IconParalize_png),
+		IconImg:    texture.Decode(spellimg.IconParalize_png),
 		Rect:       image.Rect(iconX, int(s.y), iconX+SpellIconWidth, ScreenHeight),
 		Active:     g.keys.cfg.PickParalize,
-		Spell:      spell.Paralize,
+		Spell:      attack.SpellParalize,
+		Exp:        &g.player.Exp,
 		actionMap:  g.keys.spellMap,
 		pressedMap: g.keys.spellPressed,
 		CooldownInfo: &Cooldown{
+			g:          g,
+			Spell:      attack.SpellParalize,
 			BaseImg:    cooldownBarImg,
-			CD:         g.keys.cfg.CooldownSpells[spell.Paralize],
-			Last:       &g.keys.LastSpells[spell.Paralize],
-			GlobalCD:   g.keys.cfg.CooldownAction,
+			Last:       &g.keys.LastSpells[attack.SpellParalize],
 			GlobalLast: &g.keys.LastAction,
 		},
 	}.NewKeyBinder(EmptyInput())
 	s.keyBinders = append(s.keyBinders, paralizeSpellKeyBinder)
 
 	iconX += SpellIconWidth
-	electricDischargeSpellKeyBinder := KeyBinderOpt[*Input, spell.Spell, bool]{
+	electricDischargeSpellKeyBinder := KeyBinderOpt[*Input, attack.Spell, bool]{
 		Desc:       "Desca",
-		IconImg:    texture.Decode(img.IconElectricDischarge_png),
+		IconImg:    texture.Decode(spellimg.IconElectricDischarge_png),
 		Rect:       image.Rect(iconX, int(s.y), iconX+SpellIconWidth, ScreenHeight),
 		Active:     g.keys.cfg.PickElectricDischarge,
-		Spell:      spell.ElectricDischarge,
+		Spell:      attack.SpellElectricDischarge,
+		Exp:        &g.player.Exp,
 		actionMap:  g.keys.spellMap,
 		pressedMap: g.keys.spellPressed,
 		CooldownInfo: &Cooldown{
+			g:          g,
+			Spell:      attack.SpellElectricDischarge,
 			BaseImg:    cooldownBarImg,
-			CD:         g.keys.cfg.CooldownSpells[spell.ElectricDischarge],
-			Last:       &g.keys.LastSpells[spell.ElectricDischarge],
-			GlobalCD:   g.keys.cfg.CooldownAction,
+			Last:       &g.keys.LastSpells[attack.SpellElectricDischarge],
 			GlobalLast: &g.keys.LastAction,
 		},
 	}.NewKeyBinder(EmptyInput())
 	s.keyBinders = append(s.keyBinders, electricDischargeSpellKeyBinder)
 
 	iconX += SpellIconWidth
-	explodeSpellKeyBinder := KeyBinderOpt[*Input, spell.Spell, bool]{
+	explodeSpellKeyBinder := KeyBinderOpt[*Input, attack.Spell, bool]{
 		Desc:       "Apoca",
-		IconImg:    texture.Decode(img.IconExplode_png),
+		IconImg:    texture.Decode(spellimg.IconExplode_png),
 		Rect:       image.Rect(iconX, int(s.y), iconX+SpellIconWidth, ScreenHeight),
 		Active:     g.keys.cfg.PickExplode,
-		Spell:      spell.Explode,
+		Spell:      attack.SpellExplode,
+		Exp:        &g.player.Exp,
 		actionMap:  g.keys.spellMap,
 		pressedMap: g.keys.spellPressed,
 		CooldownInfo: &Cooldown{
+			g:          g,
+			Spell:      attack.SpellExplode,
 			BaseImg:    cooldownBarImg,
-			CD:         g.keys.cfg.CooldownSpells[spell.Explode],
-			Last:       &g.keys.LastSpells[spell.Explode],
-			GlobalCD:   g.keys.cfg.CooldownAction,
+			Last:       &g.keys.LastSpells[attack.SpellExplode],
 			GlobalLast: &g.keys.LastAction,
 		},
 	}.NewKeyBinder(EmptyInput())
@@ -622,7 +1050,8 @@ func NewHud(g *Game) *Hud {
 
 	return s
 }
-
+func (s *Hud) SetCooldowns() {
+}
 func RedAlpha(a uint8) color.Color {
 	return color.RGBA{168, 0, 16, a}
 }
@@ -631,22 +1060,25 @@ func BlueAlpha(a uint8) color.Color {
 }
 
 func (s *Hud) Update() {
+	s.inventory.Update()
 	for _, kb := range s.keyBinders {
 		kb.Update()
 	}
-
+	s.meleeCooldownInfo.UpdateImage()
 	if s.potionAlpha > 0 {
 		s.potionAlpha -= .04
 	}
 
-	hp := mapValue(float64(s.g.client.HP), 0, float64(s.g.client.MaxHP), float64(s.barOffsetStart), float64(s.hpBar.Bounds().Max.X-s.barOffsetEnd))
+	hp := mapValue(float64(s.g.client.HP), 0, float64(s.g.player.Exp.MaxHp), float64(s.barOffsetStart), float64(s.hpBar.Bounds().Max.X-s.barOffsetEnd))
 	s.hpBarRect = image.Rect(s.hpBar.Bounds().Min.X, s.hpBar.Bounds().Min.Y, int(hp), s.hpBar.Bounds().Max.Y)
 
-	mp := mapValue(float64(s.g.client.MP), 0, float64(s.g.client.MaxMP), float64(s.barOffsetStart), float64(s.mpBar.Bounds().Max.X-s.barOffsetEnd))
+	mp := mapValue(float64(s.g.client.MP), 0, float64(s.g.player.Exp.MaxMp), float64(s.barOffsetStart), float64(s.mpBar.Bounds().Max.X-s.barOffsetEnd))
 	s.mpBarRect = image.Rect(s.mpBar.Bounds().Min.X, s.mpBar.Bounds().Min.Y, int(mp), s.mpBar.Bounds().Max.Y)
-
 	if s.optionsButton.Pressed() {
 		s.optionsOpen = !s.optionsOpen
+		if s.skillsOpen {
+			s.skillsOpen = false
+		}
 	}
 	if s.optionsOpen {
 		s.options.Update()
@@ -655,41 +1087,83 @@ func (s *Hud) Update() {
 			s.optionsOpen = false
 		}
 	}
+
+	if s.skillsButton.Pressed() {
+		if s.skillsOpen {
+			s.skills.FreePoints = int(s.g.player.Exp.Skills.FreePoints)
+			s.skills.updatedSkills = s.g.player.Exp.Skills
+		} else {
+			s.skills.FreePoints = int(s.g.player.Exp.Skills.FreePoints)
+			s.skills.updatedSkills = s.g.player.Exp.Skills
+			//s.g.player.Exp.Skills.FreePoints = uint16(s.skills.FreePoints)
+		}
+		s.skillsOpen = !s.skillsOpen
+		if s.optionsOpen {
+			s.optionsOpen = false
+		}
+	}
+	if s.skillsOpen {
+		s.skills.Update()
+		if (s.g.mouseX < 340 || s.g.mouseY < ScreenHeight-404 || s.g.mouseX > 940) &&
+			ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
+			s.skillsOpen = false
+			s.skills.FreePoints = int(s.g.player.Exp.Skills.FreePoints)
+			s.skills.updatedSkills = s.g.player.Exp.Skills
+		}
+	}
+	s.RefreshTooltip()
 }
 
 func (s *Hud) Draw(screen *ebiten.Image) {
+
+	if s.infoTooltipData != "" {
+		y := strings.Count(s.infoTooltipData, "\n")
+		spl := strings.SplitN(s.infoTooltipData, "\n", 2)
+		y += 2
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Translate(0, float64(ScreenHeight-64-(y*18)))
+		screen.DrawImage(s.infoTooltipBg, op)
+		y--
+		text.PrintBigAt(screen, spl[0], 20, (ScreenHeight - 64 - (y * 22)))
+		y--
+		text.PrintAt(screen, spl[1], 20, (ScreenHeight - 64 - (y * 18)))
+	}
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(s.x, s.y)
 	screen.DrawImage(s.hudBg, op)
 	s.optionsButton.Draw(screen, ScreenWidth-64, int(s.y)+16)
+	s.skillsButton.Draw(screen, ScreenWidth-128, int(s.y)+16)
 	op = &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(s.x, s.y)
 	screen.DrawImage(s.hpBar.SubImage(s.hpBarRect).(*ebiten.Image), op)
 	screen.DrawImage(s.mpBar.SubImage(s.mpBarRect).(*ebiten.Image), op)
-	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("%v", s.g.client.HP), int(s.x)+250, int(s.y)+10)
-	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("%v", s.g.client.MP), int(s.x)+250, int(s.y)+38)
+	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("%v/%v", s.g.client.HP, s.g.player.Exp.MaxHp), int(s.x)+230, int(s.y)+10)
+	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("%v/%v", s.g.client.MP, s.g.player.Exp.MaxMp), int(s.x)+230, int(s.y)+38)
 	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("%v", s.g.player.X), int(s.x)+7, int(s.y)+12)
 	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("%v", s.g.player.Y), int(s.x)+7, int(s.y)+35)
+
 	s.ShowSpellPicker(screen)
-	if s.potionAlpha > 0 {
-		if s.g.lastPotionUsed == msgs.ItemManaPotion {
-			op := &ebiten.DrawImageOptions{}
-			op.GeoM.Translate(s.x+304, s.y+32)
-			op.ColorScale.ScaleAlpha(float32(s.potionAlpha))
-			screen.DrawImage(s.manaPotionSignalImg, op)
-		} else if s.g.lastPotionUsed == msgs.ItemHealthPotion {
-			op := &ebiten.DrawImageOptions{}
-			op.GeoM.Translate(s.x+304, s.y)
-			op.ColorScale.ScaleAlpha(float32(s.potionAlpha))
-			screen.DrawImage(s.healthPotionSignalImg, op)
-		}
-	}
-	op = &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(s.x+304, s.y+1)
-	screen.DrawImage(s.redPotionImg, op)
-	op = &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(s.x+304, s.y+31)
-	screen.DrawImage(s.bluePotionImg, op)
+	// if s.potionAlpha > 0 {
+	// 	if s.g.lastPotionUsed == item.ManaPotion {
+	// 		op := &ebiten.DrawImageOptions{}
+	// 		op.GeoM.Translate(s.x+304, s.y+32)
+	// 		op.ColorScale.ScaleAlpha(float32(s.potionAlpha))
+	// 		screen.DrawImage(s.manaPotionSignalImg, op)
+	// 	} else if s.g.lastPotionUsed == item.HealthPotion {
+	// 		op := &ebiten.DrawImageOptions{}
+	// 		op.GeoM.Translate(s.x+304, s.y)
+	// 		op.ColorScale.ScaleAlpha(float32(s.potionAlpha))
+	// 		screen.DrawImage(s.healthPotionSignalImg, op)
+	// 	}
+	// }
+	// op = &ebiten.DrawImageOptions{}
+	// op.GeoM.Translate(s.x+304, s.y+1)
+	// screen.DrawImage(s.redPotionImg, op)
+	// op = &ebiten.DrawImageOptions{}
+	// op.GeoM.Translate(s.x+304, s.y+31)
+	// screen.DrawImage(s.bluePotionImg, op)
+
+	text.PrintAt(screen, fmt.Sprintf("Action\n%v", s.g.player.Exp.ActionCooldown.String()), int(s.x+990), int(s.y+16))
 
 	for _, kb := range s.keyBinders {
 		kb.Draw(screen)
@@ -700,6 +1174,11 @@ func (s *Hud) Draw(screen *ebiten.Image) {
 	if s.optionsOpen {
 		s.options.Draw(screen)
 	}
+	if s.skillsOpen {
+		s.skills.Draw(screen)
+	}
+	s.inventory.Draw(screen)
+
 }
 
 const (
@@ -707,27 +1186,48 @@ const (
 )
 
 func (s *Hud) ShowSpellPicker(screen *ebiten.Image) {
-	op := &ebiten.DrawImageOptions{}
-	spellsX, spellsY := float64(510), s.y
-	op.GeoM.Translate(spellsX, spellsY)
 	opselect := &ebiten.DrawImageOptions{}
-	switch s.g.keys.spell {
-	case spell.Resurrect:
+	weaponsX, wY := float64(400), s.y
+	s.meleeCooldownInfo.Draw(screen, int(weaponsX)+SpellIconWidth*4, int(s.y))
+	w := s.g.player.Inv.GetWeapon()
+	if w != item.None {
+		opselect.GeoM.Translate(float64(weaponsX)+SpellIconWidth*4+10, float64(wY)+16)
+		screen.DrawImage(s.inventory.items[w], opselect)
+	}
+	//op.GeoM.Translate(weaponsX, weaponsY)
+	// switch s.g.player.Exp.SelectedWeapon {
+	// case item.WeaponMightySword:
+	// 	opselect.GeoM.Translate(float64(weaponsX), float64(weaponsY))
+	// 	screen.DrawImage(s.selectedSpellImg, opselect)
+	// case item.WeaponDarkDagger:
+	// 	opselect.GeoM.Translate(float64(weaponsX+SpellIconWidth), float64(weaponsY))
+	// 	screen.DrawImage(s.selectedSpellImg, opselect)
+	// case item.WeaponFireStaff:
+	// 	opselect.GeoM.Translate(float64(weaponsX+SpellIconWidth*2), float64(weaponsY))
+	// 	screen.DrawImage(s.selectedSpellImg, opselect)
+	// case item.WeaponGoldAxe:
+	// 	opselect.GeoM.Translate(float64(weaponsX+SpellIconWidth*3), float64(weaponsY))
+	// 	screen.DrawImage(s.selectedSpellImg, opselect)
+	// }
+	spellsX, spellsY := weaponsX+SpellIconWidth*5, s.y
+	opselect.GeoM.Reset()
+	switch s.g.player.Exp.SelectedSpell {
+	case attack.SpellResurrect:
 		opselect.GeoM.Translate(float64(spellsX), float64(spellsY))
 		screen.DrawImage(s.selectedSpellImg, opselect)
-	case spell.HealWounds:
+	case attack.SpellHealWounds:
 		opselect.GeoM.Translate(float64(spellsX+SpellIconWidth), float64(spellsY))
 		screen.DrawImage(s.selectedSpellImg, opselect)
-	case spell.RemoveParalize:
+	case attack.SpellRemoveParalize:
 		opselect.GeoM.Translate(float64(spellsX+SpellIconWidth*2), float64(spellsY))
 		screen.DrawImage(s.selectedSpellImg, opselect)
-	case spell.Paralize:
+	case attack.SpellParalize:
 		opselect.GeoM.Translate(float64(spellsX+SpellIconWidth*3), float64(spellsY))
 		screen.DrawImage(s.selectedSpellImg, opselect)
-	case spell.ElectricDischarge:
+	case attack.SpellElectricDischarge:
 		opselect.GeoM.Translate(float64(spellsX+SpellIconWidth*4), float64(spellsY))
 		screen.DrawImage(s.selectedSpellImg, opselect)
-	case spell.Explode:
+	case attack.SpellExplode:
 		opselect.GeoM.Translate(float64(spellsX+SpellIconWidth*5), float64(spellsY))
 		screen.DrawImage(s.selectedSpellImg, opselect)
 	}
@@ -735,6 +1235,27 @@ func (s *Hud) ShowSpellPicker(screen *ebiten.Image) {
 
 func mapValue(v, start1, stop1, start2, stop2 float64) float64 {
 	newval := (v-start1)/(stop1-start1)*(stop2-start2) + start2
+	if start2 < stop2 {
+		if newval > stop2 {
+			newval = stop2
+		} else if newval < start2 {
+			newval = start2
+		}
+	} else {
+		if newval > start2 {
+			newval = start2
+		} else if newval < stop2 {
+			newval = stop2
+		}
+	}
+	return newval
+}
+func mapIntValue(v, start1, stop1, start2, stop2 int64) int64 {
+	val := (stop1-start1)*(stop2-start2) + start2
+	if val == 0 {
+		return (v - start1)
+	}
+	newval := (v - start1) / val
 	if start2 < stop2 {
 		if newval > stop2 {
 			newval = stop2
@@ -760,8 +1281,10 @@ type KeyBinder[A KBind] struct {
 	Over         bool
 	Rect         image.Rectangle
 	Active       A
-	Spell        spell.Spell
-	Item         msgs.Item
+	Spell        attack.Spell
+	Weapon       item.Item
+	Exp          *msgs.Experience
+	Item         item.Item
 	Desc         string
 	Change       func(old, new A)
 	Open         bool
@@ -770,11 +1293,12 @@ type KeyBinder[A KBind] struct {
 }
 
 type Cooldown struct {
+	g          *Game
+	Spell      attack.Spell
+	Weapon     item.Item
 	BaseImg    *ebiten.Image
 	Img        *ebiten.Image
-	CD         time.Duration
 	Last       *time.Time
-	GlobalCD   time.Duration
 	GlobalLast *time.Time
 }
 
@@ -787,24 +1311,33 @@ func (cd *Cooldown) UpdateImage() {
 	if cd == nil {
 		return
 	}
+	var val time.Duration
+	if cd.Spell != attack.SpellNone {
+		val = cd.g.player.Exp.Spells[cd.Spell].Cooldown
+	} else if cd.Weapon != item.None {
+		val = cd.g.player.Exp.Items[cd.Weapon].WeaponData.Cooldown
+	} else if cd.Weapon == item.None {
+		val = cd.g.player.Exp.ActionCooldown
+	}
 	now := time.Now()
 	dt := now.Sub(*cd.Last)
-	v := mapValue(float64(dt), float64(cd.CD), 0, 0, iconY)
+	v := mapValue(float64(dt), float64(val), 0, 0, iconY)
 	gdt := now.Sub(*cd.GlobalLast)
-	gv := mapValue(float64(gdt), float64(cd.GlobalCD), 0, 0, iconY)
+	gv := mapValue(float64(gdt), float64(cd.g.player.Exp.ActionCooldown), 0, 0, iconY)
 
-	if gv > v {
+	if gv > (v) {
 		if gv < 1 {
 			cd.Img = nil
 			return
 		}
-		cd.Img = ebiten.NewImageFromImage(cd.BaseImg.SubImage(image.Rect(0, 0, iconX, int(gv))))
+		cd.Img = cd.BaseImg.SubImage(image.Rect(0, 0, iconX, int(gv))).(*ebiten.Image)
 	} else {
 		if v < 1 {
 			cd.Img = nil
 			return
 		}
-		cd.Img = ebiten.NewImageFromImage(cd.BaseImg.SubImage(image.Rect(0, 0, iconX, int(v))))
+		//log.Printf("%v %v", iconX, v)
+		cd.Img = cd.BaseImg.SubImage(image.Rect(0, 0, iconX, int(v))).(*ebiten.Image)
 	}
 }
 
@@ -822,8 +1355,11 @@ func (cd *Cooldown) Draw(screen *ebiten.Image, x, y int) {
 }
 
 type KeyBinderOpt[A KBind, B any, C any] struct {
-	Spell        spell.Spell
-	Item         msgs.Item
+	Spell  attack.Spell
+	Exp    *msgs.Experience
+	Weapon item.Item
+
+	Item         item.Item
 	Desc         string
 	CooldownInfo *Cooldown
 	IconImg      *ebiten.Image
@@ -836,6 +1372,8 @@ type KeyBinderOpt[A KBind, B any, C any] struct {
 func (opt KeyBinderOpt[A, B, C]) NewKeyBinder(selected A) *KeyBinder[A] {
 	kb := &KeyBinder[A]{
 		Spell:        opt.Spell,
+		Weapon:       opt.Weapon,
+		Exp:          opt.Exp,
 		Item:         opt.Item,
 		IconImg:      opt.IconImg,
 		Desc:         opt.Desc,
@@ -860,14 +1398,18 @@ func (kb *KeyBinder[A]) Mouse() {
 		if ebiten.IsMouseButtonPressed(ebiten.MouseButton0) {
 			if !kb.Clicked {
 				kb.Clicked = true
-				if kb.Spell != spell.None {
-					kb.g.keys.spell = kb.Spell
-					kb.g.keys.lastSpellKey = kb.Active.VPtr()
-				} else if kb.Item != msgs.ItemNone {
+				if kb.Spell != attack.SpellNone && kb.Spell != kb.g.player.Exp.SelectedSpell {
+					kb.g.player.Exp.SelectedSpell = kb.Spell
+					kb.g.outQueue <- &GameMsg{E: msgs.ESelectSpell, Data: kb.Spell}
+				} else if kb.Item != item.None {
 					if time.Since(kb.g.stats.lastHudPotion) > kb.g.stats.hudPotionCooldown {
 						kb.g.outQueue <- &GameMsg{E: msgs.EUseItem, Data: kb.Item}
 						kb.g.stats.lastHudPotion = time.Now()
 					}
+				} else if kb.Weapon != item.None && kb.Weapon != kb.g.player.Exp.SelectedWeapon {
+					// kb.g.player.Exp.SelectedWeapon = kb.Weapon
+					// kb.g.outQueue <- &GameMsg{E: msgs.ESelectWeapon, Data: kb.Weapon}
+					// kb.g.player.Weapon = texture.LoadAnimation(texture.AssetFromWeaponItem(kb.Weapon))
 				}
 				kb.Open = !kb.Open
 			}
@@ -906,8 +1448,38 @@ func (kb *KeyBinder[A]) DrawTooltips(screen *ebiten.Image, x, y int) {
 		op.ColorScale.ScaleAlpha(0.3)
 		screen.DrawImage(kb.Img, op)
 		//text.PrintAtBg(screen, kb.Active.String(), x+16, y-48)
-		text.PrintAt(screen, kb.Desc, x+15, y-30)
+		//text.PrintAt(screen, kb.Desc, x+15, y-30)
+		if kb.Spell != attack.SpellNone {
+			kb.g.stats.ChangeSetTooltip(fmt.Sprintf("%v\n%v\nDamage: %d\nMana: %d",
+				kb.Desc,
+				roundDuration(kb.Exp.Spells[kb.Spell].Cooldown, 1).String(),
+				kb.Exp.Spells[kb.Spell].Damage,
+				kb.Exp.Spells[kb.Spell].ManaCost))
+			// text.PrintAt(screen, kb.Exp.Spells[kb.Spell].Cooldown.String(), x+15, y-15)
+			// text.PrintAt(screen, fmt.Sprintf("Damage: %d", kb.Exp.Spells[kb.Spell].Damage), x+15, y)
+			// text.PrintAt(screen, fmt.Sprintf("Mana: %d", kb.Exp.Spells[kb.Spell].ManaCost), x+15, y+15)
+		}
+		//  else if kb.Weapon != item.None {
+		// 	text.PrintAt(screen, kb.Exp.Weapons[kb.Weapon].Cooldown.String(), x+15, y-15)
+		// 	text.PrintAt(screen, fmt.Sprintf("Damage: %d", kb.Exp.Weapons[kb.Weapon].Damage), x+15, y)
+		// 	text.PrintAt(screen, fmt.Sprintf("Crit range: %d", kb.Exp.Weapons[kb.Weapon].CriticRange), x+15, y+15)
+		// }
 	}
+}
+
+var divs = []time.Duration{
+	time.Duration(1), time.Duration(10), time.Duration(100), time.Duration(1000)}
+
+func roundDuration(d time.Duration, digits int) time.Duration {
+	switch {
+	case d > time.Second:
+		d = d.Round(time.Second / divs[digits])
+	case d > time.Millisecond:
+		d = d.Round(time.Millisecond / divs[digits])
+	case d > time.Microsecond:
+		d = d.Round(time.Microsecond / divs[digits])
+	}
+	return d
 }
 
 type NKeyBinder[A KBind] struct {

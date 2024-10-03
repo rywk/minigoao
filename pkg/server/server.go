@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"database/sql"
 	_ "embed"
 	"errors"
 	"fmt"
@@ -16,7 +17,9 @@ import (
 
 	"github.com/rywk/minigoao/pkg/constants"
 	"github.com/rywk/minigoao/pkg/constants/assets"
+	"github.com/rywk/minigoao/pkg/constants/attack"
 	"github.com/rywk/minigoao/pkg/constants/direction"
+	"github.com/rywk/minigoao/pkg/constants/item"
 	"github.com/rywk/minigoao/pkg/grid"
 	"github.com/rywk/minigoao/pkg/msgs"
 	"github.com/rywk/minigoao/pkg/server/webpage"
@@ -32,13 +35,16 @@ type Server struct {
 	connCount atomic.Int32
 	newConn   chan msgs.Msgs
 	game      *Game
+	db        *sql.DB
 }
 
 func NewServer(tcpport string, webport string) *Server {
+
 	return &Server{
 		tcpport: tcpport,
 		webport: webport,
 		newConn: make(chan msgs.Msgs, 100),
+		//db:      db.NewDB(),
 	}
 }
 
@@ -228,10 +234,7 @@ func (g *Game) HandleLogin() {
 			dir:           direction.Front,
 			speedPxXFrame: 3,
 			speedXTile:    (constants.TileSize / 3) * AverageGameFrame,
-			hp:            372,
-			maxHp:         372,
-			mp:            2420,
-			maxMp:         2420,
+			inv:           msgs.NewInvetory(),
 		}
 
 		log.Printf("player created waiting for nick\n")
@@ -243,6 +246,55 @@ func (g *Game) HandleLogin() {
 		}
 		log.Printf("got nick [%v]\n", nick)
 		p.nick = nick
+
+		//p.exp = NewExperience()
+		p.exp = NewExperience(p)
+
+		p.inv.Slots[7][0].Item = item.HealthPotion
+		p.inv.Slots[7][0].Count = 9999
+		p.inv.HealthPotions = msgs.InventoryPos{X: 7, Y: 0}
+		p.inv.Slots[6][0].Item = item.WeaponMightySword
+		p.inv.Slots[6][0].Count = 1
+		p.inv.Slots[5][0].Item = item.WeaponWindSword
+		p.inv.Slots[5][0].Count = 1
+		p.inv.Slots[4][0].Item = item.WeaponDarkDagger
+		p.inv.Slots[4][0].Count = 1
+		p.inv.Slots[3][0].Item = item.WeaponFireStaff
+		p.inv.Slots[3][0].Count = 1
+
+		p.inv.Slots[7][1].Item = item.ManaPotion
+		p.inv.Slots[7][1].Count = 9999
+		p.inv.ManaPotions = msgs.InventoryPos{X: 7, Y: 1}
+
+		p.inv.Slots[4][1].Item = item.HelmetPaladin
+		p.inv.Slots[4][1].Count = 1
+		p.inv.Slots[1][1].Item = item.HatMage
+		p.inv.Slots[1][1].Count = 1
+		p.inv.Slots[2][1].Item = item.ShieldArcane
+		p.inv.Slots[2][1].Count = 1
+		p.inv.Slots[3][1].Item = item.ArmorShadow
+		p.inv.Slots[3][1].Count = 1
+		p.inv.Slots[6][1].Item = item.ArmorDark
+		p.inv.Slots[6][1].Count = 1
+		p.inv.Slots[5][1].Item = item.ShieldTower
+		p.inv.Slots[5][1].Count = 1
+		// if strings.Contains(nick, "pala") {
+		// 	p.exp = NewPalaExampleExperience()
+		// 	p.exp.SelectedWeapon = attack.WeaponMightySword
+		// }
+		// if strings.Contains(nick, "mago") {
+		// 	p.exp = NewMageExampleExperience()
+		// 	p.exp.SelectedWeapon = attack.WeaponFireStaff
+
+		// }
+		// if strings.Contains(nick, "ase") {
+		// 	p.exp = NewAseExampleExperience()
+		// 	p.exp.SelectedWeapon = attack.WeaponDarkDagger
+
+		// }
+		p.exp.ApplyPlayer()
+		p.hp = p.exp.MaxHp
+		p.mp = p.exp.MaxMp
 		g.incomingData <- IncomingMsg{
 			Event: msgs.EPlayerConnect,
 			Data:  p,
@@ -309,16 +361,16 @@ func (g *Game) consumeIncomingData() {
 		case msgs.EPlayerConnect:
 			online++
 			player = incomingData.Data.(*Player)
+			log.Printf("LOG IN: %v  [%v] [%v]\n", player.m.IP(), player.nick, player.id)
 			g.AddPlayer(player)
 			player.Login()
-			log.Printf("LOG IN: %v  [%v] [%v]\n", player.m.IP(), player.nick, player.id)
 		case msgs.EPing:
 			player.Send <- OutMsg{Event: msgs.EPingOk, Data: uint16(online)}
 		case msgs.EPlayerLogout:
 			online--
+			log.Printf("LOG OUT: %v  [%v] [%v]\n", player.m.IP(), player.nick, player.id)
 			g.RemovePlayer(player.id)
 			player.Logout()
-			log.Printf("LOG OUT: %v  [%v] [%v]\n", player.m.IP(), player.nick, player.id)
 		case msgs.EMove:
 			g.playerMove(player, incomingData)
 		case msgs.ECastSpell:
@@ -326,13 +378,89 @@ func (g *Game) consumeIncomingData() {
 		case msgs.EMelee:
 			g.playerMelee(player, incomingData.Data.(direction.D))
 		case msgs.EUseItem:
-			item := incomingData.Data.(msgs.Item)
-			//log.Printf("[%v][%v] USE ITEM %v\n", player.id, player.nick, item)
-			changed := UseItem(item, player)
+			it := incomingData.Data.(*msgs.EventUseItem)
+			is := player.inv.GetSlotf(it)
+			if is.Item == item.None {
+				continue
+			}
+			// if is.Count == 0 {
+			// 	continue
+			// }
+
+			log.Printf("[%v][%v] USE ITEM %v slot %v\n", player.id, player.nick, is.Item.String(), it)
+
+			// consumable behaviour
+			if is.Item.Type() == item.TypeConsumable {
+				is.Count--
+
+				changed := UseItem(is.Item, player)
+				player.Send <- OutMsg{Event: msgs.EUseItemOk, Data: &msgs.EventUseItemOk{
+					Slot:   msgs.InventoryPos{X: it.X, Y: it.Y},
+					Item:   is.Item,
+					Change: changed,
+					Count:  is.Count,
+				}}
+				if is.Count == 0 {
+					is.Item = item.None
+				}
+				continue
+			}
+			used := msgs.InventoryPos(*it)
+			var currentItem item.Item
+			var target *msgs.InventoryPos
+			// equippable behaviour
+			switch is.Item.Type() {
+			case item.TypeArmor:
+				target = &player.inv.EquippedBody
+				currentItem = player.inv.GetBody()
+
+			case item.TypeHelmet:
+				target = &player.inv.EquippedHead
+				currentItem = player.inv.GetHead()
+
+			case item.TypeShield:
+				target = &player.inv.EquippedShield
+				currentItem = player.inv.GetShield()
+
+			case item.TypeWeapon:
+				target = &player.inv.EquippedWeapon
+				currentItem = player.inv.GetWeapon()
+
+			default:
+				log.Print("unknown item type recived")
+				continue
+			}
+
+			change := uint32(1)
+			if *target == used {
+				change = 0
+				*target = msgs.InventoryPos{255, 0}
+			} else {
+				*target = used
+			}
+			if is.Item.Type() == item.TypeWeapon {
+				player.exp.UnsetItemBuffs(currentItem)
+				player.exp.SetItemBuffs(player.inv.GetWeapon())
+				player.exp.ApplyPlayer()
+				nexp := player.exp.ToMsgs()
+				log.Println(nexp)
+				//log.Println(nexp == temp)
+
+				player.Send <- OutMsg{Event: msgs.EUpdateSkillsOk, Data: &nexp}
+			}
 			player.Send <- OutMsg{Event: msgs.EUseItemOk, Data: &msgs.EventUseItemOk{
-				Item:   msgs.Item(item),
-				Change: changed,
+				Slot:   msgs.InventoryPos{X: it.X, Y: it.Y},
+				Item:   is.Item,
+				Change: change,
+				Count:  is.Count,
 			}}
+			g.space.Notify(player.pos, msgs.EPlayerChangedSkin, &msgs.EventPlayerChangedSkin{
+				ID:     player.id,
+				Armor:  player.inv.GetBody(),
+				Weapon: player.inv.GetWeapon(),
+				Shield: player.inv.GetShield(),
+				Head:   player.inv.GetHead(),
+			}, player.id)
 		case msgs.ESendChat:
 			chat := incomingData.Data.(*msgs.EventSendChat)
 			log.Printf("[%v][%v]: %v", player.id, player.nick, chat.Msg)
@@ -340,6 +468,27 @@ func (g *Game) consumeIncomingData() {
 				ID:  player.id,
 				Msg: chat.Msg,
 			}, player.id)
+		case msgs.ESelectSpell:
+			player.exp.SelectedSpell = incomingData.Data.(attack.Spell)
+			log.Printf("[%v][%v]: Selected %v", player.id, player.nick, player.exp.SelectedSpell.String())
+		// case msgs.ESelectWeapon:
+		// 	player.exp.SelectedWeapon = incomingData.Data.(item.Item)
+		// 	log.Printf("[%v][%v]: Selected %v", player.id, player.nick, player.exp.SelectedWeapon.String())
+		// 	g.space.Notify(player.pos, msgs.EPlayerSelectWeapon, &msgs.EventPlayerSelectWeapon{
+		// 		ID:     player.id,
+		// 		Weapon: player.exp.SelectedWeapon,
+		// 	}, player.id)
+		case msgs.EUpdateSkills:
+			skills := incomingData.Data.(*msgs.Skills)
+			temp := player.exp.ToMsgs()
+			log.Println(temp)
+			player.exp.ApplySkills(*skills)
+			player.exp.ApplyPlayer()
+			nexp := player.exp.ToMsgs()
+			log.Println(nexp)
+			//log.Println(nexp == temp)
+
+			player.Send <- OutMsg{Event: msgs.EUpdateSkillsOk, Data: &nexp}
 		}
 	}
 }
@@ -388,20 +537,28 @@ func (g *Game) playerMove(player *Player, incomingData IncomingMsg) {
 		}
 		newPlayer := g.players[newPlayerInSight]
 		newPlayer.Send <- OutMsg{Event: msgs.EPlayerEnterViewport, Data: &msgs.EventPlayerEnterViewport{
-			ID:    player.id,
-			Nick:  player.nick,
-			Pos:   player.pos,
-			Dir:   player.dir,
-			Dead:  player.dead,
-			Speed: uint8(player.speedPxXFrame),
+			ID:     player.id,
+			Nick:   player.nick,
+			Pos:    player.pos,
+			Dir:    player.dir,
+			Dead:   player.dead,
+			Weapon: player.inv.GetWeapon(),
+			Shield: player.inv.GetShield(),
+			Head:   player.inv.GetHead(),
+			Body:   player.inv.GetBody(),
+			Speed:  uint8(player.speedPxXFrame),
 		}}
 		player.Send <- OutMsg{Event: msgs.EPlayerEnterViewport, Data: &msgs.EventPlayerEnterViewport{
-			ID:    uint16(newPlayer.id),
-			Nick:  newPlayer.nick,
-			Pos:   newPlayer.pos,
-			Dir:   newPlayer.dir,
-			Dead:  newPlayer.dead,
-			Speed: uint8(newPlayer.speedPxXFrame),
+			ID:     uint16(newPlayer.id),
+			Nick:   newPlayer.nick,
+			Pos:    newPlayer.pos,
+			Dir:    newPlayer.dir,
+			Dead:   newPlayer.dead,
+			Weapon: player.inv.GetWeapon(),
+			Shield: player.inv.GetShield(),
+			Head:   player.inv.GetHead(),
+			Body:   player.inv.GetBody(),
+			Speed:  uint8(newPlayer.speedPxXFrame),
 		}}
 	}, func(x, y int32) {
 		newPlayerOutSight := g.space.GetSlot(0, typ.P{X: x, Y: y})
@@ -423,14 +580,14 @@ func (g *Game) playerMove(player *Player, incomingData IncomingMsg) {
 
 func (g *Game) playerCastSpell(player *Player, incomingData IncomingMsg) {
 	ev := incomingData.Data.(*msgs.EventCastSpell)
-	defer log.Printf("[%v][%v] SPELL %v at [%v %v]\n", player.id, player.nick, ev.Spell.String(), ev.PX, ev.PY)
+	defer log.Printf("[%v][%v] SPELL %v at [%v %v]\n", player.id, player.nick, player.exp.SelectedSpell.String(), ev.PX, ev.PY)
 	hitPlayer := g.CheckSpellTargets(typ.P{X: int32(ev.PX), Y: int32(ev.PY)})
 	if hitPlayer == 0 {
 		log.Printf("missed all hitboxs\n")
 		return
 	}
 	targetPlayer := g.players[hitPlayer]
-	dmg, err := Cast(GetSpellProp(ev.Spell), player, targetPlayer)
+	dmg, err := Cast(player, targetPlayer)
 	if err != nil {
 		return
 	}
@@ -439,22 +596,23 @@ func (g *Game) playerCastSpell(player *Player, incomingData IncomingMsg) {
 	}
 	g.space.Notify(targetPlayer.pos, msgs.EPlayerSpell, &msgs.EventPlayerSpell{
 		ID:     uint16(hitPlayer),
-		Spell:  ev.Spell,
+		Spell:  player.exp.SelectedSpell,
 		Killed: targetPlayer.dead,
 	}, player.id, uint16(targetPlayer.id))
 	player.Send <- OutMsg{Event: msgs.ECastSpellOk, Data: &msgs.EventCastSpellOk{
 		ID:     uint16(hitPlayer),
 		Damage: uint32(dmg),
 		NewMP:  uint32(player.mp),
-		Spell:  ev.Spell,
+		Spell:  player.exp.SelectedSpell,
 		Killed: targetPlayer.dead,
 	}}
 	targetPlayer.Send <- OutMsg{Event: msgs.EPlayerSpellRecieved, Data: &msgs.EventPlayerSpellRecieved{
 		ID:     player.id,
-		Spell:  ev.Spell,
+		Spell:  player.exp.SelectedSpell,
 		Damage: uint32(dmg),
 		NewHP:  uint32(targetPlayer.hp),
 	}}
+	player.exp.SelectedSpell = attack.SpellNone
 }
 
 func (g *Game) playerMelee(player *Player, d direction.D) {
@@ -487,7 +645,12 @@ func (g *Game) playerMelee(player *Player, d direction.D) {
 	if targetId != 0 {
 		targetPlayer := g.players[targetId]
 		if !targetPlayer.dead {
+
 			dmg = Melee(player, targetPlayer)
+			if dmg == -1 {
+				log.Printf("melee error, too fast")
+				return
+			}
 			targetPlayer.Send <- OutMsg{Event: msgs.EPlayerMeleeRecieved, Data: &msgs.EventPlayerMeleeRecieved{
 				ID:     player.id,
 				Damage: uint32(dmg),
@@ -506,7 +669,6 @@ func (g *Game) playerMelee(player *Player, d direction.D) {
 		Killed: killed,
 		Dir:    player.dir,
 	}
-	log.Printf("%#v", *plMele)
 	g.space.Notify(player.pos, msgs.EPlayerMelee, plMele, player.id, targetId)
 	meleOk := &msgs.EventMeleeOk{
 		ID:     targetId,
@@ -515,7 +677,6 @@ func (g *Game) playerMelee(player *Player, d direction.D) {
 		Killed: killed,
 		Dir:    player.dir,
 	}
-	log.Printf("%#v", *meleOk)
 
 	player.Send <- OutMsg{Event: msgs.EMeleeOk, Data: meleOk}
 }
@@ -537,13 +698,11 @@ type Player struct {
 	paralized bool
 	dead      bool
 	hp        int32
-	maxHp     int32
 	mp        int32
-	maxMp     int32
 
-	spellCD Cooldown
-	meleeCD Cooldown
-	itemCD  Cooldown
+	inv *msgs.Inventory
+
+	exp *Experience
 }
 
 type OutMsg struct {
@@ -593,9 +752,14 @@ func (p *Player) HandleIncomingMessages() {
 		case msgs.EMelee:
 			msg.Data = direction.D(im.Data[0])
 		case msgs.EUseItem:
-			msg.Data = msgs.Item(im.Data[0])
+			msg.Data = msgs.DecodeEventUseItem(im.Data)
 		case msgs.ESendChat:
 			d := msgs.DecodeMsgpack(im.Data, &msgs.EventSendChat{})
+			msg.Data = d
+		case msgs.ESelectSpell:
+			msg.Data = attack.Spell(im.Data[0])
+		case msgs.EUpdateSkills:
+			d := msgs.DecodeMsgpack(im.Data, &msgs.Skills{})
 			msg.Data = d
 		default:
 			log.Printf("HandleIncomingMessages unknown event\n")
@@ -631,9 +795,9 @@ func (p *Player) Login() {
 		Pos:   p.pos,
 		Dir:   p.dir,
 		HP:    p.hp,
-		MaxHP: p.maxHp,
 		MP:    p.mp,
-		MaxMP: p.maxMp,
+		Exp:   p.exp.ToMsgs(),
+		Inv:   msgs.Inventory(*p.inv),
 		Speed: uint8(p.speedPxXFrame),
 	}
 	log.Printf("login %#v", *loginEvent)
@@ -645,12 +809,16 @@ func (p *Player) Login() {
 				log.Print(t.Layers[0])
 				vp := p.g.players[t.Layers[0]]
 				loginEvent.VisiblePlayers = append(loginEvent.VisiblePlayers, msgs.EventNewPlayer{
-					ID:    uint16(vp.id),
-					Nick:  vp.nick,
-					Pos:   vp.pos,
-					Dir:   vp.dir,
-					Speed: uint8(vp.speedPxXFrame),
-					Dead:  vp.dead,
+					ID:     uint16(vp.id),
+					Nick:   vp.nick,
+					Pos:    vp.pos,
+					Dir:    vp.dir,
+					Speed:  uint8(vp.speedPxXFrame),
+					Weapon: vp.inv.GetWeapon(),
+					Shield: vp.inv.GetShield(),
+					Head:   vp.inv.GetHead(),
+					Body:   vp.inv.GetBody(),
+					Dead:   vp.dead,
 				})
 			}
 		},
@@ -658,17 +826,18 @@ func (p *Player) Login() {
 	p.g.space.Set(0, p.pos, uint16(p.id))
 	go p.HandleIncomingMessages()
 	go p.HandleOutgoingMessages()
-	encoded := msgs.EncodeMsgpack(loginEvent)
-	testLogin := msgs.DecodeMsgpack(encoded, &msgs.EventPlayerLogin{})
-	log.Printf("login %#v", *testLogin)
 
-	p.m.WriteWithLen(msgs.EPlayerLogin, encoded)
+	p.m.WriteWithLen(msgs.EPlayerLogin, msgs.EncodeMsgpack(loginEvent))
 	p.g.space.Notify(p.pos, msgs.EPlayerSpawned, &msgs.EventPlayerSpawned{
-		ID:    uint16(p.id),
-		Nick:  p.nick,
-		Pos:   p.pos,
-		Dir:   p.dir,
-		Speed: uint8(p.speedPxXFrame),
+		ID:     uint16(p.id),
+		Nick:   p.nick,
+		Pos:    p.pos,
+		Dir:    p.dir,
+		Weapon: p.inv.GetWeapon(),
+		Shield: p.inv.GetShield(),
+		Head:   p.inv.GetHead(),
+		Body:   p.inv.GetBody(),
+		Speed:  uint8(p.speedPxXFrame),
 	}, uint16(p.id))
 }
 
@@ -689,7 +858,7 @@ func (p *Player) TakeDamage(dmg int32) {
 
 func (p *Player) Heal(heal int32) {
 	p.hp = p.hp + heal
-	if p.hp > p.maxHp {
-		p.hp = p.maxHp
+	if p.hp > p.exp.MaxHp {
+		p.hp = p.exp.MaxHp
 	}
 }

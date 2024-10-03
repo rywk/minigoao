@@ -3,6 +3,7 @@ package player
 import (
 	"image"
 	"image/color"
+	"log"
 	"strconv"
 	"time"
 
@@ -13,8 +14,9 @@ import (
 	"github.com/rywk/minigoao/pkg/client/game/texture"
 	"github.com/rywk/minigoao/pkg/constants"
 	"github.com/rywk/minigoao/pkg/constants/assets"
+	"github.com/rywk/minigoao/pkg/constants/attack"
 	"github.com/rywk/minigoao/pkg/constants/direction"
-	"github.com/rywk/minigoao/pkg/constants/spell"
+	"github.com/rywk/minigoao/pkg/constants/item"
 	"github.com/rywk/minigoao/pkg/grid"
 	"github.com/rywk/minigoao/pkg/msgs"
 	"github.com/rywk/minigoao/pkg/typ"
@@ -32,6 +34,9 @@ type P struct {
 	drawOp      *ebiten.DrawImageOptions
 	Dead        bool
 	Inmobilized bool
+
+	// other players use this, client uses inventory
+	ArmorID, WeaponID, HelmetID, ShieldID item.Item
 
 	Armor, Weapon, Helmet, Shield       texture.A
 	NakedBody, Head, DeadBody, DeadHead texture.A
@@ -52,6 +57,9 @@ type P struct {
 	chatMsg      string
 	chatMsgStart time.Time
 
+	Exp msgs.Experience
+	Inv msgs.Inventory
+
 	soundPrevWalk int
 	soundboard    audio2d.AudioMixer
 }
@@ -59,8 +67,7 @@ type P struct {
 type ClientP struct {
 	p *P
 	// Stats
-	HP, MP       int
-	MaxHP, MaxMP int
+	HP, MP int
 }
 
 func NewClientP() *ClientP {
@@ -88,6 +95,7 @@ func (p *P) Update(counter int) {
 		p.DeadBody.Dir(p.Direction)
 		p.DeadHead.Dir(p.Direction)
 	} else {
+
 		if p.Armor != nil {
 			p.Armor.Dir(p.Direction)
 		} else {
@@ -116,7 +124,7 @@ func (p *P) SetChatMsg(msg string) {
 }
 
 const PlayerDrawOffsetX, PlayerDrawOffsetY = 3, -14
-const PlayerHeadDrawOffsetX, PlayerHeadDrawOffsetY = 4, -9
+const PlayerHeadDrawOffsetX, PlayerHeadDrawOffsetY = 4, -8
 
 func (p *P) Draw(screen *ebiten.Image) {
 	p.drawOp.GeoM.Reset()
@@ -128,6 +136,11 @@ func (p *P) Draw(screen *ebiten.Image) {
 		screen.DrawImage(p.DeadHead.Frame(), p.drawOp)
 		p.Effect.Draw(screen)
 		return
+	}
+	if p.Direction == direction.Back || p.Direction == direction.Left {
+		if p.Weapon != nil {
+			screen.DrawImage(p.Weapon.Frame(), p.drawOp)
+		}
 	}
 	if p.Direction == direction.Left || p.Direction == direction.Front {
 		if p.Armor != nil {
@@ -148,13 +161,15 @@ func (p *P) Draw(screen *ebiten.Image) {
 			screen.DrawImage(p.NakedBody.Frame(), p.drawOp)
 		}
 	}
-	if p.Weapon != nil {
-		screen.DrawImage(p.Weapon.Frame(), p.drawOp)
+	if p.Direction == direction.Front || p.Direction == direction.Right {
+		if p.Weapon != nil {
+			screen.DrawImage(p.Weapon.Frame(), p.drawOp)
+		}
 	}
 	p.drawOp.GeoM.Translate(PlayerHeadDrawOffsetX, PlayerHeadDrawOffsetY)
 	screen.DrawImage(p.Head.Frame(), p.drawOp)
 	if p.Helmet != nil {
-		p.drawOp.GeoM.Translate(-3, -6)
+		p.drawOp.GeoM.Translate(-5, -7)
 		screen.DrawImage(p.Helmet.Frame(), p.drawOp)
 	}
 	if p.local == nil {
@@ -181,7 +196,7 @@ func (p *P) DrawPlayerHPMP(screen *ebiten.Image) {
 	p.drawOp.GeoM.Translate(p.Pos[0]+PlayerDrawOffsetX, p.Pos[1]+PlayerDrawOffsetY)
 	p.drawOp.GeoM.Translate(-2, 45)
 	hpx, mpx := p.HPImg.Bounds().Max.X, p.MPImg.Bounds().Max.X
-	hpx, mpx = p.Client.HP*hpx/p.Client.MaxHP, p.Client.MP*mpx/p.Client.MaxMP
+	hpx, mpx = p.Client.HP*hpx/int(p.Exp.MaxHp), p.Client.MP*mpx/int(p.Exp.MaxMp)
 	hpRect := image.Rect(p.HPImg.Bounds().Min.X, p.HPImg.Bounds().Min.Y, hpx, p.HPImg.Bounds().Max.Y)
 	mpRect := image.Rect(p.MPImg.Bounds().Min.X, p.MPImg.Bounds().Min.Y, mpx, p.MPImg.Bounds().Max.Y)
 	p.drawOp.GeoM.Translate(-1, -1)
@@ -317,11 +332,83 @@ func (p *P) AddStep(e *msgs.EventPlayerMoved) {
 	})
 }
 
+func (p *P) LoadAnimations() {
+	log.Printf("loading animations %v %v %v %v ", p.ArmorID, p.HelmetID, p.WeaponID, p.ShieldID)
+	p.Armor = texture.LoadItemAninmatio(p.ArmorID)
+	p.Helmet = texture.LoadItemHead(p.HelmetID)
+	p.Weapon = texture.LoadItemAninmatio(p.WeaponID)
+	p.Shield = texture.LoadItemAninmatio(p.ShieldID)
+	log.Printf("loaded animations %v %v %v %v ", p.ArmorID, p.HelmetID, p.WeaponID, p.ShieldID)
+}
+
+func (p *P) MaybeLoadAnimations(c *msgs.EventPlayerChangedSkin) {
+	log.Printf("maybe loading animations %v %v %v %v ", p.ArmorID, p.HelmetID, p.WeaponID, p.ShieldID)
+	log.Printf("new loading animations %v %v %v %v ", c.Armor, c.Head, c.Weapon, c.Shield)
+
+	if p.ArmorID != c.Armor {
+		p.ArmorID = c.Armor
+		p.Armor = texture.LoadItemAninmatio(p.ArmorID)
+	}
+	if p.HelmetID != c.Head {
+		p.HelmetID = c.Head
+		p.Helmet = texture.LoadItemHead(p.HelmetID)
+	}
+	if p.WeaponID != c.Weapon {
+		p.WeaponID = c.Weapon
+		p.Weapon = texture.LoadItemAninmatio(p.WeaponID)
+	}
+	if p.ShieldID != c.Shield {
+		p.ShieldID = c.Shield
+		p.Shield = texture.LoadItemAninmatio(p.ShieldID)
+	}
+}
+
+func (p *P) RefreshEquipped() {
+	if p.Inv.EquippedBody.X != 255 {
+		is := p.Inv.GetSlotv2(&p.Inv.EquippedBody)
+		p.Armor = texture.LoadItemAninmatio(is.Item)
+	}
+	if p.Inv.EquippedHead.X != 255 {
+		is := p.Inv.GetSlotv2(&p.Inv.EquippedHead)
+		p.Armor = texture.LoadItemHead(is.Item)
+	}
+	if p.Inv.EquippedWeapon.X != 255 {
+		is := p.Inv.GetSlotv2(&p.Inv.EquippedWeapon)
+		p.Armor = texture.LoadItemAninmatio(is.Item)
+	}
+	if p.Inv.EquippedShield.X != 255 {
+		is := p.Inv.GetSlotv2(&p.Inv.EquippedShield)
+		p.Armor = texture.LoadItemAninmatio(is.Item)
+	}
+}
+func (p *P) RefreshBody() {
+	if p.Inv.EquippedBody.X == 255 {
+		p.Armor = nil
+	}
+	is := p.Inv.GetSlotv2(&p.Inv.EquippedBody)
+	p.Armor = texture.LoadItemAninmatio(is.Item)
+}
+func (p *P) RefreshHead() {
+	if p.Inv.EquippedHead.X != 255 {
+		is := p.Inv.GetSlotv2(&p.Inv.EquippedHead)
+		p.Helmet = texture.LoadItemHead(is.Item)
+	}
+}
+func (p *P) RefreshWeapon() {
+	if p.Inv.EquippedWeapon.X != 255 {
+		is := p.Inv.GetSlotv2(&p.Inv.EquippedWeapon)
+		p.Weapon = texture.LoadItemAninmatio(is.Item)
+	}
+}
+func (p *P) RefreshShield() {
+	if p.Inv.EquippedShield.X != 255 {
+		is := p.Inv.GetSlotv2(&p.Inv.EquippedShield)
+		p.Shield = texture.LoadItemAninmatio(is.Item)
+	}
+}
 func NewLogin(e *msgs.EventPlayerLogin) *P {
 	p := Create(e)
 	p.Client = NewClientP()
-	p.Client.MaxHP = int(e.MaxHP)
-	p.Client.MaxMP = int(e.MaxMP)
 	p.Client.HP = int(e.HP)
 	p.Client.MP = int(e.MP)
 	p.Client.p = p
@@ -331,6 +418,7 @@ func NewLogin(e *msgs.EventPlayerLogin) *P {
 	p.HPImg.Fill(color.RGBA{255, 60, 60, 255})
 	p.MPImg.Fill(color.RGBA{40, 130, 250, 255})
 	p.HPMPBGImg.Fill(color.RGBA{0, 0, 0, 200})
+	p.Inv = e.Inv
 	return p
 }
 
@@ -346,11 +434,12 @@ func Create(a *msgs.EventPlayerLogin) *P {
 			float64(a.Pos.Y) * constants.TileSize},
 		Nick:      a.Nick,
 		Dead:      a.Dead,
+		Exp:       a.Exp,
 		MoveSpeed: float64(a.Speed),
-		Armor:     texture.LoadAnimation(assets.DarkArmour),
-		Helmet:    texture.LoadStill(assets.ProHat),
-		Weapon:    texture.LoadAnimation(assets.SpecialSword),
-		Shield:    texture.LoadAnimation(assets.SilverShield),
+		ArmorID:   a.Inv.GetBody(),
+		HelmetID:  a.Inv.GetHead(),
+		WeaponID:  a.Inv.GetWeapon(),
+		ShieldID:  a.Inv.GetShield(),
 		NakedBody: texture.LoadAnimation(assets.NakedBody),
 		Head:      texture.LoadStill(assets.Head),
 		DeadBody:  texture.LoadAnimation(assets.DeadBody),
@@ -361,6 +450,7 @@ func Create(a *msgs.EventPlayerLogin) *P {
 		p:      p,
 		active: make([]texture.Effect, 0),
 	}
+	p.LoadAnimations()
 	return p
 }
 
@@ -378,10 +468,10 @@ func CreateFromLogin(local *P, a *msgs.EventNewPlayer) *P {
 		Nick:      a.Nick,
 		Dead:      a.Dead,
 		MoveSpeed: float64(a.Speed),
-		Armor:     texture.LoadAnimation(assets.DarkArmour),
-		Helmet:    texture.LoadStill(assets.ProHat),
-		Weapon:    texture.LoadAnimation(assets.SpecialSword),
-		Shield:    texture.LoadAnimation(assets.SilverShield),
+		ArmorID:   a.Body,
+		HelmetID:  a.Head,
+		WeaponID:  a.Weapon,
+		ShieldID:  a.Shield,
 		NakedBody: texture.LoadAnimation(assets.NakedBody),
 		Head:      texture.LoadStill(assets.Head),
 		DeadBody:  texture.LoadAnimation(assets.DeadBody),
@@ -392,6 +482,7 @@ func CreateFromLogin(local *P, a *msgs.EventNewPlayer) *P {
 		p:      p,
 		active: make([]texture.Effect, 0),
 	}
+	p.LoadAnimations()
 	return p
 }
 
@@ -409,10 +500,10 @@ func CreatePlayerSpawned(local *P, a *msgs.EventPlayerSpawned) *P {
 		Nick:      a.Nick,
 		Dead:      a.Dead,
 		MoveSpeed: float64(a.Speed),
-		Armor:     texture.LoadAnimation(assets.DarkArmour),
-		Helmet:    texture.LoadStill(assets.ProHat),
-		Weapon:    texture.LoadAnimation(assets.SpecialSword),
-		Shield:    texture.LoadAnimation(assets.SilverShield),
+		ArmorID:   a.Body,
+		HelmetID:  a.Head,
+		WeaponID:  a.Weapon,
+		ShieldID:  a.Shield,
 		NakedBody: texture.LoadAnimation(assets.NakedBody),
 		Head:      texture.LoadStill(assets.Head),
 		DeadBody:  texture.LoadAnimation(assets.DeadBody),
@@ -423,6 +514,7 @@ func CreatePlayerSpawned(local *P, a *msgs.EventPlayerSpawned) *P {
 		p:      p,
 		active: make([]texture.Effect, 0),
 	}
+	p.LoadAnimations()
 	return p
 }
 
@@ -439,7 +531,7 @@ func (pfx *PEffects) NewMeleeHit() {
 	pfx.active = append(pfx.active, texture.LoadEffect(assets.MeleeHit))
 }
 
-func (pfx *PEffects) NewSpellHit(s spell.Spell) {
+func (pfx *PEffects) NewSpellHit(s attack.Spell) {
 	a := texture.AssetFromSpell(s)
 	if a != assets.Nothing {
 		pfx.active = append(pfx.active, NewSpellOffset(a))

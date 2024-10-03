@@ -153,11 +153,11 @@ func NewBodyAnimation(img *ebiten.Image, config SpriteConfig) *Animation {
 		x := config.X
 		for i := 0; i < frames; i++ {
 			sprits = append(sprits, img.SubImage(image.Rect(x, y, x+config.Width, y+config.Height)).(*ebiten.Image))
-			x += config.Width
+			x += config.Width - 1
 		}
 		s := NewSprites(sprits)
 		a.directionMap[d] = s
-		y += config.Height
+		y += config.Height - 1
 	}
 	return a
 }

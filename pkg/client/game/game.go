@@ -27,8 +27,9 @@ import (
 	"github.com/rywk/minigoao/pkg/conc"
 	"github.com/rywk/minigoao/pkg/constants"
 	"github.com/rywk/minigoao/pkg/constants/assets"
+	"github.com/rywk/minigoao/pkg/constants/attack"
 	"github.com/rywk/minigoao/pkg/constants/direction"
-	"github.com/rywk/minigoao/pkg/constants/spell"
+	"github.com/rywk/minigoao/pkg/constants/item"
 	"github.com/rywk/minigoao/pkg/msgs"
 	"github.com/rywk/minigoao/pkg/typ"
 	"golang.org/x/image/math/f64"
@@ -66,19 +67,17 @@ type Game struct {
 	mode Mode
 
 	// register stuff
-	connecting                 bool
-	connected                  chan Login
-	adressEnteringPasteTooltip string
-	serverAddress              string
-	serverTyper                *typing.Typer
-	typingServer               bool
-	nickTyper                  *typing.Typer
-	fsBtn                      *Checkbox
-	vsyncBtn                   *Checkbox
-	inputBox                   *ebiten.Image
-	fullscreen                 bool
-	vsync                      bool
-	connErrorColorStart        int
+	connecting          bool
+	connected           chan Login
+	serverTyper         *typing.Typer
+	typingServer        bool
+	nickTyper           *typing.Typer
+	fsBtn               *Checkbox
+	vsyncBtn            *Checkbox
+	inputBox            *ebiten.Image
+	fullscreen          bool
+	vsync               bool
+	connErrorColorStart int
 
 	// game
 	mouseX, mouseY int
@@ -100,9 +99,6 @@ type Game struct {
 
 	keys *Keys
 
-	dirOverwriteAttempt            bool
-	dirOverwriteAttemptLeftForMove float64
-
 	lastMove          time.Time
 	leftForMove       float64 // pixels left to complete tile change
 	lastDir           direction.D
@@ -110,7 +106,9 @@ type Game struct {
 	startForStep      time.Time
 	lastMoveConfirmed bool
 
-	lastPotionUsed msgs.Item
+	LastAction time.Time
+
+	lastPotionUsed item.Item
 
 	steps []player.Step
 
@@ -377,6 +375,7 @@ func (g *Game) StartGame(login *msgs.EventPlayerLogin) {
 	g.keys = NewKeys(g, nil)
 	g.keys.enterDown = true
 	g.playersY = append(g.playersY, g.player)
+
 	g.stats = NewHud(g)
 
 	g.eventQueue = make([]*GameMsg, 0, 100)
@@ -386,6 +385,7 @@ func (g *Game) StartGame(login *msgs.EventPlayerLogin) {
 	go g.WriteToServer()
 
 	g.SoundBoard.Play(assets.Spawn)
+
 }
 
 func (g *Game) Login(e *msgs.EventPlayerLogin) {
@@ -435,6 +435,10 @@ func (g *Game) WriteEventQueue() {
 			dim.Data = msgs.DecodeEventPlayerMeleeRecieved(im.Data)
 		case msgs.EPlayerSpellRecieved:
 			dim.Data = msgs.DecodeEventPlayerSpellRecieved(im.Data)
+		case msgs.EPlayerChangedSkin:
+			dim.Data = msgs.DecodeEventPlayerChangedSkin(im.Data)
+		case msgs.EUpdateSkillsOk:
+			dim.Data = msgs.DecodeMsgpack(im.Data, &msgs.Experience{})
 		case msgs.EPlayerSpawned:
 			msg := &msgs.EventPlayerSpawned{}
 			msgs.DecodeMsgpack(im.Data, msg)
@@ -551,7 +555,7 @@ func (g *Game) ProcessEventQueue() error {
 			log.Printf("CastSpellOk m: %#v\n", event)
 			g.player.Client.MP = int(event.NewMP)
 			if uint32(event.ID) != g.sessionID {
-				g.player.Effect.NewAttackNumber(int(event.Damage), event.Spell == spell.HealWounds)
+				g.player.Effect.NewAttackNumber(int(event.Damage), event.Spell == attack.SpellHealWounds)
 				g.players[event.ID].Effect.NewSpellHit(event.Spell)
 				g.SoundBoard.PlayFrom(assets.SoundFromSpell(event.Spell), g.player.X, g.player.Y, g.players[event.ID].X, g.players[event.ID].Y)
 				g.players[event.ID].Dead = event.Killed
@@ -560,11 +564,11 @@ func (g *Game) ProcessEventQueue() error {
 			event := ev.Data.(*msgs.EventPlayerSpellRecieved)
 			log.Printf("RecivedSpell m: %#v\n", event)
 			switch event.Spell {
-			case spell.Paralize:
+			case attack.SpellParalize:
 				g.player.Inmobilized = true
-			case spell.RemoveParalize:
+			case attack.SpellRemoveParalize:
 				g.player.Inmobilized = false
-			case spell.Resurrect:
+			case attack.SpellResurrect:
 				g.player.Dead = false
 			}
 			caster := g.players[event.ID]
@@ -573,7 +577,7 @@ func (g *Game) ProcessEventQueue() error {
 			}
 			g.SoundBoard.Play(assets.SoundFromSpell(event.Spell))
 			g.player.Effect.NewSpellHit(event.Spell)
-			caster.Effect.NewAttackNumber(int(event.Damage), event.Spell == spell.HealWounds)
+			caster.Effect.NewAttackNumber(int(event.Damage), event.Spell == attack.SpellHealWounds)
 			g.player.Client.HP = int(event.NewHP)
 			if g.player.Client.HP == 0 {
 				g.player.Inmobilized = false
@@ -587,19 +591,84 @@ func (g *Game) ProcessEventQueue() error {
 			g.players[event.ID].Dead = event.Killed
 		case msgs.EUseItemOk:
 			event := ev.Data.(*msgs.EventUseItemOk)
-			log.Printf("UsePotionOk m: %#v\n", event)
-			switch event.Item {
-			case msgs.Item(msgs.ItemManaPotion):
-				g.player.Client.MP = int(event.Change)
-			case msgs.Item(msgs.ItemHealthPotion):
-				g.player.Client.HP = int(event.Change)
+			if event.Item.Type() == item.TypeConsumable {
+
+				log.Printf("UsePotionOk m: %#v\n", event)
+				switch event.Item {
+				case item.ManaPotion:
+					g.player.Client.MP = int(event.Change)
+				case item.HealthPotion:
+					g.player.Client.HP = int(event.Change)
+				}
+				g.player.Inv.Slots[event.Slot.X][event.Slot.Y].Count = event.Count
+				if event.Count == 0 {
+					g.player.Inv.Slots[event.Slot.X][event.Slot.Y].Item = item.None
+				}
+				g.stats.potionAlpha = 1
+				g.lastPotionUsed = event.Item
+				g.SoundBoard.Play(assets.Potion)
+				continue
 			}
-			g.stats.potionAlpha = 1
-			g.lastPotionUsed = event.Item
-			g.SoundBoard.Play(assets.Potion)
+
+			switch event.Item.Type() {
+			case item.TypeArmor:
+				if event.Change == 0 {
+					g.player.Inv.EquippedBody.X = 255
+					g.player.Armor = nil
+					continue
+				}
+				g.player.Inv.EquippedBody.X = event.Slot.X
+				g.player.Inv.EquippedBody.Y = event.Slot.Y
+				g.player.RefreshBody()
+			case item.TypeHelmet:
+				if event.Change == 0 {
+					g.player.Inv.EquippedHead.X = 255
+					g.player.Helmet = nil
+					continue
+				}
+				g.player.Inv.EquippedHead.X = event.Slot.X
+				g.player.Inv.EquippedHead.Y = event.Slot.Y
+				g.player.RefreshHead()
+
+			case item.TypeShield:
+				if event.Change == 0 {
+					g.player.Inv.EquippedShield.X = 255
+					g.player.Shield = nil
+					continue
+				}
+				g.player.Inv.EquippedShield.X = event.Slot.X
+				g.player.Inv.EquippedShield.Y = event.Slot.Y
+				g.player.RefreshShield()
+
+			case item.TypeWeapon:
+				if event.Change == 0 {
+					g.player.Inv.EquippedWeapon.X = 255
+					g.player.Weapon = nil
+					continue
+				}
+				g.player.Inv.EquippedWeapon.X = event.Slot.X
+				g.player.Inv.EquippedWeapon.Y = event.Slot.Y
+				g.player.RefreshWeapon()
+				g.stats.meleeCooldownInfo.Weapon = g.player.Inv.GetWeapon()
+			}
+			//g.player.RefreshEquipped()
 		case msgs.EBroadcastChat:
 			event := ev.Data.(*msgs.EventBroadcastChat)
 			g.players[event.ID].SetChatMsg(event.Msg)
+		case msgs.EPlayerChangedSkin:
+			event := ev.Data.(*msgs.EventPlayerChangedSkin)
+			g.players[event.ID].MaybeLoadAnimations(event)
+		case msgs.EUpdateSkillsOk:
+			event := ev.Data.(*msgs.Experience)
+			g.player.Exp = *event
+			g.stats.skills.updatedSkills = g.player.Exp.Skills
+			g.stats.skills.FreePoints = int(g.player.Exp.Skills.FreePoints)
+			if g.player.Client.HP > int(g.player.Exp.MaxHp) {
+				g.player.Client.HP = int(g.player.Exp.MaxHp)
+			}
+			if g.player.Client.MP > int(g.player.Exp.MaxMp) {
+				g.player.Client.MP = int(g.player.Exp.MaxMp)
+			}
 		}
 	}
 	g.eventQueue = g.eventQueue[:0]
@@ -638,7 +707,9 @@ func (g *Game) SendChat() {
 		}
 	}
 }
+func (g *Game) GameTooltip() {
 
+}
 func DirToNewPos(p *player.P, d direction.D) typ.P {
 	switch d {
 	case direction.Front:
@@ -783,7 +854,11 @@ func (g *Game) UpdateGamePos() {
 
 func (g *Game) ListenInputs() {
 	g.keys.ListenMovement()
-	g.keys.ListenSpell()
+	spellSelected := g.keys.ListenSpell()
+	if spellSelected != attack.SpellNone && spellSelected != g.player.Exp.SelectedSpell {
+		g.outQueue <- &GameMsg{E: msgs.ESelectSpell, Data: spellSelected}
+		g.player.Exp.SelectedSpell = spellSelected
+	}
 
 	d := g.keys.MovingTo()
 
@@ -798,16 +873,26 @@ COMBAT:
 		if g.keys.MeleeHit() {
 			g.outQueue <- &GameMsg{E: msgs.EMelee, Data: d}
 		}
-		if ok, spellType, x, y := g.keys.CastSpell(); ok {
+		if ok, x, y := g.keys.CastSpell(); ok {
 			worldX, worldY := g.ScreenToWorld(x, y)
 			g.outQueue <- &GameMsg{E: msgs.ECastSpell, Data: &msgs.EventCastSpell{
-				PX:    uint32(worldX),
-				PY:    uint32(worldY),
-				Spell: spellType,
+				PX: uint32(worldX),
+				PY: uint32(worldY),
 			}}
 		}
-		if pressedPotion := g.keys.PressedPotion(); pressedPotion != msgs.ItemNone {
-			g.outQueue <- &GameMsg{E: msgs.EUseItem, Data: pressedPotion}
+		// HARDCODING POTION SLOTS
+		if pressedPotion := g.keys.PressedPotion(); pressedPotion != item.None {
+			if pressedPotion == item.HealthPotion {
+				if g.player.Inv.HealthPotions.X != 255 {
+					msg := msgs.EventUseItem(g.player.Inv.HealthPotions)
+					g.outQueue <- &GameMsg{E: msgs.EUseItem, Data: &msg}
+				}
+			} else {
+				if g.player.Inv.ManaPotions.X != 255 {
+					msg := msgs.EventUseItem(g.player.Inv.ManaPotions)
+					g.outQueue <- &GameMsg{E: msgs.EUseItem, Data: &msg}
+				}
+			}
 		}
 
 	}

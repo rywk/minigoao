@@ -7,10 +7,12 @@ import (
 	"io"
 	"log"
 	"net"
+	"time"
 	"unsafe"
 
+	"github.com/rywk/minigoao/pkg/constants/attack"
 	"github.com/rywk/minigoao/pkg/constants/direction"
-	"github.com/rywk/minigoao/pkg/constants/spell"
+	"github.com/rywk/minigoao/pkg/constants/item"
 	"github.com/rywk/minigoao/pkg/typ"
 	"github.com/vmihailenco/msgpack/v5"
 )
@@ -159,13 +161,17 @@ const (
 	EMelee
 	EUseItem
 	ESendChat
+	ESelectSpell
+	EUpdateSkills
 
 	EPingOk
 	EMoveOk
 	ECastSpellOk
 	EMeleeOk
 	EUseItemOk
+	EUpdateSkillsOk
 
+	EPlayerChangedSkin   // A Player in the viewport changed a part of how other players view it
 	EPlayerConnect       // Just used internally for when the client conn starts and a nick is sent
 	EPlayerLogin         // Player login response, with data about the character and the players in the viewport
 	EPlayerLogout        // Just used internally for when the client conn drops
@@ -188,21 +194,25 @@ const mapCoordinateSize = int(unsafe.Sizeof(uint32(0)))
 
 var eventLen = [ELen]int{
 	0,
-	1,       // EPing
-	-1,      // ERegister
-	0,       // EServerDisconnect
-	1,       // EMove - 1 byte (uint8) to define the direction.
-	1 + 4*2, // ECastSpell - 1 byte (uint8) to define the spell picked in the client side. x, y map coords are 2 uint32
-	1,       // EMelee - signals user used the melee key
-	1,       // EUseItem - 1 byte (uint8) to define the item id
-	-1,      // ESendChat
+	1,     // EPing
+	-1,    // ERegister
+	0,     // EServerDisconnect
+	1,     // EMove - 1 byte (uint8) to define the direction.
+	4 * 2, // ECastSpell - 1 byte (uint8) to define the spell picked in the client side. x, y map coords are 2 uint32
+	1,     // EMelee - signals user used the melee key
+	2,     // EUseItem - 2 byte (byte) x,y inventory
+	-1,    // ESendChat
+	1,     // ESelectSpell 1 byte (uint8) to define spell
+	-1,    // EUpdateSkills
 
 	2,                 // EPingOk
 	2,                 // EMoveOk - 1 byte (bool) move, 1 byte (bool) direction
 	1 + 2 + 4 + 4 + 1, // ECastSpellOk - 1 byte (uint8) spell, 2 bytes (uint16) to define the player id, 4 bytes (uint32) damage,  4 bytes (uint32) new mp,  1 byte (bool) killed target
 	1 + 1 + 1 + 2 + 4, // EMeleeOk -  1 byte (uint8) direction,  1 byte (bool) hit/miss, 1 byte (bool) killed target, 2 bytes (uint16) to define the player id, 4 bytes (uint32) damage
-	1 + 4,             // EUseItemOk - 1 byte (uint8) item, 4 byte (uint32) to define value changed (mana/health)
+	1 + 4 + 2 + 2,     // EUseItemOk - 1 byte (uint8) item, 4 byte (uint32) to define value changed (mana/health), new item count uint16, the slot used
+	-1,                // EUpdateSkillsOk
 
+	6,  // EPlayerChangedSkin - 2 bytes (uint16) to define the player id 4 for the new skin
 	0,  // EPlayerConnect
 	-1, // EPlayerLogin - -1 dynamic size msgpack
 	0,  // EPlayerLogout
@@ -228,13 +238,17 @@ var eventString = [ELen]string{
 	"ECastSpell",
 	"EMelee",
 	"EUseItem",
+	"ESelectSpell",
+	"EUpdateSkills",
 
 	"EPingOk",
 	"EMoveOk",
 	"ECastSpellOk",
 	"EMeleeOk",
 	"EUseItemOk",
+	"EUpdateSkillsOk",
 
+	"EPlayerChangedSkin",
 	"EPlayerConnect",
 	"EPlayerLogin",
 	"EPlayerLogout",
@@ -275,9 +289,13 @@ func encodeAndWrite(m Msgs, e E, msg interface{}) error {
 	case EMelee:
 		return m.Write(e, []byte{msg.(uint8)})
 	case EUseItem:
-		return m.Write(e, []byte{byte(msg.(Item))})
+		return m.Write(e, EncodeEventUseItem(msg.(*EventUseItem)))
 	case ESendChat:
 		return m.WriteWithLen(e, EncodeMsgpack(msg.(*EventSendChat)))
+	case ESelectSpell:
+		return m.Write(e, []byte{byte(msg.(attack.Spell))})
+	case EUpdateSkills:
+		return m.WriteWithLen(e, EncodeMsgpack(msg.(*Skills)))
 	case EPingOk:
 		return m.Write(e, binary.BigEndian.AppendUint16(make([]byte, 0, 2), msg.(uint16)))
 	case EMoveOk:
@@ -288,6 +306,10 @@ func encodeAndWrite(m Msgs, e E, msg interface{}) error {
 		return m.Write(e, EncodeEventMeleeOk(msg.(*EventMeleeOk)))
 	case EUseItemOk:
 		return m.Write(e, EncodeEventUseItemOk(msg.(*EventUseItemOk)))
+	case EUpdateSkillsOk:
+		return m.WriteWithLen(e, EncodeMsgpack(msg.(*Experience)))
+	case EPlayerChangedSkin:
+		return m.Write(e, EncodeEventPlayerChangedSkin(msg.(*EventPlayerChangedSkin)))
 	case EPlayerSpawned:
 		return m.WriteWithLen(e, EncodeMsgpack(msg.(*EventPlayerSpawned)))
 	case EPlayerDespawned:
@@ -346,10 +368,153 @@ type EventPlayerLogin struct {
 	Speed          uint8
 	Dead           bool
 	HP             int32
-	MaxHP          int32
 	MP             int32
-	MaxMP          int32
+	Inv            Inventory
+	Exp            Experience
 	VisiblePlayers []EventNewPlayer
+}
+type Inventory struct {
+	HealthPotions  InventoryPos
+	ManaPotions    InventoryPos
+	EquippedHead   InventoryPos
+	EquippedBody   InventoryPos
+	EquippedWeapon InventoryPos
+	EquippedShield InventoryPos
+	Slots          [8][2]ItemSlot
+}
+
+func NewInvetory() *Inventory {
+	return &Inventory{
+		HealthPotions:  EmptyInventoryPos(),
+		ManaPotions:    EmptyInventoryPos(),
+		EquippedHead:   EmptyInventoryPos(),
+		EquippedBody:   EmptyInventoryPos(),
+		EquippedWeapon: EmptyInventoryPos(),
+		EquippedShield: EmptyInventoryPos(),
+	}
+}
+
+func EmptyInventoryPos() InventoryPos {
+	return InventoryPos{X: 255, Y: 255}
+}
+
+func (in *Inventory) GetWeapon() item.Item {
+	slot := in.EquippedWeapon
+	if slot.X == 255 {
+		return item.None
+	}
+	return in.Slots[slot.X][slot.Y].Item
+}
+func (in *Inventory) GetShield() item.Item {
+	slot := in.EquippedShield
+	if slot.X == 255 {
+		return item.None
+	}
+	return in.Slots[slot.X][slot.Y].Item
+}
+func (in *Inventory) GetBody() item.Item {
+	slot := in.EquippedBody
+	if slot.X == 255 {
+		return item.None
+	}
+	return in.Slots[slot.X][slot.Y].Item
+}
+func (in *Inventory) GetHead() item.Item {
+	slot := in.EquippedHead
+	if slot.X == 255 {
+		return item.None
+	}
+	return in.Slots[slot.X][slot.Y].Item
+}
+func (in *Inventory) GetSlot(slot typ.P) ItemSlot {
+	if slot.X == -1 {
+		return ItemSlot{}
+	}
+	return in.Slots[slot.X][slot.Y]
+}
+
+func (in *Inventory) GetSlotf(slot *EventUseItem) *ItemSlot {
+	return &in.Slots[slot.X][slot.Y]
+}
+func (in *Inventory) GetSlotv2(slot *InventoryPos) *ItemSlot {
+	return &in.Slots[slot.X][slot.Y]
+}
+func (in *Inventory) Range(fn func(i int, it *ItemSlot) bool) {
+	for i := range in.Slots {
+		if !fn(i, &in.Slots[i][0]) {
+			break
+		}
+		if !fn(i, &in.Slots[i][1]) {
+			break
+		}
+	}
+}
+
+type InventoryPos struct {
+	X, Y uint8
+}
+type ItemSlot struct {
+	Item  item.Item
+	Count uint16
+}
+type Experience struct {
+	MaxHp, MaxMp   int32
+	Skills         Skills
+	ItemSkills     Skills
+	ActionCooldown time.Duration
+	SelectedSpell  attack.Spell
+	Spells         [attack.SpellLen]SpellData
+	SelectedWeapon item.Item
+	Items          map[item.Item]ItemData
+}
+
+type Skills struct {
+	FreePoints         uint16
+	Agility            uint16
+	Intelligence       uint16
+	Vitality           uint16
+	FireAffinity       uint16
+	ElectricAffinity   uint16
+	ClericAffinity     uint16
+	AssasinAffinity    uint16
+	WarriorAffinity    uint16
+	MartialArtAffinity uint16
+}
+
+type SpellData struct {
+	//SpellType uint8
+	Damage   int32
+	Cooldown time.Duration
+	ManaCost int32
+}
+
+type ItemData struct {
+	Item       item.Item
+	WeaponData WeaponData
+	ArmorData  ArmorData
+	ShieldData ShieldData
+	HelmetData HelmetData
+}
+type WeaponData struct {
+	//WeaponType uint8
+	Damage      int32
+	Cooldown    time.Duration
+	CriticRange int32
+}
+type ArmorData struct {
+	//WeaponType uint8
+	PhysicalDef int32
+	MagicDef    int32
+}
+type ShieldData struct {
+	//WeaponType uint8
+	PhysicalDef int32
+	MagicDef    int32
+}
+type HelmetData struct {
+	//WeaponType uint8
+	PhysicalDef int32
+	MagicDef    int32
 }
 
 func DecodeMsgpack[T any](data []byte, to *T) *T {
@@ -376,6 +541,11 @@ type EventNewPlayer struct {
 	Dir   direction.D
 	Dead  bool
 	Speed uint8
+
+	Weapon item.Item
+	Shield item.Item
+	Body   item.Item
+	Head   item.Item
 }
 
 type EventPlayerSpawned = EventNewPlayer
@@ -383,33 +553,22 @@ type EventPlayerSpawned = EventNewPlayer
 type EventPlayerEnterViewport = EventNewPlayer
 
 // binary
-type Item uint8
-
-const (
-	ItemNone Item = iota
-	ItemManaPotion
-	ItemHealthPotion
-	ItemLen
-)
 
 type EventCastSpell struct {
-	Spell  spell.Spell
 	PX, PY uint32
 }
 
 func DecodeEventCastSpell(data []byte) *EventCastSpell {
 	return &EventCastSpell{
-		Spell: spell.Spell(data[0]),
-		PX:    binary.BigEndian.Uint32(data[1:5]),
-		PY:    binary.BigEndian.Uint32(data[5:9]),
+		PX: binary.BigEndian.Uint32(data[0:4]),
+		PY: binary.BigEndian.Uint32(data[4:8]),
 	}
 }
 
 func EncodeEventCastSpell(c *EventCastSpell) []byte {
 	bs := make([]byte, ECastSpell.Len())
-	bs[0] = byte(c.Spell)
-	binary.BigEndian.PutUint32(bs[1:5], c.PX)
-	binary.BigEndian.PutUint32(bs[5:9], c.PY)
+	binary.BigEndian.PutUint32(bs[0:4], c.PX)
+	binary.BigEndian.PutUint32(bs[4:8], c.PY)
 	return bs
 }
 
@@ -417,7 +576,7 @@ type EventCastSpellOk struct {
 	ID     uint16
 	Damage uint32
 	NewMP  uint32
-	Spell  spell.Spell
+	Spell  attack.Spell
 	Killed bool
 }
 
@@ -426,7 +585,7 @@ func DecodeEventCastSpellOk(data []byte) *EventCastSpellOk {
 		ID:     binary.BigEndian.Uint16(data[:2]),
 		Damage: binary.BigEndian.Uint32(data[2:6]),
 		NewMP:  binary.BigEndian.Uint32(data[6:10]),
-		Spell:  spell.Spell(data[10]),
+		Spell:  attack.Spell(data[10]),
 		Killed: data[11] != 0,
 	}
 }
@@ -471,15 +630,50 @@ func EncodeEventMeleeOk(c *EventMeleeOk) []byte {
 	return bs
 }
 
+type EventPlayerChangedSkin struct {
+	ID     uint16
+	Armor  item.Item
+	Head   item.Item
+	Weapon item.Item
+	Shield item.Item
+}
+
+func DecodeEventPlayerChangedSkin(data []byte) *EventPlayerChangedSkin {
+	return &EventPlayerChangedSkin{
+		ID:     binary.BigEndian.Uint16(data[0:2]),
+		Armor:  item.Item(data[2]),
+		Head:   item.Item(data[3]),
+		Weapon: item.Item(data[4]),
+		Shield: item.Item(data[5]),
+	}
+}
+
+func EncodeEventPlayerChangedSkin(c *EventPlayerChangedSkin) []byte {
+	bs := make([]byte, EPlayerChangedSkin.Len())
+	binary.BigEndian.PutUint16(bs[0:2], c.ID)
+	bs[2] = byte(c.Armor)
+	bs[3] = byte(c.Head)
+	bs[4] = byte(c.Weapon)
+	bs[5] = byte(c.Shield)
+	return bs
+}
+
 type EventUseItemOk struct {
-	Item   Item
+	Slot   InventoryPos
+	Item   item.Item
 	Change uint32
+	Count  uint16
 }
 
 func DecodeEventUseItemOk(data []byte) *EventUseItemOk {
 	return &EventUseItemOk{
-		Item:   Item(data[0]),
+		Item:   item.Item(data[0]),
 		Change: binary.BigEndian.Uint32(data[1:5]),
+		Count:  binary.BigEndian.Uint16(data[5:7]),
+		Slot: InventoryPos{
+			X: data[7],
+			Y: data[8],
+		},
 	}
 }
 
@@ -487,6 +681,9 @@ func EncodeEventUseItemOk(c *EventUseItemOk) []byte {
 	bs := make([]byte, EUseItemOk.Len())
 	bs[0] = byte(c.Item)
 	binary.BigEndian.PutUint32(bs[1:5], c.Change)
+	binary.BigEndian.PutUint16(bs[5:7], c.Count)
+	bs[7] = c.Slot.X
+	bs[8] = c.Slot.Y
 	return bs
 }
 
@@ -518,14 +715,14 @@ func EncodeEventPlayerMoved(c *EventPlayerMoved) []byte {
 
 type EventPlayerSpell struct {
 	ID     uint16
-	Spell  spell.Spell
+	Spell  attack.Spell
 	Killed bool
 }
 
 func DecodeEventPlayerSpell(data []byte) *EventPlayerSpell {
 	return &EventPlayerSpell{
 		ID:     binary.BigEndian.Uint16(data[:2]),
-		Spell:  spell.Spell(data[2]),
+		Spell:  attack.Spell(data[2]),
 		Killed: data[3] != 0,
 	}
 }
@@ -574,7 +771,7 @@ func EncodeEventPlayerMelee(c *EventPlayerMelee) []byte {
 
 type EventPlayerSpellRecieved struct {
 	ID     uint16
-	Spell  spell.Spell
+	Spell  attack.Spell
 	Damage uint32
 	NewHP  uint32
 }
@@ -582,7 +779,7 @@ type EventPlayerSpellRecieved struct {
 func DecodeEventPlayerSpellRecieved(data []byte) *EventPlayerSpellRecieved {
 	return &EventPlayerSpellRecieved{
 		ID:     binary.BigEndian.Uint16(data[:2]),
-		Spell:  spell.Spell(data[2]),
+		Spell:  attack.Spell(data[2]),
 		Damage: binary.BigEndian.Uint32(data[3:7]),
 		NewHP:  binary.BigEndian.Uint32(data[7:11]),
 	}
@@ -619,5 +816,21 @@ func EncodeEventPlayerMeleeRecieved(c *EventPlayerMeleeRecieved) []byte {
 	binary.BigEndian.PutUint32(bs[2:6], c.Damage)
 	binary.BigEndian.PutUint32(bs[6:10], c.NewHP)
 	bs[10] = c.Dir
+	return bs
+}
+
+type EventUseItem InventoryPos
+
+func DecodeEventUseItem(data []byte) *EventUseItem {
+	return &EventUseItem{
+		X: data[0],
+		Y: data[1],
+	}
+}
+
+func EncodeEventUseItem(c *EventUseItem) []byte {
+	bs := make([]byte, EUseItem.Len())
+	bs[0] = c.X
+	bs[1] = c.Y
 	return bs
 }
