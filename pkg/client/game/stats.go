@@ -490,36 +490,36 @@ type Skills struct {
 }
 
 func NewSkills(g *Game) *Skills {
-	bg := ebiten.NewImage(600, 340)
-	xoff := int32(60)
-	height := int32(90)
-	yoff := int32(60)
+	bg := ebiten.NewImage(400, ScreenHeight-64)
+	xoff := int32(40)
+	height := int32(50)
+	yoff := int32(80)
 
 	btnImg := ebiten.NewImage(32, 32)
 	btnImg.Fill(color.RGBA{101, 32, 133, 0})
-	windowStart := typ.P{X: 340, Y: ScreenHeight - 404}
+	windowStart := typ.P{X: ScreenWidth - 400, Y: 0}
 	s := &Skills{
 		drawOp:        &ebiten.DrawImageOptions{},
 		g:             g,
 		W:             int32(bg.Bounds().Dx()),
 		H:             int32(bg.Bounds().Dy()),
-		saveButton:    NewButton(g, texture.Decode(img.IconDisk_png), btnImg, windowStart.Add(400, 10)),
-		zeroButton:    NewButton(g, texture.Decode(img.IconX_png), btnImg, windowStart.Add(442, 10)),
+		saveButton:    NewButton(g, texture.Decode(img.IconDisk_png), btnImg, windowStart.Add(80, 40)),
+		zeroButton:    NewButton(g, texture.Decode(img.IconX_png), btnImg, windowStart.Add(280, 40)),
 		Background:    bg,
 		FreePoints:    int(g.player.Exp.Skills.FreePoints),
 		updatedSkills: g.player.Exp.Skills,
 	}
-	s.Agility = NewSkillInput(g, &s.updatedSkills.Agility, windowStart.Add(xoff+10, yoff+yoff/2))
-	s.Intelligence = NewSkillInput(g, &s.updatedSkills.Intelligence, windowStart.Add(xoff+10, yoff+height+yoff/2))
-	s.Vitality = NewSkillInput(g, &s.updatedSkills.Vitality, windowStart.Add(xoff+10, yoff+height*2+yoff/2))
+	s.Agility = NewSkillInput(g, &s.updatedSkills.Agility, windowStart.Add(xoff*7, yoff))
+	s.Intelligence = NewSkillInput(g, &s.updatedSkills.Intelligence, windowStart.Add(xoff*7, yoff+height))
+	s.Vitality = NewSkillInput(g, &s.updatedSkills.Vitality, windowStart.Add(xoff*7, yoff+height*2))
 
-	s.FireAffinity = NewSkillInput(g, &s.updatedSkills.FireAffinity, windowStart.Add(xoff*4+35, yoff+yoff+yoff/2))
-	s.ElectricAffinity = NewSkillInput(g, &s.updatedSkills.ElectricAffinity, windowStart.Add(xoff*6+40, yoff+yoff+yoff/2))
-	s.ClericAffinity = NewSkillInput(g, &s.updatedSkills.ClericAffinity, windowStart.Add(xoff*8+40, yoff+yoff+yoff/2))
+	s.FireAffinity = NewSkillInput(g, &s.updatedSkills.FireAffinity, windowStart.Add(xoff*7, yoff+height*4))
+	s.ElectricAffinity = NewSkillInput(g, &s.updatedSkills.ElectricAffinity, windowStart.Add(xoff*7, yoff+height*5))
+	s.ClericAffinity = NewSkillInput(g, &s.updatedSkills.ClericAffinity, windowStart.Add(xoff*7, yoff+height*6))
 
-	s.AssasinAffinity = NewSkillInput(g, &s.updatedSkills.AssasinAffinity, windowStart.Add(xoff*4+35, yoff+yoff*2+yoff+yoff/2))
-	s.WarriorAffinity = NewSkillInput(g, &s.updatedSkills.WarriorAffinity, windowStart.Add(xoff*6+40, yoff+yoff*2+yoff+yoff/2))
-	s.MartialArtAffinity = NewSkillInput(g, &s.updatedSkills.MartialArtAffinity, windowStart.Add(xoff*8+40, yoff+yoff*2+yoff+yoff/2))
+	s.AssasinAffinity = NewSkillInput(g, &s.updatedSkills.AssasinAffinity, windowStart.Add(xoff*7, yoff+height*8))
+	s.WarriorAffinity = NewSkillInput(g, &s.updatedSkills.WarriorAffinity, windowStart.Add(xoff*7, yoff+height*9))
+	s.MartialArtAffinity = NewSkillInput(g, &s.updatedSkills.MartialArtAffinity, windowStart.Add(xoff*7, yoff+height*10))
 	return s
 }
 
@@ -529,6 +529,60 @@ func (b *Skills) Update() {
 		b.g.outQueue <- &GameMsg{E: msgs.EUpdateSkills, Data: &b.updatedSkills}
 		b.g.stats.skillsOpen = false
 	}
+	b.Agility.Update()
+	if *b.Agility.Value < b.g.player.Exp.ItemSkills.Agility {
+		*b.Agility.Value++
+		b.FreePoints--
+	}
+
+	b.Intelligence.Update()
+	if *b.Intelligence.Value < b.g.player.Exp.ItemSkills.Intelligence {
+		*b.Intelligence.Value++
+		b.FreePoints--
+	}
+
+	b.Vitality.Update()
+	if *b.Vitality.Value < b.g.player.Exp.ItemSkills.Vitality {
+		*b.Vitality.Value++
+		b.FreePoints--
+	}
+
+	b.FireAffinity.Update()
+	if *b.FireAffinity.Value < b.g.player.Exp.ItemSkills.FireAffinity {
+		*b.FireAffinity.Value++
+		b.FreePoints--
+	}
+
+	b.ElectricAffinity.Update()
+	if *b.ElectricAffinity.Value < b.g.player.Exp.ItemSkills.ElectricAffinity {
+		*b.ElectricAffinity.Value++
+		b.FreePoints--
+	}
+
+	b.ClericAffinity.Update()
+	if *b.ClericAffinity.Value < b.g.player.Exp.ItemSkills.ClericAffinity {
+		*b.ClericAffinity.Value++
+		b.FreePoints--
+	}
+
+	b.AssasinAffinity.Update()
+	if *b.AssasinAffinity.Value < b.g.player.Exp.ItemSkills.AssasinAffinity {
+		*b.AssasinAffinity.Value++
+		b.FreePoints--
+	}
+
+	b.WarriorAffinity.Update()
+	if *b.WarriorAffinity.Value < b.g.player.Exp.ItemSkills.WarriorAffinity {
+		*b.WarriorAffinity.Value++
+		b.FreePoints--
+	}
+
+	b.MartialArtAffinity.Update()
+	if *b.MartialArtAffinity.Value < b.g.player.Exp.ItemSkills.MartialArtAffinity {
+		*b.MartialArtAffinity.Value++
+		b.FreePoints--
+	}
+
 	if b.zeroButton.Pressed() {
 		total := 0
 		total += int(b.updatedSkills.Agility) - int(b.g.player.Exp.ItemSkills.Agility)
@@ -558,62 +612,66 @@ func (b *Skills) Update() {
 		total += int(b.updatedSkills.MartialArtAffinity) - int(b.g.player.Exp.ItemSkills.MartialArtAffinity)
 		b.updatedSkills.MartialArtAffinity = 0 + b.g.player.Exp.ItemSkills.MartialArtAffinity
 		if total > 0 {
-			b.FreePoints = int(b.g.player.Exp.Skills.FreePoints) + total
+
+			b.FreePoints += total
 		} else {
+
 			//b.FreePoints = int(b.g.player.Exp.Skills.FreePoints)
 			//log.Print("asd")
 		}
 	}
-	b.Agility.Update()
-	b.Intelligence.Update()
-	b.Vitality.Update()
 
-	b.FireAffinity.Update()
-	b.ElectricAffinity.Update()
-	b.ClericAffinity.Update()
-
-	b.AssasinAffinity.Update()
-	b.WarriorAffinity.Update()
-	b.MartialArtAffinity.Update()
 }
 func (b *Skills) Draw(screen *ebiten.Image) {
 	b.Background.Fill(color.RGBA{0, 0, 0, 170})
-	b.saveButton.Draw(b.Background, 400, 10)
-	b.zeroButton.Draw(b.Background, 442, 10)
+	b.saveButton.Draw(b.Background, 80, 40)
+	b.zeroButton.Draw(b.Background, 280, 40)
 
-	text.PrintBigAt(b.Background, "Free points", 200, 0)
-	text.PrintBigAt(b.Background, fmt.Sprintf("%d", b.FreePoints), 240, 28)
+	text.PrintBigAt(b.Background, "Free points", 138, 0)
+	text.PrintBigAt(b.Background, fmt.Sprintf("%d", b.FreePoints), 180, 28)
 
-	xoff := 60
-	height := 90
-	yoff := 60
-	text.PrintBigAt(b.Background, "Agility", xoff-20, yoff)
-	b.Agility.Draw(b.Background, xoff+10, yoff+yoff/2)
-	text.PrintBigAt(b.Background, "Intelligence", xoff-44, yoff+height)
-	b.Intelligence.Draw(b.Background, xoff+10, yoff+height+yoff/2)
-	text.PrintBigAt(b.Background, "Vitality", xoff-20, yoff+height*2)
-	b.Vitality.Draw(b.Background, xoff+10, yoff+height*2+yoff/2)
+	xoff := 40
+	height := 50
+	yoff := 80
+	text.PrintBigAt(b.Background, "Agility", xoff, yoff)
+	b.Agility.Draw(b.Background, xoff*7, yoff)
 
-	text.PrintBigAt(b.Background, "Magic", xoff*3+xoff/6, yoff+yoff/2)
-	//offY := 50
-	text.PrintBigAt(b.Background, "Fire", xoff*4+20, yoff+yoff)
-	b.FireAffinity.Draw(b.Background, xoff*4+35, yoff+yoff+yoff/2)
-	text.PrintBigAt(b.Background, "Electric", xoff*6, yoff+yoff)
-	b.ElectricAffinity.Draw(b.Background, xoff*6+40, yoff+yoff+yoff/2)
-	text.PrintBigAt(b.Background, "Cleric", xoff*8+10, yoff+yoff)
-	b.ClericAffinity.Draw(b.Background, xoff*8+40, yoff+yoff+yoff/2)
+	text.PrintBigAt(b.Background, "Intelligence", xoff, yoff+height)
+	b.Intelligence.Draw(b.Background, xoff*7, yoff+height)
 
-	text.PrintBigAt(b.Background, "Melee", xoff*3+xoff/6, yoff+yoff*2+yoff/2)
-	text.PrintBigAt(b.Background, "Assasin", xoff*4, yoff+yoff*2+yoff)
-	b.AssasinAffinity.Draw(b.Background, xoff*4+35, yoff+yoff*2+yoff+yoff/2)
-	text.PrintBigAt(b.Background, "Warrior", xoff*6, yoff+yoff*2+yoff)
-	b.WarriorAffinity.Draw(b.Background, xoff*6+40, yoff+yoff*2+yoff+yoff/2)
-	text.PrintBigAt(b.Background, "MartialArt", xoff*8, yoff+yoff*2+yoff)
-	b.MartialArtAffinity.Draw(b.Background, xoff*8+40, yoff+yoff*2+yoff+yoff/2)
+	text.PrintBigAt(b.Background, "Vitality", xoff, yoff+height*2)
+	b.Vitality.Draw(b.Background, xoff*7, yoff+height*2)
+
+	text.PrintBigAt(b.Background, "Magic", xoff*4, yoff+height*3)
+
+	text.PrintBigAt(b.Background, "Fire", xoff, yoff+height*4)
+	b.FireAffinity.Draw(b.Background, xoff*7, yoff+height*4)
+
+	text.PrintBigAt(b.Background, "Electric", xoff, yoff+height*5)
+	b.ElectricAffinity.Draw(b.Background, xoff*7, yoff+height*5)
+
+	text.PrintBigAt(b.Background, "Cleric", xoff, yoff+height*6)
+	b.ClericAffinity.Draw(b.Background, xoff*7, yoff+height*6)
+
+	text.PrintBigAt(b.Background, "Melee", xoff*4, yoff+height*7)
+	text.PrintBigAt(b.Background, "Assasin", xoff, yoff+height*8)
+	b.AssasinAffinity.Draw(b.Background, xoff*7, yoff+height*8)
+
+	text.PrintBigAt(b.Background, "Warrior", xoff, yoff+height*9)
+	b.WarriorAffinity.Draw(b.Background, xoff*7, yoff+height*9)
+
+	text.PrintBigAt(b.Background, "MartialArt", xoff, yoff+height*10)
+	b.MartialArtAffinity.Draw(b.Background, xoff*7, yoff+height*10)
 
 	b.drawOp.GeoM.Reset()
-	b.drawOp.GeoM.Translate(340, ScreenHeight-404)
+	b.drawOp.GeoM.Translate(ScreenWidth-400, 0)
 	screen.DrawImage(b.Background, b.drawOp)
+	if b.zeroButton.Over {
+		text.PrintAt(screen, "Reset skills", b.g.mouseX-80, b.g.mouseY)
+	}
+	if b.saveButton.Over {
+		text.PrintAt(screen, "Save skills", b.g.mouseX-80, b.g.mouseY)
+	}
 }
 
 type Options struct {
@@ -1103,7 +1161,7 @@ func (s *Hud) Update() {
 	}
 	if s.skillsOpen {
 		s.skills.Update()
-		if (s.g.mouseX < 340 || s.g.mouseY < ScreenHeight-404 || s.g.mouseX > 940) &&
+		if (s.g.mouseX < ScreenWidth-400) &&
 			ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
 			s.skillsOpen = false
 			s.skills.FreePoints = int(s.g.player.Exp.Skills.FreePoints)
