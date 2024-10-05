@@ -280,7 +280,7 @@ var ItemProps = [ItemLen]ItemProp{
 		},
 		WeaponProp: &WeaponProp{
 			Cooldown:  time.Millisecond * 1000,
-			Damage:    198,
+			Damage:    182,
 			CritRange: 8,
 			Cast: func(from, to Player, calc int32) error {
 				if from == to {
@@ -335,48 +335,48 @@ var ItemProps = [ItemLen]ItemProp{
 
 	{
 		Type: ShieldArcane,
-		Buffs: skill.Buffs{}.AddValue(skill.BuffMagicDefense, 22).
-			AddValue(skill.BuffPhysicalDefense, 8),
+		Buffs: skill.Buffs{}.AddValue(skill.BuffMagicDefense, 8).
+			AddValue(skill.BuffPhysicalDefense, 4),
 		Use: func(p Player) uint32 {
 			return 0
 		},
 	},
 	{
 		Type: ShieldTower,
-		Buffs: skill.Buffs{}.AddValue(skill.BuffMagicDefense, 8).
-			AddValue(skill.BuffPhysicalDefense, 22),
+		Buffs: skill.Buffs{}.AddValue(skill.BuffMagicDefense, 4).
+			AddValue(skill.BuffPhysicalDefense, 8),
 		Use: func(p Player) uint32 {
 			return 0
 		},
 	},
 	{
 		Type: HatMage,
-		Buffs: skill.Buffs{}.AddValue(skill.BuffMagicDefense, 8).
-			AddValue(skill.BuffPhysicalDefense, 22),
+		Buffs: skill.Buffs{}.AddValue(skill.BuffMagicDefense, 4).
+			AddValue(skill.BuffPhysicalDefense, 8),
 		Use: func(p Player) uint32 {
 			return 0
 		},
 	},
 	{
 		Type: HelmetPaladin,
-		Buffs: skill.Buffs{}.AddValue(skill.BuffMagicDefense, 22).
-			AddValue(skill.BuffPhysicalDefense, 8),
+		Buffs: skill.Buffs{}.AddValue(skill.BuffMagicDefense, 8).
+			AddValue(skill.BuffPhysicalDefense, 4),
 		Use: func(p Player) uint32 {
 			return 0
 		},
 	},
 	{
 		Type: ArmorShadow,
-		Buffs: skill.Buffs{}.AddValue(skill.BuffMagicDefense, 22).
-			AddValue(skill.BuffPhysicalDefense, 8),
+		Buffs: skill.Buffs{}.AddValue(skill.BuffMagicDefense, 8).
+			AddValue(skill.BuffPhysicalDefense, 4),
 		Use: func(p Player) uint32 {
 			return 0
 		},
 	},
 	{
 		Type: ArmorDark,
-		Buffs: skill.Buffs{}.AddValue(skill.BuffMagicDefense, 16).
-			AddValue(skill.BuffPhysicalDefense, 16),
+		Buffs: skill.Buffs{}.AddValue(skill.BuffMagicDefense, 6).
+			AddValue(skill.BuffPhysicalDefense, 6),
 		Use: func(p Player) uint32 {
 			return 0
 		},

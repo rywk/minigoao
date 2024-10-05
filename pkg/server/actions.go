@@ -45,12 +45,11 @@ func Cast(from, to *Player) (int32, error) {
 	}
 	from.mp = from.mp - sp.BaseManaCost
 
-	mod := int32(from.exp.ItemBuffs[skill.BuffMagicDamage] - to.exp.ItemBuffs[skill.BuffMagicDefense])
+	damage := sp.BaseDamage + int32(from.exp.ItemBuffs[skill.BuffMagicDamage]-to.exp.ItemBuffs[skill.BuffMagicDefense])
 	log.Printf("MagicAtk %v vs MagicDef %v", from.exp.ItemBuffs[skill.BuffMagicDamage], to.exp.ItemBuffs[skill.BuffMagicDefense])
-	if mod < 0 {
-		mod = 0
+	if damage < 0 {
+		damage = 0
 	}
-	damage := sp.BaseDamage + mod
 
 	err := sp.Cast(from, to, damage)
 	if err != nil {
@@ -85,11 +84,11 @@ func Melee(from, to *Player) int32 {
 	log.Printf("base: %v, crit range: %v", wp.Damage, wp.CritRange)
 	log.Printf("PhysicAtk %v vs PhysicDef %v", from.exp.ItemBuffs[skill.BuffPhysicalDamage], to.exp.ItemBuffs[skill.BuffPhysicalDefense])
 
-	mod := int32(from.exp.ItemBuffs[skill.BuffPhysicalDamage] - to.exp.ItemBuffs[skill.BuffPhysicalDefense])
+	mod := wp.Damage + int32(from.exp.ItemBuffs[skill.BuffPhysicalDamage]-to.exp.ItemBuffs[skill.BuffPhysicalDefense])
 	if mod < 0 {
 		mod = 0
 	}
-	damage := (wp.Damage + rand.Int31n(wp.CritRange)) + mod
+	damage := (mod + rand.Int31n(wp.CritRange))
 
 	wp.Cast(from, to, damage)
 	return damage
