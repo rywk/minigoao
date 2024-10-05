@@ -216,7 +216,7 @@ type Player interface {
 	MultMaxMana(float64) int32
 }
 
-const HandDamage int32 = 25
+const HandDamage int32 = -50
 const HandCritDamage int32 = 15
 const HandCooldown = time.Second
 

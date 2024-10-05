@@ -100,7 +100,7 @@ const (
 
 // Base stats
 const (
-	BaseHP             = 300
+	BaseHP             = 330
 	BaseMP             = 1200
 	BaseActionCooldown = time.Millisecond * 720
 )

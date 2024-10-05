@@ -29,7 +29,7 @@ func NewExperience(p *Player) *Experience {
 	}
 }
 
-const TotalSkills = 100
+const TotalSkills = 50
 
 // Each time the skills are updated
 func (e *Experience) SetNewSkills(sk skill.Skills) {
