@@ -113,8 +113,8 @@ var SpellProps = [SpellLen]SpellProp{
 	{
 		Spell:        SpellElectricDischarge,
 		BaseCooldown: time.Millisecond * 900,
-		BaseManaCost: 450,
-		BaseDamage:   92,
+		BaseManaCost: 400,
+		BaseDamage:   96,
 		Cast: func(from, to Player, calc int32) error {
 			if from == to {
 				return ErrorSelfCast
@@ -126,7 +126,7 @@ var SpellProps = [SpellLen]SpellProp{
 	{
 		Spell:        SpellExplode,
 		BaseCooldown: time.Second,
-		BaseManaCost: 999,
+		BaseManaCost: 900,
 		BaseDamage:   149,
 		Cast: func(from, to Player, calc int32) error {
 			if from == to {
