@@ -55,6 +55,8 @@ var (
 	Text_png []byte
 	//go:embed text_small.png
 	TextSmall_png []byte
+	//go:embed damage_numbers.png
+	DamageNumbers_png []byte
 
 	//go:embed hud_bg2.png
 	HudBg_png []byte

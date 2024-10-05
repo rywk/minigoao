@@ -448,7 +448,6 @@ func (g *Game) consumeIncomingData() {
 		case msgs.ESelectSpell:
 			player.SelectedSpell = incomingData.Data.(attack.Spell)
 			log.Printf("[%v][%v]: Selected %v", player.id, player.nick, player.SelectedSpell.String())
-
 		case msgs.EUpdateSkills:
 			skills := incomingData.Data.(*skill.Skills)
 			player.exp.SetNewSkills(*skills)

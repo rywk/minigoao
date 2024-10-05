@@ -1,6 +1,7 @@
 package player
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 	"log"
@@ -540,7 +541,14 @@ func (pfx *PEffects) NewSpellHit(s attack.Spell) {
 
 func (pfx *PEffects) NewAttackNumber(dmg int, heal bool) {
 	if dmg > 0 {
-		pfx.active = append(pfx.active, &AtkDmgFxTxt{img: ebiten.NewImage(40, 40), dmg: strconv.FormatInt(int64(dmg), 10), heal: heal})
+		dmgs := ""
+		if dmg >= 150 {
+			dmgs = fmt.Sprintf("¡%d!", dmg)
+		} else {
+			dmgs = strconv.FormatInt(int64(dmg), 10)
+		}
+		offy := len(dmgs) * 4
+		pfx.active = append(pfx.active, &AtkDmgFxTxt{img: ebiten.NewImage(40, 40), dmg: dmgs, heal: heal, offy: offy})
 	}
 }
 
@@ -582,6 +590,7 @@ type AtkDmgFxTxt struct {
 	img  *ebiten.Image
 	y    int
 	c    int
+	offy int
 }
 
 func (adt *AtkDmgFxTxt) Play() bool {
@@ -590,7 +599,8 @@ func (adt *AtkDmgFxTxt) Play() bool {
 	if adt.heal {
 		col = color.RGBA{6, 153, 194, 100}
 	}
-	text.PrintColAt(adt.img, adt.dmg, 0, 10-adt.y, col)
+
+	text.DrawNumbers(adt.img, adt.dmg, 0, 10-adt.y, col)
 	if adt.y == 10 {
 		adt.y = 0
 		return false
@@ -608,7 +618,7 @@ func (adt *AtkDmgFxTxt) EffectFrame() *ebiten.Image {
 }
 
 func (a *AtkDmgFxTxt) EffectOpt(op *ebiten.DrawImageOptions) *ebiten.DrawImageOptions {
-	op.GeoM.Translate(6, -50)
+	op.GeoM.Translate(float64(12-a.offy), -50)
 	return op
 }
 

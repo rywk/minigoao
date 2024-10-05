@@ -76,14 +76,6 @@ func (s Buffs) Add(sk Buffs) Buffs {
 	return s
 }
 
-func (s Buffs) SubMelee(sk Buffs) Value {
-	return s[BuffPhysicalDamage] - sk[BuffPhysicalDefense]
-}
-
-func (s Buffs) SubSpell(sk Buffs) Value {
-	return s[BuffMagicDamage] - sk[BuffMagicDefense]
-}
-
 // Player Stats
 type Stats struct {
 	MaxHP    int32
@@ -120,7 +112,7 @@ func (s Skills) Buffs() Buffs {
 	b[BuffPhysicalDamage] += s[Vitality]
 	b[BuffPhysicalDamage] -= s[Intelligence] * 0.4
 
-	b[BuffMagicDamage] += s[Intelligence]
+	b[BuffMagicDamage] += s[Intelligence] * 0.9
 	//b[BuffMagicDamage] -= s[Vitality]
 
 	return b

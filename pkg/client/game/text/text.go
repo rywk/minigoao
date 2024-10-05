@@ -21,6 +21,9 @@ var (
 	smallDebugPrintTextImage     *ebiten.Image
 	smallDebugPrintTextSubImages = map[rune]*ebiten.Image{}
 
+	numbersPrintTextImage     *ebiten.Image
+	numbersPrintTextSubImages = map[rune]*ebiten.Image{}
+
 	bigBgImage   *ebiten.Image
 	smallBgImage *ebiten.Image
 )
@@ -31,6 +34,9 @@ const (
 
 	scw = 6
 	sch = 16
+
+	numcw = 8
+	numch = 12
 )
 
 func init() {
@@ -51,6 +57,20 @@ func init() {
 
 	smallBgImage = ebiten.NewImage(scw, sch+2)
 	smallBgImage.Fill(color.Black)
+
+	numbersImg, _, err := image.Decode(bytes.NewReader(img.DamageNumbers_png))
+	if err != nil {
+		panic(err)
+	}
+	numbersPrintTextImage = ebiten.NewImageFromImage(numbersImg)
+
+	runes := []rune{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '!', '¡'}
+	x := 0
+	for _, r := range runes {
+		numbersPrintTextSubImages[r] = numbersPrintTextImage.SubImage(image.Rect(x, 0, x+numcw, numch)).(*ebiten.Image)
+		x += numcw
+	}
+
 }
 
 func PrintColAt(image *ebiten.Image, str string, x, y int, col color.Color) {
@@ -182,4 +202,29 @@ func drawDebugTextOpt(rt *ebiten.Image, str string, ox, oy int, opt options) (in
 		rt.DrawImage(opt.bgimg, bgOp)
 	}
 	return x, y
+}
+func DrawNumbers(rt *ebiten.Image, str string, ox, oy int, col color.Color) {
+	op := &ebiten.DrawImageOptions{}
+	//bgOp := &ebiten.DrawImageOptions{}
+	x := 0
+	y := 0
+
+	for _, c := range str {
+
+		s, ok := numbersPrintTextSubImages[c]
+		if !ok {
+			return
+		}
+
+		op.GeoM.Reset()
+		op.GeoM.Translate(float64(x), float64(y))
+		op.GeoM.Translate(float64(ox), float64(oy))
+		if col != nil {
+			op.ColorScale.Reset()
+			op.ColorScale.ScaleWithColor(col)
+		}
+		rt.DrawImage(s, op)
+		x += numcw
+	}
+
 }
