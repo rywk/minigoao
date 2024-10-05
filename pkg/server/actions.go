@@ -64,6 +64,8 @@ func Cast(from, to *Player) (int32, error) {
 	return damage, nil
 }
 
+const BaseMelee = 126
+
 func Melee(from, to *Player) int32 {
 	if from == to {
 		return -1
@@ -87,9 +89,10 @@ func Melee(from, to *Player) int32 {
 	log.Printf("base: %v, crit range: %v", wp.Damage, wp.CritRange)
 	log.Printf("ITEM PhysicAtk %v vs PhysicDef %v", from.exp.ItemBuffs[skill.BuffPhysicalDamage], to.exp.ItemBuffs[skill.BuffPhysicalDefense])
 	log.Printf("PJ PhysicAtk %v vs PhysicDef %v", from.exp.SkillBuffs[skill.BuffPhysicalDamage], to.exp.SkillBuffs[skill.BuffPhysicalDefense])
+
 	itemBuff := int32(from.exp.ItemBuffs[skill.BuffPhysicalDamage] - to.exp.ItemBuffs[skill.BuffPhysicalDefense])
 	buff := int32(from.exp.SkillBuffs[skill.BuffPhysicalDamage] - to.exp.SkillBuffs[skill.BuffPhysicalDefense])
-	damage := (wp.Damage + rand.Int31n(wp.CritRange)) + buff + itemBuff
+	damage := BaseMelee + (wp.Damage + rand.Int31n(wp.CritRange)) + buff + itemBuff
 	if damage < 0 {
 		damage = 0
 	}

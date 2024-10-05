@@ -259,8 +259,8 @@ var ItemProps = [ItemLen]ItemProp{
 		},
 		WeaponProp: &WeaponProp{
 			Cooldown:  time.Millisecond * 900,
-			Damage:    148,
-			CritRange: 10,
+			Damage:    1,
+			CritRange: 4,
 			Cast: func(from, to Player, calc int32) error {
 				if from == to {
 					return ErrorSelfCast
@@ -279,7 +279,7 @@ var ItemProps = [ItemLen]ItemProp{
 		},
 		WeaponProp: &WeaponProp{
 			Cooldown:  time.Millisecond * 1000,
-			Damage:    192,
+			Damage:    3,
 			CritRange: 8,
 			Cast: func(from, to Player, calc int32) error {
 				if from == to {
@@ -296,8 +296,8 @@ var ItemProps = [ItemLen]ItemProp{
 		Use:   func(p Player) uint32 { return 0 },
 		WeaponProp: &WeaponProp{
 			Cooldown:  time.Millisecond * 1000,
-			Damage:    50,
-			CritRange: 20,
+			Damage:    0,
+			CritRange: 3,
 			Cast: func(from, to Player, calc int32) error {
 				if from == to {
 					return ErrorSelfCast
@@ -317,8 +317,8 @@ var ItemProps = [ItemLen]ItemProp{
 		},
 		WeaponProp: &WeaponProp{
 			Cooldown:  time.Millisecond * 1000,
-			Damage:    152,
-			CritRange: 78,
+			Damage:    -35,
+			CritRange: 35,
 			Cast: func(from, to Player, calc int32) error {
 				if from == to {
 					return ErrorSelfCast
