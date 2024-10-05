@@ -858,3 +858,7 @@ func (p *Player) AddMana(mana int32) int32 {
 func (p *Player) MultMaxMana(mana float64) int32 {
 	return int32(float64(p.exp.Stats.MaxMP) * mana)
 }
+
+func (p *Player) IsParalized() bool {
+	return p.paralized
+}

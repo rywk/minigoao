@@ -462,6 +462,7 @@ type Experience struct {
 	FreePoints int32
 	Skills     skill.Skills
 	ItemBuffs  skill.Buffs
+	SkillBuffs skill.Buffs
 	Stats      skill.Stats
 }
 

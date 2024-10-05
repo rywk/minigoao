@@ -14,6 +14,7 @@ type Experience struct {
 	FreePoints int32
 	Skills     skill.Skills
 	ItemBuffs  skill.Buffs
+	SkillBuffs skill.Buffs
 	Stats      skill.Stats
 }
 
@@ -23,11 +24,12 @@ func NewExperience(p *Player) *Experience {
 		FreePoints: TotalSkills,
 		Skills:     skill.Skills{},
 		ItemBuffs:  skill.Buffs{},
+		SkillBuffs: skill.Buffs{},
 		Stats:      skill.Skills{}.Stats(),
 	}
 }
 
-const TotalSkills = 14
+const TotalSkills = 100
 
 // Each time the skills are updated
 func (e *Experience) SetNewSkills(sk skill.Skills) {
@@ -37,6 +39,7 @@ func (e *Experience) SetNewSkills(sk skill.Skills) {
 	}
 	e.Skills = sk
 	e.Stats = sk.Stats()
+	e.SkillBuffs = sk.Buffs()
 	e.FreePoints = TotalSkills - int32(total)
 }
 
@@ -67,6 +70,7 @@ func (e *Experience) ToMsgs() msgs.Experience {
 		FreePoints: e.FreePoints,
 		Skills:     e.Skills,
 		ItemBuffs:  e.ItemBuffs,
+		SkillBuffs: e.SkillBuffs,
 		Stats:      e.Stats,
 	}
 }

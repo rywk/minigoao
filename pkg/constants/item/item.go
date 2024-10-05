@@ -246,7 +246,7 @@ var ItemProps = [ItemLen]ItemProp{
 	}, {
 		Type: HealthPotion,
 		Use: func(p Player) uint32 {
-			return uint32(p.AddHp(30))
+			return uint32(p.AddHp(27))
 		},
 	},
 	{
@@ -294,10 +294,7 @@ var ItemProps = [ItemLen]ItemProp{
 	{
 		Type:  WeaponFireStaff,
 		Buffs: skill.Buffs{}.AddValue(skill.BuffMagicDamage, 32),
-		Use: func(p Player) uint32 {
-			// use means equip or unequip in the case of wearable items
-			return 0
-		},
+		Use:   func(p Player) uint32 { return 0 },
 		WeaponProp: &WeaponProp{
 			Cooldown:  time.Millisecond * 1000,
 			Damage:    50,

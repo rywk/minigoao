@@ -91,25 +91,37 @@ type Stats struct {
 	ActionCD time.Duration
 }
 
-// Reducers
+// Flatters
 const (
-	actionCDR Value = 0.016
-	healthR   Value = 0.058
-	manaR     Value = 0.18
+	//actionCDF Value = 0.016
+	healthF Value = 1
+	manaF   Value = 12
 )
 
 // Base stats
 const (
-	BaseHP             = 291
-	BaseMP             = 874
-	BaseActionCooldown = time.Millisecond * 700
+	BaseHP             = 300
+	BaseMP             = 1200
+	BaseActionCooldown = time.Millisecond * 720
 )
 
 func (s Skills) Stats() Stats {
 	stats := Stats{
-		ActionCD: BaseActionCooldown - time.Duration(Value(BaseActionCooldown)*(s[Agility]*actionCDR)),
-		MaxHP:    BaseHP + int32(BaseHP*(s[Vitality]*healthR)),
-		MaxMP:    BaseMP + int32(BaseMP*(s[Intelligence]*manaR)),
+		ActionCD: BaseActionCooldown,
+		MaxHP:    int32(BaseHP + s[Vitality]*healthF),
+		MaxMP:    int32(BaseMP + s[Intelligence]*manaF),
 	}
 	return stats
+}
+
+func (s Skills) Buffs() Buffs {
+	b := Buffs{}
+
+	b[BuffPhysicalDamage] += s[Vitality]
+	b[BuffPhysicalDamage] -= s[Intelligence]
+
+	b[BuffMagicDamage] -= s[Vitality]
+	b[BuffMagicDamage] += s[Intelligence]
+
+	return b
 }
