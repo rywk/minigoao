@@ -251,8 +251,8 @@ var ItemProps = [ItemLen]ItemProp{
 	},
 	{
 		Type: WeaponWindSword,
-		Buffs: skill.Buffs{}.AddValue(skill.BuffMagicDamage, 16).
-			AddValue(skill.BuffPhysicalDamage, 16),
+		Buffs: skill.Buffs{}.AddValue(skill.BuffMagicDamage, 2).
+			AddValue(skill.BuffPhysicalDamage, 1),
 		Use: func(p Player) uint32 {
 			// use means equip or unequip in the case of wearable items
 			return 0
@@ -271,9 +271,8 @@ var ItemProps = [ItemLen]ItemProp{
 		},
 	},
 	{
-		Type: WeaponMightySword,
-		Buffs: skill.Buffs{}.AddValue(skill.BuffPhysicalDefense, 16).
-			AddValue(skill.BuffPhysicalDamage, 16),
+		Type:  WeaponMightySword,
+		Buffs: skill.Buffs{}.AddValue(skill.BuffPhysicalDamage, 3),
 		Use: func(p Player) uint32 {
 			// use means equip or unequip in the case of wearable items
 			return 0
@@ -293,7 +292,7 @@ var ItemProps = [ItemLen]ItemProp{
 	},
 	{
 		Type:  WeaponFireStaff,
-		Buffs: skill.Buffs{}.AddValue(skill.BuffMagicDamage, 32),
+		Buffs: skill.Buffs{}.AddValue(skill.BuffMagicDamage, 3),
 		Use:   func(p Player) uint32 { return 0 },
 		WeaponProp: &WeaponProp{
 			Cooldown:  time.Millisecond * 1000,
@@ -310,8 +309,8 @@ var ItemProps = [ItemLen]ItemProp{
 	},
 	{
 		Type: WeaponDarkDagger,
-		Buffs: skill.Buffs{}.AddValue(skill.BuffMagicDefense, 16).
-			AddValue(skill.BuffPhysicalDamage, 16),
+		Buffs: skill.Buffs{}.AddValue(skill.BuffMagicDamage, 1).
+			AddValue(skill.BuffPhysicalDamage, 2),
 		Use: func(p Player) uint32 {
 			// use means equip or unequip in the case of wearable items
 			return 0
@@ -331,49 +330,43 @@ var ItemProps = [ItemLen]ItemProp{
 	},
 
 	{
-		Type: ShieldArcane,
-		Buffs: skill.Buffs{}.AddValue(skill.BuffMagicDefense, 8).
-			AddValue(skill.BuffPhysicalDefense, 4),
+		Type:  ShieldArcane,
+		Buffs: skill.Buffs{}.AddValue(skill.BuffMagicDefense, 1),
 		Use: func(p Player) uint32 {
 			return 0
 		},
 	},
 	{
-		Type: ShieldTower,
-		Buffs: skill.Buffs{}.AddValue(skill.BuffMagicDefense, 4).
-			AddValue(skill.BuffPhysicalDefense, 8),
+		Type:  ShieldTower,
+		Buffs: skill.Buffs{}.AddValue(skill.BuffPhysicalDefense, 1),
 		Use: func(p Player) uint32 {
 			return 0
 		},
 	},
 	{
-		Type: HatMage,
-		Buffs: skill.Buffs{}.AddValue(skill.BuffMagicDefense, 4).
-			AddValue(skill.BuffPhysicalDefense, 8),
+		Type:  HatMage,
+		Buffs: skill.Buffs{}.AddValue(skill.BuffPhysicalDefense, 1),
 		Use: func(p Player) uint32 {
 			return 0
 		},
 	},
 	{
-		Type: HelmetPaladin,
-		Buffs: skill.Buffs{}.AddValue(skill.BuffMagicDefense, 8).
-			AddValue(skill.BuffPhysicalDefense, 4),
+		Type:  HelmetPaladin,
+		Buffs: skill.Buffs{}.AddValue(skill.BuffMagicDefense, 1),
 		Use: func(p Player) uint32 {
 			return 0
 		},
 	},
 	{
-		Type: ArmorShadow,
-		Buffs: skill.Buffs{}.AddValue(skill.BuffMagicDefense, 8).
-			AddValue(skill.BuffPhysicalDefense, 4),
+		Type:  ArmorShadow,
+		Buffs: skill.Buffs{}.AddValue(skill.BuffMagicDefense, 1),
 		Use: func(p Player) uint32 {
 			return 0
 		},
 	},
 	{
-		Type: ArmorDark,
-		Buffs: skill.Buffs{}.AddValue(skill.BuffMagicDefense, 6).
-			AddValue(skill.BuffPhysicalDefense, 6),
+		Type:  ArmorDark,
+		Buffs: skill.Buffs{}.AddValue(skill.BuffPhysicalDefense, 1),
 		Use: func(p Player) uint32 {
 			return 0
 		},

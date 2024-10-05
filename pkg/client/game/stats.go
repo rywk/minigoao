@@ -489,7 +489,7 @@ func (b *Skills) Update() {
 		b.g.outQueue <- &GameMsg{E: msgs.EUpdateSkills, Data: &b.updatedSkills}
 		b.g.stats.skillsOpen = false
 	}
-	b.Agility.Update()
+	//b.Agility.Update()
 
 	b.Intelligence.Update()
 
@@ -515,8 +515,8 @@ func (b *Skills) Draw(screen *ebiten.Image) {
 	xoff := 40
 	height := 30
 	yoff := 80
-	text.PrintBigAt(b.Background, "Agility", xoff, yoff)
-	b.Agility.Draw(b.Background, xoff*7, yoff)
+	// text.PrintBigAt(b.Background, "Agility", xoff, yoff)
+	// b.Agility.Draw(b.Background, xoff*7, yoff)
 
 	text.PrintBigAt(b.Background, "Intelligence", xoff, yoff+height)
 	b.Intelligence.Draw(b.Background, xoff*7, yoff+height)
