@@ -84,11 +84,10 @@ func Melee(from, to *Player) int32 {
 	log.Printf("base: %v, crit range: %v", wp.Damage, wp.CritRange)
 	log.Printf("PhysicAtk %v vs PhysicDef %v", from.exp.ItemBuffs[skill.BuffPhysicalDamage], to.exp.ItemBuffs[skill.BuffPhysicalDefense])
 
-	mod := wp.Damage + int32(from.exp.ItemBuffs[skill.BuffPhysicalDamage]-to.exp.ItemBuffs[skill.BuffPhysicalDefense])
-	if mod < 0 {
-		mod = 0
+	damage := (wp.Damage + rand.Int31n(wp.CritRange)) + int32(from.exp.ItemBuffs[skill.BuffPhysicalDamage]-to.exp.ItemBuffs[skill.BuffPhysicalDefense])
+	if damage < 0 {
+		damage = 0
 	}
-	damage := (mod + rand.Int31n(wp.CritRange))
 
 	wp.Cast(from, to, damage)
 	return damage
