@@ -94,8 +94,8 @@ type Stats struct {
 // Flatters
 const (
 	//actionCDF Value = 0.016
-	healthF Value = 1
-	manaF   Value = 12
+	healthF Value = 1.7
+	manaF   Value = 16
 )
 
 // Base stats
