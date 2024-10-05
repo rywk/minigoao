@@ -107,6 +107,7 @@ var SpellProps = [SpellLen]SpellProp{
 				return ErrorTargetAlive
 			}
 			to.Revive()
+			to.Heal(40)
 			return nil
 		},
 	},
