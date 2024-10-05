@@ -118,10 +118,10 @@ func (s Skills) Buffs() Buffs {
 	b := Buffs{}
 
 	b[BuffPhysicalDamage] += s[Vitality]
-	b[BuffPhysicalDamage] -= s[Intelligence]
+	b[BuffPhysicalDamage] -= s[Intelligence] / 2
 
-	b[BuffMagicDamage] -= s[Vitality]
 	b[BuffMagicDamage] += s[Intelligence]
+	b[BuffMagicDamage] -= s[Vitality] / 2
 
 	return b
 }
