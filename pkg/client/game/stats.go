@@ -18,6 +18,7 @@ import (
 	"github.com/rywk/minigoao/pkg/constants/attack"
 	"github.com/rywk/minigoao/pkg/constants/direction"
 	"github.com/rywk/minigoao/pkg/constants/item"
+	"github.com/rywk/minigoao/pkg/constants/skill"
 	"github.com/rywk/minigoao/pkg/msgs"
 	"github.com/rywk/minigoao/pkg/typ"
 )
@@ -219,36 +220,36 @@ func (b *Slider) Update() {
 type SkillInput struct {
 	g          *Game
 	Less, More *Button
-	Value      *uint16
+	Skill      skill.Skill
 }
 
-func NewSkillInput(g *Game, value *uint16, pos typ.P) *SkillInput {
+func NewSkillInput(g *Game, sk skill.Skill, pos typ.P) *SkillInput {
 	subIcon := texture.Decode(img.IconSubstract_png)
 	plusIcon := texture.Decode(img.IconPlus_png)
 	btnImg := ebiten.NewImage(24, 24)
 	btnImg.Fill(color.RGBA{101, 32, 133, 0})
 	return &SkillInput{
 		g:     g,
-		Value: value,
 		Less:  NewButton(g, subIcon, btnImg, pos.Add(-40, 0)),
 		More:  NewButton(g, plusIcon, btnImg, pos.Add(30, 0)),
+		Skill: sk,
 	}
 }
 
 func (ni *SkillInput) Update() {
-	if *ni.Value > 0 && ni.Less.Pressed() {
-		*ni.Value--
+	if ni.g.stats.skills.updatedSkills[ni.Skill] > 0 && ni.Less.Pressed() {
+		ni.g.stats.skills.updatedSkills[ni.Skill]--
 		ni.g.stats.skills.FreePoints++
 	}
 	if ni.g.stats.skills.FreePoints > 0 && ni.More.Pressed() {
-		*ni.Value++
+		ni.g.stats.skills.updatedSkills[ni.Skill]++
 		ni.g.stats.skills.FreePoints--
 	}
 }
 
 func (ni *SkillInput) Draw(screen *ebiten.Image, x int, y int) {
 	ni.Less.Draw(screen, x-40, y)
-	text.PrintBigAt(screen, fmt.Sprintf("%d", *ni.Value), x, y)
+	text.PrintBigAt(screen, fmt.Sprintf("%d", int(ni.g.stats.skills.updatedSkills[ni.Skill])), x, y)
 	ni.More.Draw(screen, x+30, y)
 }
 
@@ -320,44 +321,30 @@ func (inv *Inventory) Update() {
 		}
 		if inv.slotBtns[i][0].Over {
 			up := inv.g.player.Inv.Slots[i][0]
+			w := item.ItemProps[up.Item]
 
-			if w, ok := inv.g.player.Exp.Items[up.Item]; ok {
-				switch up.Item.Type() {
-				case item.TypeConsumable:
-					if up.Item == item.HealthPotion {
-						inv.g.stats.ChangeSetTooltip(fmt.Sprintf("%v\nHeals +30 HP", up.Item.Name()))
-					} else {
-						inv.g.stats.ChangeSetTooltip(fmt.Sprintf("%v\nRestores %%5 of max MP", up.Item.Name()))
+			str := fmt.Sprintf("%v\n", up.Item.Name())
+			buffStr := item.ItemProps[up.Item].Buffs.String()
+			if buffStr != "" {
+				str += fmt.Sprintf("%v\n", buffStr)
+			}
 
-					}
-				case item.TypeWeapon:
-					inv.g.stats.ChangeSetTooltip(fmt.Sprintf("%v\n%v\nDamage: %d\nCrit Range: %d",
-						up.Item.Name(),
-						w.WeaponData.Cooldown,
-						w.WeaponData.Damage,
-						w.WeaponData.CriticRange,
-					))
-				case item.TypeArmor:
-					inv.g.stats.ChangeSetTooltip(fmt.Sprintf("%v\nPhysical Def: %d\nMagic Def: %d",
-						up.Item.Name(),
-						w.ArmorData.PhysicalDef,
-						w.ArmorData.MagicDef,
-					))
-				case item.TypeHelmet:
-					inv.g.stats.ChangeSetTooltip(fmt.Sprintf("%v\nPhysical Def: %d\nMagic Def: %d",
-						up.Item.Name(),
-						w.HelmetData.PhysicalDef,
-						w.HelmetData.MagicDef,
-					))
-				case item.TypeShield:
-					inv.g.stats.ChangeSetTooltip(fmt.Sprintf("%v\nPhysical Def: %d\nMagic Def: %d",
-						up.Item.Name(),
-						w.ShieldData.PhysicalDef,
-						w.ShieldData.MagicDef,
-					))
+			switch up.Item.Type() {
+			case item.TypeConsumable:
+				if up.Item == item.HealthPotion {
+					str += "Heals +30 HP"
+				} else {
+					str += "Restores %5 of max MP"
 				}
+			case item.TypeWeapon:
+				str += fmt.Sprintf("%v\nDamage: %d\nCrit Range: %d",
+					w.WeaponProp.Cooldown,
+					w.WeaponProp.Damage,
+					w.WeaponProp.CritRange,
+				)
 
 			}
+			inv.g.stats.ChangeSetTooltip(str)
 		}
 		if inv.slotBtns[i][1].Pressed() {
 			it := inv.g.player.Inv.Slots[i][1]
@@ -374,44 +361,31 @@ func (inv *Inventory) Update() {
 		}
 		if inv.slotBtns[i][1].Over {
 			down := inv.g.player.Inv.Slots[i][1]
+			w := item.ItemProps[down.Item]
 
-			if w, ok := inv.g.player.Exp.Items[down.Item]; ok {
-				switch down.Item.Type() {
-				case item.TypeConsumable:
-					if down.Item == item.HealthPotion {
-						inv.g.stats.ChangeSetTooltip(fmt.Sprintf("%v\nHeals +30 HP", down.Item.Name()))
-					} else {
-						inv.g.stats.ChangeSetTooltip(fmt.Sprintf("%v\nRestores %%5 of max MP", down.Item.Name()))
+			str := fmt.Sprintf("%v\n", down.Item.Name())
 
-					}
-				case item.TypeWeapon:
-					inv.g.stats.ChangeSetTooltip(fmt.Sprintf("%v\n%v\nDamage: %d\nCrit Range: %d",
-						down.Item.Name(),
-						w.WeaponData.Cooldown,
-						w.WeaponData.Damage,
-						w.WeaponData.CriticRange,
-					))
-				case item.TypeArmor:
-					inv.g.stats.ChangeSetTooltip(fmt.Sprintf("%v\nPhysical Def: %d\nMagic Def: %d",
-						down.Item.Name(),
-						w.ArmorData.PhysicalDef,
-						w.ArmorData.MagicDef,
-					))
-				case item.TypeHelmet:
-					inv.g.stats.ChangeSetTooltip(fmt.Sprintf("%v\nPhysical Def: %d\nMagic Def: %d",
-						down.Item.Name(),
-						w.HelmetData.PhysicalDef,
-						w.HelmetData.MagicDef,
-					))
-				case item.TypeShield:
-					inv.g.stats.ChangeSetTooltip(fmt.Sprintf("%v\nPhysical Def: %d\nMagic Def: %d",
-						down.Item.Name(),
-						w.ShieldData.PhysicalDef,
-						w.ShieldData.MagicDef,
-					))
+			buffStr := item.ItemProps[down.Item].Buffs.String()
+			if buffStr != "" {
+				str += fmt.Sprintf("%v\n", buffStr)
+			}
+
+			switch down.Item.Type() {
+			case item.TypeConsumable:
+				if down.Item == item.HealthPotion {
+					str += "Heals +30 HP"
+				} else {
+					str += "Restores %5 of max MP"
 				}
+			case item.TypeWeapon:
+				str += fmt.Sprintf("%v\nDamage: %d\nCrit Range: %d",
+					w.WeaponProp.Cooldown,
+					w.WeaponProp.Damage,
+					w.WeaponProp.CritRange,
+				)
 
 			}
+			inv.g.stats.ChangeSetTooltip(str)
 		}
 	}
 }
@@ -472,27 +446,21 @@ type Skills struct {
 	W, H       int32
 	Background *ebiten.Image
 
-	updatedSkills msgs.Skills
+	updatedSkills skill.Skills
 	saveButton    *Button
 	zeroButton    *Button
 
 	FreePoints int
 
-	Agility            *SkillInput
-	Intelligence       *SkillInput
-	Vitality           *SkillInput
-	FireAffinity       *SkillInput
-	ElectricAffinity   *SkillInput
-	ClericAffinity     *SkillInput
-	AssasinAffinity    *SkillInput
-	WarriorAffinity    *SkillInput
-	MartialArtAffinity *SkillInput
+	Agility      *SkillInput
+	Intelligence *SkillInput
+	Vitality     *SkillInput
 }
 
 func NewSkills(g *Game) *Skills {
 	bg := ebiten.NewImage(400, ScreenHeight-64)
 	xoff := int32(40)
-	height := int32(50)
+	height := int32(30)
 	yoff := int32(80)
 
 	btnImg := ebiten.NewImage(32, 32)
@@ -506,121 +474,35 @@ func NewSkills(g *Game) *Skills {
 		saveButton:    NewButton(g, texture.Decode(img.IconDisk_png), btnImg, windowStart.Add(80, 40)),
 		zeroButton:    NewButton(g, texture.Decode(img.IconX_png), btnImg, windowStart.Add(280, 40)),
 		Background:    bg,
-		FreePoints:    int(g.player.Exp.Skills.FreePoints),
+		FreePoints:    int(g.player.Exp.FreePoints),
 		updatedSkills: g.player.Exp.Skills,
 	}
-	s.Agility = NewSkillInput(g, &s.updatedSkills.Agility, windowStart.Add(xoff*7, yoff))
-	s.Intelligence = NewSkillInput(g, &s.updatedSkills.Intelligence, windowStart.Add(xoff*7, yoff+height))
-	s.Vitality = NewSkillInput(g, &s.updatedSkills.Vitality, windowStart.Add(xoff*7, yoff+height*2))
+	s.Agility = NewSkillInput(g, skill.Agility, windowStart.Add(xoff*7, yoff))
+	s.Intelligence = NewSkillInput(g, skill.Intelligence, windowStart.Add(xoff*7, yoff+height))
+	s.Vitality = NewSkillInput(g, skill.Vitality, windowStart.Add(xoff*7, yoff+height*2))
 
-	s.FireAffinity = NewSkillInput(g, &s.updatedSkills.FireAffinity, windowStart.Add(xoff*7, yoff+height*4))
-	s.ElectricAffinity = NewSkillInput(g, &s.updatedSkills.ElectricAffinity, windowStart.Add(xoff*7, yoff+height*5))
-	s.ClericAffinity = NewSkillInput(g, &s.updatedSkills.ClericAffinity, windowStart.Add(xoff*7, yoff+height*6))
-
-	s.AssasinAffinity = NewSkillInput(g, &s.updatedSkills.AssasinAffinity, windowStart.Add(xoff*7, yoff+height*8))
-	s.WarriorAffinity = NewSkillInput(g, &s.updatedSkills.WarriorAffinity, windowStart.Add(xoff*7, yoff+height*9))
-	s.MartialArtAffinity = NewSkillInput(g, &s.updatedSkills.MartialArtAffinity, windowStart.Add(xoff*7, yoff+height*10))
 	return s
 }
 
 func (b *Skills) Update() {
 	if b.saveButton.Pressed() {
-		//b.g.player.Exp.Skills = *b.updatedSkills
 		b.g.outQueue <- &GameMsg{E: msgs.EUpdateSkills, Data: &b.updatedSkills}
 		b.g.stats.skillsOpen = false
 	}
 	b.Agility.Update()
-	if *b.Agility.Value < b.g.player.Exp.ItemSkills.Agility {
-		*b.Agility.Value++
-		b.FreePoints--
-	}
 
 	b.Intelligence.Update()
-	if *b.Intelligence.Value < b.g.player.Exp.ItemSkills.Intelligence {
-		*b.Intelligence.Value++
-		b.FreePoints--
-	}
 
 	b.Vitality.Update()
-	if *b.Vitality.Value < b.g.player.Exp.ItemSkills.Vitality {
-		*b.Vitality.Value++
-		b.FreePoints--
-	}
-
-	b.FireAffinity.Update()
-	if *b.FireAffinity.Value < b.g.player.Exp.ItemSkills.FireAffinity {
-		*b.FireAffinity.Value++
-		b.FreePoints--
-	}
-
-	b.ElectricAffinity.Update()
-	if *b.ElectricAffinity.Value < b.g.player.Exp.ItemSkills.ElectricAffinity {
-		*b.ElectricAffinity.Value++
-		b.FreePoints--
-	}
-
-	b.ClericAffinity.Update()
-	if *b.ClericAffinity.Value < b.g.player.Exp.ItemSkills.ClericAffinity {
-		*b.ClericAffinity.Value++
-		b.FreePoints--
-	}
-
-	b.AssasinAffinity.Update()
-	if *b.AssasinAffinity.Value < b.g.player.Exp.ItemSkills.AssasinAffinity {
-		*b.AssasinAffinity.Value++
-		b.FreePoints--
-	}
-
-	b.WarriorAffinity.Update()
-	if *b.WarriorAffinity.Value < b.g.player.Exp.ItemSkills.WarriorAffinity {
-		*b.WarriorAffinity.Value++
-		b.FreePoints--
-	}
-
-	b.MartialArtAffinity.Update()
-	if *b.MartialArtAffinity.Value < b.g.player.Exp.ItemSkills.MartialArtAffinity {
-		*b.MartialArtAffinity.Value++
-		b.FreePoints--
-	}
 
 	if b.zeroButton.Pressed() {
-		total := 0
-		total += int(b.updatedSkills.Agility) - int(b.g.player.Exp.ItemSkills.Agility)
-		b.updatedSkills.Agility = 0 + b.g.player.Exp.ItemSkills.Agility
-
-		total += int(b.updatedSkills.Intelligence) - int(b.g.player.Exp.ItemSkills.Intelligence)
-		b.updatedSkills.Intelligence = 0 + b.g.player.Exp.ItemSkills.Intelligence
-
-		total += int(b.updatedSkills.Vitality) - int(b.g.player.Exp.ItemSkills.Vitality)
-		b.updatedSkills.Vitality = 0 + b.g.player.Exp.ItemSkills.Vitality
-
-		total += int(b.updatedSkills.FireAffinity) - int(b.g.player.Exp.ItemSkills.FireAffinity)
-		b.updatedSkills.FireAffinity = 0 + b.g.player.Exp.ItemSkills.FireAffinity
-
-		total += int(b.updatedSkills.ElectricAffinity) - int(b.g.player.Exp.ItemSkills.ElectricAffinity)
-		b.updatedSkills.ElectricAffinity = 0 + b.g.player.Exp.ItemSkills.ElectricAffinity
-
-		total += int(b.updatedSkills.ClericAffinity) - int(b.g.player.Exp.ItemSkills.ClericAffinity)
-		b.updatedSkills.ClericAffinity = 0 + b.g.player.Exp.ItemSkills.ClericAffinity
-
-		total += int(b.updatedSkills.AssasinAffinity) - int(b.g.player.Exp.ItemSkills.AssasinAffinity)
-		b.updatedSkills.AssasinAffinity = 0 + b.g.player.Exp.ItemSkills.AssasinAffinity
-
-		total += int(b.updatedSkills.WarriorAffinity) - int(b.g.player.Exp.ItemSkills.WarriorAffinity)
-		b.updatedSkills.WarriorAffinity = 0 + b.g.player.Exp.ItemSkills.WarriorAffinity
-
-		total += int(b.updatedSkills.MartialArtAffinity) - int(b.g.player.Exp.ItemSkills.MartialArtAffinity)
-		b.updatedSkills.MartialArtAffinity = 0 + b.g.player.Exp.ItemSkills.MartialArtAffinity
-		if total > 0 {
-
-			b.FreePoints += total
-		} else {
-
-			//b.FreePoints = int(b.g.player.Exp.Skills.FreePoints)
-			//log.Print("asd")
+		var total skill.Value
+		for sk := range skill.Max {
+			total += b.updatedSkills[sk]
+			b.updatedSkills[sk] = 0
 		}
+		b.FreePoints += int(total)
 	}
-
 }
 func (b *Skills) Draw(screen *ebiten.Image) {
 	b.Background.Fill(color.RGBA{0, 0, 0, 170})
@@ -631,7 +513,7 @@ func (b *Skills) Draw(screen *ebiten.Image) {
 	text.PrintBigAt(b.Background, fmt.Sprintf("%d", b.FreePoints), 180, 28)
 
 	xoff := 40
-	height := 50
+	height := 30
 	yoff := 80
 	text.PrintBigAt(b.Background, "Agility", xoff, yoff)
 	b.Agility.Draw(b.Background, xoff*7, yoff)
@@ -641,27 +523,6 @@ func (b *Skills) Draw(screen *ebiten.Image) {
 
 	text.PrintBigAt(b.Background, "Vitality", xoff, yoff+height*2)
 	b.Vitality.Draw(b.Background, xoff*7, yoff+height*2)
-
-	text.PrintBigAt(b.Background, "Magic", xoff*4, yoff+height*3)
-
-	text.PrintBigAt(b.Background, "Fire", xoff, yoff+height*4)
-	b.FireAffinity.Draw(b.Background, xoff*7, yoff+height*4)
-
-	text.PrintBigAt(b.Background, "Electric", xoff, yoff+height*5)
-	b.ElectricAffinity.Draw(b.Background, xoff*7, yoff+height*5)
-
-	text.PrintBigAt(b.Background, "Cleric", xoff, yoff+height*6)
-	b.ClericAffinity.Draw(b.Background, xoff*7, yoff+height*6)
-
-	text.PrintBigAt(b.Background, "Melee", xoff*4, yoff+height*7)
-	text.PrintBigAt(b.Background, "Assasin", xoff, yoff+height*8)
-	b.AssasinAffinity.Draw(b.Background, xoff*7, yoff+height*8)
-
-	text.PrintBigAt(b.Background, "Warrior", xoff, yoff+height*9)
-	b.WarriorAffinity.Draw(b.Background, xoff*7, yoff+height*9)
-
-	text.PrintBigAt(b.Background, "MartialArt", xoff, yoff+height*10)
-	b.MartialArtAffinity.Draw(b.Background, xoff*7, yoff+height*10)
 
 	b.drawOp.GeoM.Reset()
 	b.drawOp.GeoM.Translate(ScreenWidth-400, 0)
@@ -1126,10 +987,10 @@ func (s *Hud) Update() {
 		s.potionAlpha -= .04
 	}
 
-	hp := mapValue(float64(s.g.client.HP), 0, float64(s.g.player.Exp.MaxHp), float64(s.barOffsetStart), float64(s.hpBar.Bounds().Max.X-s.barOffsetEnd))
+	hp := mapValue(float64(s.g.client.HP), 0, float64(s.g.player.Exp.Stats.MaxHP), float64(s.barOffsetStart), float64(s.hpBar.Bounds().Max.X-s.barOffsetEnd))
 	s.hpBarRect = image.Rect(s.hpBar.Bounds().Min.X, s.hpBar.Bounds().Min.Y, int(hp), s.hpBar.Bounds().Max.Y)
 
-	mp := mapValue(float64(s.g.client.MP), 0, float64(s.g.player.Exp.MaxMp), float64(s.barOffsetStart), float64(s.mpBar.Bounds().Max.X-s.barOffsetEnd))
+	mp := mapValue(float64(s.g.client.MP), 0, float64(s.g.player.Exp.Stats.MaxMP), float64(s.barOffsetStart), float64(s.mpBar.Bounds().Max.X-s.barOffsetEnd))
 	s.mpBarRect = image.Rect(s.mpBar.Bounds().Min.X, s.mpBar.Bounds().Min.Y, int(mp), s.mpBar.Bounds().Max.Y)
 	if s.optionsButton.Pressed() {
 		s.optionsOpen = !s.optionsOpen
@@ -1147,10 +1008,10 @@ func (s *Hud) Update() {
 
 	if s.skillsButton.Pressed() {
 		if s.skillsOpen {
-			s.skills.FreePoints = int(s.g.player.Exp.Skills.FreePoints)
+			s.skills.FreePoints = int(s.g.player.Exp.FreePoints)
 			s.skills.updatedSkills = s.g.player.Exp.Skills
 		} else {
-			s.skills.FreePoints = int(s.g.player.Exp.Skills.FreePoints)
+			s.skills.FreePoints = int(s.g.player.Exp.FreePoints)
 			s.skills.updatedSkills = s.g.player.Exp.Skills
 			//s.g.player.Exp.Skills.FreePoints = uint16(s.skills.FreePoints)
 		}
@@ -1164,7 +1025,7 @@ func (s *Hud) Update() {
 		if (s.g.mouseX < ScreenWidth-400) &&
 			ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
 			s.skillsOpen = false
-			s.skills.FreePoints = int(s.g.player.Exp.Skills.FreePoints)
+			s.skills.FreePoints = int(s.g.player.Exp.FreePoints)
 			s.skills.updatedSkills = s.g.player.Exp.Skills
 		}
 	}
@@ -1194,8 +1055,8 @@ func (s *Hud) Draw(screen *ebiten.Image) {
 	op.GeoM.Translate(s.x, s.y)
 	screen.DrawImage(s.hpBar.SubImage(s.hpBarRect).(*ebiten.Image), op)
 	screen.DrawImage(s.mpBar.SubImage(s.mpBarRect).(*ebiten.Image), op)
-	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("%v/%v", s.g.client.HP, s.g.player.Exp.MaxHp), int(s.x)+230, int(s.y)+10)
-	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("%v/%v", s.g.client.MP, s.g.player.Exp.MaxMp), int(s.x)+230, int(s.y)+38)
+	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("%v/%v", s.g.client.HP, s.g.player.Exp.Stats.MaxHP), int(s.x)+230, int(s.y)+10)
+	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("%v/%v", s.g.client.MP, s.g.player.Exp.Stats.MaxMP), int(s.x)+230, int(s.y)+38)
 	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("%v", s.g.player.X), int(s.x)+7, int(s.y)+12)
 	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("%v", s.g.player.Y), int(s.x)+7, int(s.y)+35)
 
@@ -1220,7 +1081,7 @@ func (s *Hud) Draw(screen *ebiten.Image) {
 	// op.GeoM.Translate(s.x+304, s.y+31)
 	// screen.DrawImage(s.bluePotionImg, op)
 
-	text.PrintAt(screen, fmt.Sprintf("Action\n%v", s.g.player.Exp.ActionCooldown.String()), int(s.x+990), int(s.y+16))
+	text.PrintAt(screen, fmt.Sprintf("Action\n%dms", s.g.player.Exp.Stats.ActionCD.Milliseconds()), int(s.x+990), int(s.y+16))
 
 	for _, kb := range s.keyBinders {
 		kb.Draw(screen)
@@ -1251,24 +1112,10 @@ func (s *Hud) ShowSpellPicker(screen *ebiten.Image) {
 		opselect.GeoM.Translate(float64(weaponsX)+SpellIconWidth*4+10, float64(wY)+16)
 		screen.DrawImage(s.inventory.items[w], opselect)
 	}
-	//op.GeoM.Translate(weaponsX, weaponsY)
-	// switch s.g.player.Exp.SelectedWeapon {
-	// case item.WeaponMightySword:
-	// 	opselect.GeoM.Translate(float64(weaponsX), float64(weaponsY))
-	// 	screen.DrawImage(s.selectedSpellImg, opselect)
-	// case item.WeaponDarkDagger:
-	// 	opselect.GeoM.Translate(float64(weaponsX+SpellIconWidth), float64(weaponsY))
-	// 	screen.DrawImage(s.selectedSpellImg, opselect)
-	// case item.WeaponFireStaff:
-	// 	opselect.GeoM.Translate(float64(weaponsX+SpellIconWidth*2), float64(weaponsY))
-	// 	screen.DrawImage(s.selectedSpellImg, opselect)
-	// case item.WeaponGoldAxe:
-	// 	opselect.GeoM.Translate(float64(weaponsX+SpellIconWidth*3), float64(weaponsY))
-	// 	screen.DrawImage(s.selectedSpellImg, opselect)
-	// }
+
 	spellsX, spellsY := weaponsX+SpellIconWidth*5, s.y
 	opselect.GeoM.Reset()
-	switch s.g.player.Exp.SelectedSpell {
+	switch s.g.SelectedSpell {
 	case attack.SpellResurrect:
 		opselect.GeoM.Translate(float64(spellsX), float64(spellsY))
 		screen.DrawImage(s.selectedSpellImg, opselect)
@@ -1370,17 +1217,15 @@ func (cd *Cooldown) UpdateImage() {
 	}
 	var val time.Duration
 	if cd.Spell != attack.SpellNone {
-		val = cd.g.player.Exp.Spells[cd.Spell].Cooldown
-	} else if cd.Weapon != item.None {
-		val = cd.g.player.Exp.Items[cd.Weapon].WeaponData.Cooldown
-	} else if cd.Weapon == item.None {
-		val = cd.g.player.Exp.ActionCooldown
+		val = attack.SpellProps[cd.Spell].BaseCooldown
+	} else {
+		val = item.ItemProps[cd.Weapon].WeaponProp.Cooldown
 	}
 	now := time.Now()
 	dt := now.Sub(*cd.Last)
 	v := mapValue(float64(dt), float64(val), 0, 0, iconY)
 	gdt := now.Sub(*cd.GlobalLast)
-	gv := mapValue(float64(gdt), float64(cd.g.player.Exp.ActionCooldown), 0, 0, iconY)
+	gv := mapValue(float64(gdt), float64(cd.g.player.Exp.Stats.ActionCD), 0, 0, iconY)
 
 	if gv > (v) {
 		if gv < 1 {
@@ -1455,19 +1300,20 @@ func (kb *KeyBinder[A]) Mouse() {
 		if ebiten.IsMouseButtonPressed(ebiten.MouseButton0) {
 			if !kb.Clicked {
 				kb.Clicked = true
-				if kb.Spell != attack.SpellNone && kb.Spell != kb.g.player.Exp.SelectedSpell {
-					kb.g.player.Exp.SelectedSpell = kb.Spell
+				if kb.Spell != attack.SpellNone && kb.Spell != kb.g.SelectedSpell {
+					kb.g.SelectedSpell = kb.Spell
 					kb.g.outQueue <- &GameMsg{E: msgs.ESelectSpell, Data: kb.Spell}
 				} else if kb.Item != item.None {
 					if time.Since(kb.g.stats.lastHudPotion) > kb.g.stats.hudPotionCooldown {
 						kb.g.outQueue <- &GameMsg{E: msgs.EUseItem, Data: kb.Item}
 						kb.g.stats.lastHudPotion = time.Now()
 					}
-				} else if kb.Weapon != item.None && kb.Weapon != kb.g.player.Exp.SelectedWeapon {
-					// kb.g.player.Exp.SelectedWeapon = kb.Weapon
-					// kb.g.outQueue <- &GameMsg{E: msgs.ESelectWeapon, Data: kb.Weapon}
-					// kb.g.player.Weapon = texture.LoadAnimation(texture.AssetFromWeaponItem(kb.Weapon))
 				}
+				// else if kb.Weapon != item.None && kb.Weapon != kb.g.SelectedWeapon {
+				// kb.g.player.Exp.SelectedWeapon = kb.Weapon
+				// kb.g.outQueue <- &GameMsg{E: msgs.ESelectWeapon, Data: kb.Weapon}
+				// kb.g.player.Weapon = texture.LoadAnimation(texture.AssetFromWeaponItem(kb.Weapon))
+				//	}
 				kb.Open = !kb.Open
 			}
 		} else {
@@ -1509,9 +1355,9 @@ func (kb *KeyBinder[A]) DrawTooltips(screen *ebiten.Image, x, y int) {
 		if kb.Spell != attack.SpellNone {
 			kb.g.stats.ChangeSetTooltip(fmt.Sprintf("%v\n%v\nDamage: %d\nMana: %d",
 				kb.Desc,
-				roundDuration(kb.Exp.Spells[kb.Spell].Cooldown, 1).String(),
-				kb.Exp.Spells[kb.Spell].Damage,
-				kb.Exp.Spells[kb.Spell].ManaCost))
+				roundDuration(attack.SpellProps[kb.Spell].BaseCooldown, 1).String(),
+				attack.SpellProps[kb.Spell].BaseDamage,
+				attack.SpellProps[kb.Spell].BaseManaCost))
 			// text.PrintAt(screen, kb.Exp.Spells[kb.Spell].Cooldown.String(), x+15, y-15)
 			// text.PrintAt(screen, fmt.Sprintf("Damage: %d", kb.Exp.Spells[kb.Spell].Damage), x+15, y)
 			// text.PrintAt(screen, fmt.Sprintf("Mana: %d", kb.Exp.Spells[kb.Spell].ManaCost), x+15, y+15)

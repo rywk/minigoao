@@ -196,7 +196,7 @@ func (p *P) DrawPlayerHPMP(screen *ebiten.Image) {
 	p.drawOp.GeoM.Translate(p.Pos[0]+PlayerDrawOffsetX, p.Pos[1]+PlayerDrawOffsetY)
 	p.drawOp.GeoM.Translate(-2, 45)
 	hpx, mpx := p.HPImg.Bounds().Max.X, p.MPImg.Bounds().Max.X
-	hpx, mpx = p.Client.HP*hpx/int(p.Exp.MaxHp), p.Client.MP*mpx/int(p.Exp.MaxMp)
+	hpx, mpx = p.Client.HP*hpx/int(p.Exp.Stats.MaxHP), p.Client.MP*mpx/int(p.Exp.Stats.MaxMP)
 	hpRect := image.Rect(p.HPImg.Bounds().Min.X, p.HPImg.Bounds().Min.Y, hpx, p.HPImg.Bounds().Max.Y)
 	mpRect := image.Rect(p.MPImg.Bounds().Min.X, p.MPImg.Bounds().Min.Y, mpx, p.MPImg.Bounds().Max.Y)
 	p.drawOp.GeoM.Translate(-1, -1)

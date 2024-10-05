@@ -1,7 +1,6 @@
 package server
 
 import (
-	"errors"
 	"log"
 	"math/rand"
 	"time"
@@ -10,429 +9,90 @@ import (
 	"github.com/rywk/minigoao/pkg/constants/attack"
 	"github.com/rywk/minigoao/pkg/constants/direction"
 	"github.com/rywk/minigoao/pkg/constants/item"
+	"github.com/rywk/minigoao/pkg/constants/skill"
 	"github.com/rywk/minigoao/pkg/typ"
 )
 
-type SpellProp struct {
-	Spell        attack.Spell
-	MagicAff     MagicAffinityType
-	AeraSpell    bool
-	BaseCooldown time.Duration
-	BaseDamage   int32
-	BaseManaCost int32
-
-	Cast func(from, to *Player, calc int32) error
-
-	ExpSpell ExpSpell
-}
-
-type ExpSpell struct {
-	CD       Cooldown
-	Damage   int32
-	ManaCost int32
-}
-
-var ErrorNoMana = errors.New("no mana")
-var ErrorTargetDead = errors.New("target dead")
-var ErrorTargetAlive = errors.New("target alive")
-var ErrorCasterDead = errors.New("caster dead")
-var ErrorSelfCast = errors.New("cant self cast")
-var ErrorTooFast = errors.New("too fast")
-
-const BaseHp float32 = 189
-const BaseMp float32 = 840
-
-var spellProps = [attack.SpellLen]SpellProp{
-	{Spell: attack.SpellNone},
-	{
-		Spell:        attack.SpellParalize,
-		MagicAff:     MagicAffinityTypeNone,
-		BaseCooldown: time.Millisecond * 1000,
-		BaseManaCost: 400,
-		Cast: func(from, to *Player, calc int32) error {
-			if from == to {
-				return ErrorSelfCast
-			}
-			to.paralized = true
-			return nil
-		},
-	},
-	{
-		Spell:    attack.SpellRemoveParalize,
-		MagicAff: MagicAffinityTypeNone,
-
-		BaseCooldown: time.Millisecond * 1000,
-		BaseManaCost: 550,
-		Cast: func(from, to *Player, calc int32) error {
-			to.paralized = false
-			return nil
-		},
-	},
-	{
-		Spell:    attack.SpellHealWounds,
-		MagicAff: MagicAffinityTypeCleric,
-
-		BaseCooldown: time.Millisecond * 1000,
-		BaseManaCost: 600,
-		BaseDamage:   54,
-		Cast: func(_, to *Player, calc int32) error {
-			to.Heal(calc)
-			return nil
-		},
-	},
-	{
-		Spell:    attack.SpellResurrect,
-		MagicAff: MagicAffinityTypeCleric,
-
-		BaseCooldown: time.Millisecond * 5000,
-		BaseManaCost: 1100,
-		BaseDamage:   0,
-		Cast: func(from, to *Player, calc int32) error {
-			if !to.dead {
-				return ErrorTargetAlive
-			}
-			to.dead = false
-			to.hp = to.exp.MaxHp
-			return nil
-		},
-	},
-	{
-		Spell:        attack.SpellElectricDischarge,
-		MagicAff:     MagicAffinityTypeElectric,
-		BaseCooldown: time.Millisecond * 900,
-		BaseManaCost: 550,
-		BaseDamage:   71,
-		Cast: func(from, to *Player, calc int32) error {
-			if from == to {
-				return ErrorSelfCast
-			}
-			to.TakeDamage(calc)
-			return nil
-		},
-	},
-	{
-		Spell:        attack.SpellExplode,
-		MagicAff:     MagicAffinityTypeFire,
-		BaseCooldown: time.Millisecond * 1100,
-		BaseManaCost: 1250,
-		BaseDamage:   138,
-		Cast: func(from, to *Player, calc int32) error {
-			if from == to {
-				return ErrorSelfCast
-			}
-			to.TakeDamage(calc)
-			return nil
-		},
-	},
+type Cooldowns struct {
+	LastAction time.Time
+	LastMelee  time.Time
+	LastSpells [attack.SpellLen]time.Time
 }
 
 func Cast(from, to *Player) (int32, error) {
-	ns := &from.exp.spells[from.exp.SelectedSpell]
-	if from.dead && ns.Spell != attack.SpellResurrect {
-		return 0, ErrorCasterDead
+	sp := attack.SpellProps[from.SelectedSpell]
+	if from.dead && sp.Spell != attack.SpellResurrect {
+		return 0, attack.ErrorCasterDead
 	}
-	if to.dead && ns.Spell != attack.SpellResurrect {
-		return 0, ErrorTargetDead
+	if to.dead && sp.Spell != attack.SpellResurrect {
+		return 0, attack.ErrorTargetDead
 	}
-	if from.dead && ns.Spell == attack.SpellResurrect {
-		ns.Cast(from, to, 0)
+	if from.dead && sp.Spell == attack.SpellResurrect {
+		sp.Cast(from, to, 0)
 		return 0, nil
 	}
-	confirmAction, can := from.exp.ActionCooldown.Ask()
-	if !can {
-		return 0, ErrorTooFast
-	}
-	confirm, can := ns.ExpSpell.CD.Ask()
-	if !can {
-		return 0, ErrorTooFast
-	}
-	if from.mp < ns.ExpSpell.ManaCost {
-		return 0, ErrorNoMana
-	}
-	from.mp = from.mp - ns.ExpSpell.ManaCost
 
-	err := ns.Cast(from, to, ns.ExpSpell.Damage)
+	now := time.Now()
+	if now.Sub(from.cds.LastAction) < from.exp.Stats.ActionCD {
+		return 0, attack.ErrorTooFast
+	}
+	if now.Sub(from.cds.LastSpells[from.SelectedSpell]) < from.exp.Stats.ActionCD {
+		return 0, attack.ErrorTooFast
+	}
+
+	if from.mp < sp.BaseManaCost {
+		return 0, attack.ErrorNoMana
+	}
+	from.mp = from.mp - sp.BaseManaCost
+
+	mod := int32(from.exp.ItemBuffs[skill.BuffMagicDamage] - to.exp.ItemBuffs[skill.BuffMagicDefense])
+	log.Printf("MagicAtk %v vs MagicDef %v", from.exp.ItemBuffs[skill.BuffMagicDamage], to.exp.ItemBuffs[skill.BuffMagicDefense])
+	if mod < 0 {
+		mod = 0
+	}
+	damage := sp.BaseDamage + mod
+
+	err := sp.Cast(from, to, damage)
 	if err != nil {
-		from.mp = from.mp + ns.ExpSpell.ManaCost
+		from.mp = from.mp + sp.BaseManaCost
 		return 0, err
 	}
-	confirm()
-	confirmAction()
-	return ns.ExpSpell.Damage, nil
-}
-
-func GetSpellProp(s attack.Spell) *SpellProp {
-	return &spellProps[s]
-}
-
-type ExpWeapon struct {
-	CD        Cooldown
-	Damage    int32
-	CritRange int32
+	from.cds.LastAction = now
+	from.cds.LastSpells[from.SelectedSpell] = now
+	return damage, nil
 }
 
 func Melee(from, to *Player) int32 {
-	confirmAction, can := from.exp.ActionCooldown.Ask()
-	if !can {
+	if from == to {
+		return -1
+	}
+	now := time.Now()
+	if now.Sub(from.cds.LastAction) < from.exp.Stats.ActionCD {
 		log.Printf("melee error, too fast action")
 		return -1
 	}
+
 	w := from.inv.GetWeapon()
-	wp := from.exp.items[w].WeaponProp
+	wp := item.ItemProps[w].WeaponProp
 	if wp == nil {
-		calc := int32(from.exp.BaseMeleeDamage) + int32(rand.Intn(int(from.exp.BaseMeleeCritRange)))
-		if from == to {
-			return -1
-		}
-		to.TakeDamage(calc)
-		return calc
-	}
-	confirm, can := wp.ExpWeapon.CD.Ask()
-	log.Printf("cd : %v\ncan %v", wp.ExpWeapon.CD.CD, can)
-	if !can {
-		log.Printf("melee error, too fast melee by %v", time.Since(wp.ExpWeapon.CD.Last)-wp.ExpWeapon.CD.CD)
 		return -1
 	}
-	confirm()
-	confirmAction()
-	log.Printf("base: %v, crit range: %v", wp.ExpWeapon.Damage, wp.ExpWeapon.CritRange)
-	calc := int32(wp.ExpWeapon.Damage) + int32(rand.Intn(int(wp.ExpWeapon.CritRange)))
-	wp.Cast(from, to, calc)
-	return calc
-}
-
-type Cooldown struct {
-	CD   time.Duration
-	Last time.Time
-}
-
-func (c *Cooldown) Try() bool {
-	now := time.Now()
-	if now.Sub(c.Last) < c.CD {
-		return false
+	if now.Sub(from.cds.LastMelee) < wp.Cooldown {
+		log.Printf("melee error, too fast weapon")
+		return -1
 	}
-	c.Last = now
-	return true
-}
 
-func (c *Cooldown) Ask() (func(), bool) {
-	now := time.Now()
-	return func() { c.Last = now }, !(now.Sub(c.Last) < c.CD-time.Millisecond*4)
-}
+	log.Printf("base: %v, crit range: %v", wp.Damage, wp.CritRange)
+	log.Printf("PhysicAtk %v vs PhysicDef %v", from.exp.ItemBuffs[skill.BuffPhysicalDamage], to.exp.ItemBuffs[skill.BuffPhysicalDefense])
 
-func GetItemProp(w item.Item) ItemProp {
-	return items[w]
-}
+	mod := int32(from.exp.ItemBuffs[skill.BuffPhysicalDamage] - to.exp.ItemBuffs[skill.BuffPhysicalDefense])
+	if mod < 0 {
+		mod = 0
+	}
+	damage := (wp.Damage + rand.Int31n(wp.CritRange)) + mod
 
-func GetWeaponProp(w item.Item) WeaponProp {
-	return *items[w].WeaponProp
-}
-
-type WeaponProp struct {
-	Weapon        item.Item
-	MeleeAff      MeleeAffinityType
-	MagicAff      MagicAffinityType
-	MeleeAffN     int32
-	MagicAffN     int32
-	BaseCooldown  time.Duration
-	BaseDamage    int32
-	BaseCritRange int32
-	ExpWeapon     ExpWeapon
-	Cast          func(from, to *Player, calc int32) error
-}
-
-type ShieldProp struct {
-	PhysicalDef int32
-	MagicDef    int32
-}
-type HeadProp struct {
-	PhysicalDef int32
-	MagicDef    int32
-}
-type ArmorProp struct {
-	PhysicalDef int32
-	MagicDef    int32
-}
-type ItemProp struct {
-	Type       item.Item
-	WeaponProp *WeaponProp
-	ShieldProp *ShieldProp
-	HeadProp   *HeadProp
-	ArmorProp  *ArmorProp
-	Use        func(p *Player) uint32
-}
-
-func (ip ItemProp) IsWeapon() bool {
-	return ip.WeaponProp != nil
-}
-
-func (ip ItemProp) IsPotion() bool {
-	return ip.Type == item.ManaPotion || ip.Type == item.HealthPotion
-}
-
-var items = [item.ItemLen]ItemProp{
-	{Type: item.None, Use: func(p *Player) uint32 { return 0 }},
-	{
-		Type: item.ManaPotion,
-		Use: func(p *Player) uint32 {
-			p.mp = p.mp + int32(float32(p.exp.MaxMp)*0.05)
-			if p.mp > p.exp.MaxMp {
-				p.mp = p.exp.MaxMp
-			}
-			return uint32(p.mp)
-		},
-	}, {
-		Type: item.HealthPotion,
-		Use: func(p *Player) uint32 {
-			p.hp = p.hp + 30
-			if p.hp > p.exp.MaxHp {
-				p.hp = p.exp.MaxHp
-			}
-			return uint32(p.hp)
-		},
-	},
-	{
-		Type: item.WeaponWindSword,
-		Use: func(p *Player) uint32 {
-			// use means equip or unequip in the case of wearable items
-			return 0
-		},
-		WeaponProp: &WeaponProp{
-			Weapon:        item.WeaponWindSword,
-			MagicAff:      MagicAffinityTypeCleric,
-			MagicAffN:     3,
-			MeleeAff:      MeleeAffinityTypeMartialArt,
-			MeleeAffN:     2,
-			BaseCooldown:  time.Millisecond * 900,
-			BaseDamage:    74,
-			BaseCritRange: 2,
-			Cast: func(from, to *Player, calc int32) error {
-				if from == to {
-					return ErrorSelfCast
-				}
-				to.TakeDamage(calc)
-				return nil
-			},
-		},
-	},
-	{
-		Type: item.WeaponMightySword,
-		Use: func(p *Player) uint32 {
-			// use means equip or unequip in the case of wearable items
-			return 0
-		},
-		WeaponProp: &WeaponProp{
-			Weapon:        item.WeaponMightySword,
-			MagicAff:      MagicAffinityTypeElectric,
-			MagicAffN:     2,
-			MeleeAff:      MeleeAffinityTypeWarrior,
-			MeleeAffN:     3,
-			BaseCooldown:  time.Millisecond * 1000,
-			BaseDamage:    98,
-			BaseCritRange: 8,
-			Cast: func(from, to *Player, calc int32) error {
-				if from == to {
-					return ErrorSelfCast
-				}
-				to.TakeDamage(calc)
-				return nil
-			},
-		},
-	},
-	{
-		Type: item.WeaponFireStaff,
-		Use: func(p *Player) uint32 {
-			// use means equip or unequip in the case of wearable items
-			return 0
-		},
-		WeaponProp: &WeaponProp{
-			Weapon:        item.WeaponFireStaff,
-			MagicAff:      MagicAffinityTypeFire,
-			MagicAffN:     5,
-			MeleeAff:      MeleeAffinityTypeNone,
-			BaseCooldown:  time.Millisecond * 1000,
-			BaseDamage:    20,
-			BaseCritRange: 20,
-			Cast: func(from, to *Player, calc int32) error {
-				if from == to {
-					return ErrorSelfCast
-				}
-				to.TakeDamage(calc)
-				return nil
-			},
-		},
-	},
-	{
-		Type: item.WeaponDarkDagger,
-		Use: func(p *Player) uint32 {
-			// use means equip or unequip in the case of wearable items
-			return 0
-		},
-		WeaponProp: &WeaponProp{
-			Weapon:        item.WeaponFireStaff,
-			MagicAff:      MagicAffinityTypeElectric,
-			MagicAffN:     3,
-			MeleeAff:      MeleeAffinityTypeAssasin,
-			MeleeAffN:     2,
-			BaseCooldown:  time.Millisecond * 1000,
-			BaseDamage:    66,
-			BaseCritRange: 60,
-			Cast: func(from, to *Player, calc int32) error {
-				if from == to {
-					return ErrorSelfCast
-				}
-				to.TakeDamage(calc)
-				return nil
-			},
-		},
-	},
-
-	{
-		Type:       item.ShieldArcane,
-		ShieldProp: &ShieldProp{},
-		Use: func(p *Player) uint32 {
-			return 0
-		},
-	},
-	{
-		Type:       item.ShieldTower,
-		ShieldProp: &ShieldProp{},
-		Use: func(p *Player) uint32 {
-			return 0
-		},
-	},
-	{
-		Type:     item.HatMage,
-		HeadProp: &HeadProp{},
-		Use: func(p *Player) uint32 {
-			return 0
-		},
-	},
-	{
-		Type:     item.HelmetPaladin,
-		HeadProp: &HeadProp{},
-		Use: func(p *Player) uint32 {
-			return 0
-		},
-	},
-	{
-		Type:      item.ArmorShadow,
-		ArmorProp: &ArmorProp{},
-		Use: func(p *Player) uint32 {
-			return 0
-		},
-	},
-	{
-		Type:      item.ArmorDark,
-		ArmorProp: &ArmorProp{},
-		Use: func(p *Player) uint32 {
-			return 0
-		},
-	},
-}
-
-func UseItem(item item.Item, p *Player) uint32 {
-	return items[item].Use(p)
+	wp.Cast(from, to, damage)
+	return damage
 }
 
 ///

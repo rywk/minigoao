@@ -212,8 +212,8 @@ func (k *Keys) MeleeHit() bool {
 	}
 	hit := false
 	if k.cfg.Melee.IsPressed() &&
-		time.Since(k.LastMelee) > k.g.player.Exp.Items[k.g.player.Inv.GetWeapon()].WeaponData.Cooldown &&
-		time.Since(k.LastAction) > k.g.player.Exp.ActionCooldown {
+		time.Since(k.LastMelee) > item.ItemProps[k.g.player.Inv.GetWeapon()].WeaponProp.Cooldown &&
+		time.Since(k.LastAction) > k.g.player.Exp.Stats.ActionCD {
 		k.LastMelee = time.Now()
 		k.LastAction = k.LastMelee
 		hit = true
@@ -282,7 +282,7 @@ func (k *Keys) ListenSpell() attack.Spell {
 }
 
 func (k *Keys) CastSpell() (bool, int, int) {
-	selectedSpell := k.g.player.Exp.SelectedSpell
+	selectedSpell := k.g.SelectedSpell
 	if selectedSpell == attack.SpellNone {
 		if k.cursorMode == ebiten.CursorShapeCrosshair || k.g.mouseY >= ScreenHeight-64 {
 			ebiten.SetCursorShape(ebiten.CursorShapeDefault)
@@ -301,13 +301,13 @@ func (k *Keys) CastSpell() (bool, int, int) {
 		k.clickDown = true
 	} else {
 		if k.clickDown && selectedSpell != attack.SpellNone && k.g.mouseY < ScreenHeight-64 &&
-			time.Since(k.LastSpells[selectedSpell]) > k.g.player.Exp.Spells[selectedSpell].Cooldown &&
-			time.Since(k.LastAction) > k.g.player.Exp.ActionCooldown {
+			time.Since(k.LastSpells[selectedSpell]) > attack.SpellProps[selectedSpell].BaseCooldown &&
+			time.Since(k.LastAction) > k.g.player.Exp.Stats.ActionCD {
 			k.LastAction = time.Now()
 			k.LastSpells[selectedSpell] = k.LastAction
 			k.clickDown = false
 			k.lastSpellKey = &NoInput
-			k.g.player.Exp.SelectedSpell = attack.SpellNone
+			k.g.SelectedSpell = attack.SpellNone
 			return true, k.g.mouseX, k.g.mouseY
 		}
 		k.clickDown = false

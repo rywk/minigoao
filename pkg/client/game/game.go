@@ -99,6 +99,8 @@ type Game struct {
 
 	keys *Keys
 
+	SelectedSpell attack.Spell
+
 	lastMove          time.Time
 	leftForMove       float64 // pixels left to complete tile change
 	lastDir           direction.D
@@ -662,12 +664,12 @@ func (g *Game) ProcessEventQueue() error {
 			event := ev.Data.(*msgs.Experience)
 			g.player.Exp = *event
 			g.stats.skills.updatedSkills = g.player.Exp.Skills
-			g.stats.skills.FreePoints = int(g.player.Exp.Skills.FreePoints)
-			if g.player.Client.HP > int(g.player.Exp.MaxHp) {
-				g.player.Client.HP = int(g.player.Exp.MaxHp)
+			g.stats.skills.FreePoints = int(g.player.Exp.FreePoints)
+			if g.player.Client.HP > int(g.player.Exp.Stats.MaxHP) {
+				g.player.Client.HP = int(g.player.Exp.Stats.MaxHP)
 			}
-			if g.player.Client.MP > int(g.player.Exp.MaxMp) {
-				g.player.Client.MP = int(g.player.Exp.MaxMp)
+			if g.player.Client.MP > int(g.player.Exp.Stats.MaxMP) {
+				g.player.Client.MP = int(g.player.Exp.Stats.MaxMP)
 			}
 		}
 	}
@@ -855,9 +857,9 @@ func (g *Game) UpdateGamePos() {
 func (g *Game) ListenInputs() {
 	g.keys.ListenMovement()
 	spellSelected := g.keys.ListenSpell()
-	if spellSelected != attack.SpellNone && spellSelected != g.player.Exp.SelectedSpell {
+	if spellSelected != attack.SpellNone && spellSelected != g.SelectedSpell {
 		g.outQueue <- &GameMsg{E: msgs.ESelectSpell, Data: spellSelected}
-		g.player.Exp.SelectedSpell = spellSelected
+		g.SelectedSpell = spellSelected
 	}
 
 	d := g.keys.MovingTo()

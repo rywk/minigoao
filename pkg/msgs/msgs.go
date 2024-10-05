@@ -13,6 +13,7 @@ import (
 	"github.com/rywk/minigoao/pkg/constants/attack"
 	"github.com/rywk/minigoao/pkg/constants/direction"
 	"github.com/rywk/minigoao/pkg/constants/item"
+	"github.com/rywk/minigoao/pkg/constants/skill"
 	"github.com/rywk/minigoao/pkg/typ"
 	"github.com/vmihailenco/msgpack/v5"
 )
@@ -295,7 +296,7 @@ func encodeAndWrite(m Msgs, e E, msg interface{}) error {
 	case ESelectSpell:
 		return m.Write(e, []byte{byte(msg.(attack.Spell))})
 	case EUpdateSkills:
-		return m.WriteWithLen(e, EncodeMsgpack(msg.(*Skills)))
+		return m.WriteWithLen(e, EncodeMsgpack(msg.(*skill.Skills)))
 	case EPingOk:
 		return m.Write(e, binary.BigEndian.AppendUint16(make([]byte, 0, 2), msg.(uint16)))
 	case EMoveOk:
@@ -458,27 +459,10 @@ type ItemSlot struct {
 	Count uint16
 }
 type Experience struct {
-	MaxHp, MaxMp   int32
-	Skills         Skills
-	ItemSkills     Skills
-	ActionCooldown time.Duration
-	SelectedSpell  attack.Spell
-	Spells         [attack.SpellLen]SpellData
-	SelectedWeapon item.Item
-	Items          map[item.Item]ItemData
-}
-
-type Skills struct {
-	FreePoints         uint16
-	Agility            uint16
-	Intelligence       uint16
-	Vitality           uint16
-	FireAffinity       uint16
-	ElectricAffinity   uint16
-	ClericAffinity     uint16
-	AssasinAffinity    uint16
-	WarriorAffinity    uint16
-	MartialArtAffinity uint16
+	FreePoints int32
+	Skills     skill.Skills
+	ItemBuffs  skill.Buffs
+	Stats      skill.Stats
 }
 
 type SpellData struct {
