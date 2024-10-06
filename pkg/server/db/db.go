@@ -43,6 +43,7 @@ type DB interface {
 	AddCharacterKill(id int) error
 	AddCharacterDeath(id int) error
 	LogInCharacter(id int) error
+	LogOutAll() error
 
 	//DeleteCharacter(int) error
 }
@@ -209,6 +210,25 @@ func (d *Data) AddCharacterDeath(id int) error {
 	if rowsAff == 0 {
 		return errors.New("not found")
 	}
+	return nil
+}
+func (d *Data) LogOutAll() error {
+	q := `update characters set logged_in = false`
+	res, err := d.db.Exec(q)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return ErrAlreadyExist
+		}
+		return err
+	}
+	rowsAff, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAff == 0 {
+		return errors.New("not found")
+	}
+	log.Printf("logged out %v characters", rowsAff)
 	return nil
 }
 func (d *Data) LogInCharacter(id int) error {

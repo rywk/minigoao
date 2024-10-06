@@ -98,13 +98,16 @@ func (s *Server) Start(exposed bool) error {
 		sigint := make(chan os.Signal, 1)
 		signal.Notify(sigint, os.Interrupt)
 		<-sigint
-
+		err := s.db.LogOutAll()
+		if err != nil {
+			log.Printf("LogOutAll err %v", err)
+		}
 		log.Printf("Shutting down web...")
 
 		// Received an interrupt signal, shut down.
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		defer cancel()
-		err := web.Shutdown(ctx)
+		err = web.Shutdown(ctx)
 		if err != nil && !errors.Is(err, context.DeadlineExceeded) {
 			log.Printf("Error at server.Shutdown: %v", err)
 		}
