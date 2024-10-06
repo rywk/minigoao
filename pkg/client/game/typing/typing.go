@@ -80,7 +80,14 @@ func (g *Typer) Draw(screen *ebiten.Image, x, y int) {
 	}
 	text.PrintBigAt(screen, t, x, y)
 }
-
+func (g *Typer) DrawBg(screen *ebiten.Image, x, y int, col color.Color) {
+	// Blink the cursor.
+	t := g.Text
+	if g.Counter%40 < 20 {
+		t += "_"
+	}
+	text.PrintBigAtBgCol(screen, t, x, y, col)
+}
 func (g *Typer) DrawCol(screen *ebiten.Image, x, y int, col color.Color) {
 	// Blink the cursor.
 	t := g.Text

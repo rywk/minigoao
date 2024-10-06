@@ -455,6 +455,10 @@ func (g *Game) updateAccount() {
 	}
 
 	if g.creatingChar {
+		if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
+			g.nickTyper.Text = ""
+			g.creatingChar = false
+		}
 		g.nickTyper.Update()
 		r := strings.NewReplacer("\n", "", " ", "")
 		nickText := g.nickTyper.String()
@@ -479,19 +483,20 @@ func (g *Game) updateAccount() {
 	if g.btnNewCharacters.Pressed() {
 		g.creatingChar = true
 	}
+
 }
 func (g *Game) drawAccount(screen *ebiten.Image) {
 	g.mouseX, g.mouseY = ebiten.CursorPosition()
 
 	//text.PrintBigAt(screen, fmt.Sprintf("%d", g.account.ID), 100, 100)
 	text.PrintBigAt(screen, g.account.Account, 100, 100)
-	text.PrintBigAt(screen, g.account.Email, 200, 100)
+	text.PrintBigAt(screen, g.account.Email, 370, 100)
 	for _, btn := range g.btnsCharacters {
 		btn.Draw(screen, int(btn.Pos.X), int(btn.Pos.Y))
 	}
 	g.btnNewCharacters.Draw(screen, int(g.btnNewCharacters.Pos.X), int(g.btnNewCharacters.Pos.Y))
 	if g.creatingChar {
-		g.nickTyper.Draw(screen, int(g.btnNewCharacters.Pos.X+50), int(g.btnNewCharacters.Pos.Y))
+		g.nickTyper.DrawBg(screen, int(g.btnNewCharacters.Pos.X+70), int(g.btnNewCharacters.Pos.Y+4), color.RGBA{60, 12, 57, 200})
 	}
 	if g.connErrorColorStart > 0 {
 		text.PrintBigAtCol(screen, g.errorMsg, 80, ScreenHeight-80, color.RGBA{178, 0, 16, uint8(g.connErrorColorStart)})

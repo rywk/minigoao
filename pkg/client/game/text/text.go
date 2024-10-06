@@ -130,7 +130,18 @@ func PrintBigAtBg(image *ebiten.Image, str string, x, y int) (int, int) {
 		bg: true,
 	})
 }
-
+func PrintBigAtBgCol(image *ebiten.Image, str string, x, y int, col color.Color) (int, int) {
+	bigBgImage.Fill(col)
+	rx, ry := drawDebugTextOpt(image, str, x, y, options{
+		textimg: bigDebugPrintTextImage,
+		bgimg:   bigBgImage,
+		runemap: bigDebugPrintTextSubImages,
+		cw:      bcw, ch: bch,
+		bg: true,
+	})
+	bigBgImage.Fill(color.Black)
+	return rx, ry
+}
 func PrintImage(str string) *ebiten.Image {
 	img := ebiten.NewImage(len(str)*16, 36)
 	drawDebugTextOpt(img, str, 0, 0, options{
