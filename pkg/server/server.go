@@ -619,6 +619,12 @@ func (g *Game) consumeIncomingData() {
 		case msgs.ESendChat:
 			chat := incomingData.Data.(*msgs.EventSendChat)
 			log.Printf("[%v][%v]: %v", player.id, player.nick, chat.Msg)
+
+			if len(chat.Msg) > 0 && chat.Msg[0] == '/' {
+				player.HandleCmd(chat.Msg[1:])
+				continue
+			}
+
 			g.space.Notify(player.pos, msgs.EBroadcastChat, &msgs.EventBroadcastChat{
 				ID:  player.id,
 				Msg: chat.Msg,
@@ -865,6 +871,18 @@ type Player struct {
 	lastConsumable time.Time
 
 	keyConfigs msgs.KeyConfig
+}
+
+const (
+	PlayerCMDMeditar = "meditar"
+)
+
+func (p *Player) HandleCmd(cmd string) {
+	cmd = strings.ToLower(cmd)
+	switch cmd {
+	case PlayerCMDMeditar:
+
+	}
 }
 
 type OutMsg struct {

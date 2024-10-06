@@ -13,7 +13,7 @@ var (
 	IconParalize_png []byte
 	//go:embed icon_electric_discharge64.png
 	IconElectricDischarge_png []byte
-	//go:embed icon_apoca64.png
+	//go:embed icon_apoca264.png
 	IconExplode_png []byte
 
 	// Effects
@@ -22,6 +22,8 @@ var (
 	MeleeHit_png []byte
 	//go:embed spell_apoca.png
 	SpellApoca_png []byte
+	//go:embed spell_apoca22.png
+	SpellApoca2_png []byte
 	//go:embed spell_desca2.png
 	SpellDesca_png []byte
 	//go:embed spell_paralize.png

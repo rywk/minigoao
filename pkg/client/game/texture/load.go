@@ -54,17 +54,26 @@ var (
 			},
 			img: spellimg.MeleeHit_png,
 		},
+		// asset.SpellApoca: {
+		// 	c: SpriteConfig{
+		// 		Width:      145,
+		// 		Height:     145,
+		// 		GridW:      4,
+		// 		GridH:      4,
+		// 		FrameCount: 16,
+		// 	},
+		// 	img: spellimg.SpellApoca_png,
+		// },
 		asset.SpellApoca: {
 			c: SpriteConfig{
-				Width:      145,
-				Height:     145,
-				GridW:      4,
+				Width:      80,
+				Height:     80,
+				GridW:      7,
 				GridH:      4,
-				FrameCount: 16,
+				FrameCount: 28,
 			},
-			img: spellimg.SpellApoca_png,
+			img: spellimg.SpellApoca2_png,
 		},
-
 		asset.SpellDesca: {
 			c: SpriteConfig{
 				Width:      127,

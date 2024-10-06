@@ -552,7 +552,7 @@ type SpellOffset struct {
 }
 
 var spellOffsets = map[assets.Image]struct{ x, y int }{
-	assets.SpellApoca:      {-50, -90},
+	assets.SpellApoca:      {-20, -40},
 	assets.SpellInmo:       {-30, -55},
 	assets.SpellInmoRm:     {-20, -30},
 	assets.SpellDesca:      {-45, -70},
