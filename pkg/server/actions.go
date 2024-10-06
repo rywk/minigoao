@@ -52,6 +52,10 @@ func Cast(from, to *Player) (int32, error) {
 		damage = 0
 	}
 
+	if sp.Cast == nil {
+		return 0, nil
+	}
+
 	err := sp.Cast(from, to, damage)
 	if err != nil {
 		from.mp = from.mp + sp.BaseManaCost
