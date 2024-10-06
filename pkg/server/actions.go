@@ -63,7 +63,7 @@ func Cast(from, to *Player) (int32, error) {
 	}
 	if to.dead {
 		from.kills++
-		to.deaths--
+		to.deaths++
 	}
 	if from.SelectedSpell == attack.SpellParalize ||
 		from.SelectedSpell == attack.SpellRemoveParalize {
@@ -106,7 +106,7 @@ func Melee(from, to *Player) int32 {
 	wp.Cast(from, to, damage)
 	if to.dead {
 		from.kills++
-		to.deaths--
+		to.deaths++
 	}
 	return damage
 }

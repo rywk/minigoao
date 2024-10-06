@@ -866,8 +866,9 @@ type Player struct {
 	hp        int32
 	mp        int32
 
-	kills         int
-	deaths        int
+	kills  int
+	deaths int
+
 	account       *db.Account
 	characters    []msgs.Character
 	characterID   int
