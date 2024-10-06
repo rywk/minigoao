@@ -594,14 +594,14 @@ func (adt *AtkDmgFxTxt) Play() bool {
 		col = color.RGBA{6, 153, 194, 255}
 	}
 
-	text.DrawNumbers(adt.img, adt.dmg, 0, 34-adt.y, col)
-	if adt.y == 20 {
+	text.DrawNumbers(adt.img, adt.dmg, 0, 40-adt.y, col)
+	if adt.y == 30 {
 		adt.y = 0
 		return false
 	}
-	if adt.c%2 == 0 {
-		adt.y++
-	}
+	//if adt.c%2 == 0 {
+	adt.y++
+	//}
 	adt.c++
 
 	return true
