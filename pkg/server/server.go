@@ -275,7 +275,7 @@ func (g *Game) HandleLogin(m msgs.Msgs, account *db.Account, characters []msgs.C
 		case msgs.ECreateAccount:
 			handle(func() (msgs.E, interface{}) {
 				ca := msgs.DecodeMsgpack(msg.Data, &msgs.EventCreateAccount{})
-				log.Printf("CREATE ACCOUNT %v\n", *ca)
+				log.Printf("CREATE ACCOUNT %v %v\n", ca.Account, ca.Email)
 				err := g.db.CreateAccount(ca.Account, ca.Email, HashPassword(ca.Password))
 				if err != nil {
 					return msgs.EError, &msgs.EventError{Msg: "CreateAccount " + err.Error()}
@@ -330,7 +330,7 @@ func (g *Game) HandleLogin(m msgs.Msgs, account *db.Account, characters []msgs.C
 			// m.EncodeAndWrite(msgs.EAccountLoginOk, &resp)
 		case msgs.ELoginAccount:
 			ca := msgs.DecodeMsgpack(msg.Data, &msgs.EventLoginAccount{})
-			log.Printf("LOGIN ACCOUNT %v\n", *ca)
+			log.Printf("LOGIN ACCOUNT %v\n", ca.Account)
 			account, err = g.db.GetAccount(ca.Account, "")
 			if err != nil {
 				log.Printf("LOGIN ACCOUNT ERR %v\n", err)
