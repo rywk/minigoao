@@ -42,6 +42,7 @@ type DB interface {
 	GetCharacter(int) (*msgs.Character, error)
 	AddCharacterKill(id int) error
 	AddCharacterDeath(id int) error
+	LogInCharacter(id int) error
 
 	//DeleteCharacter(int) error
 }
@@ -111,7 +112,8 @@ const charatcersTable = `create table if not exists characters (
 	deaths integer not null default 0,
 	skills blob not null,
 	inventory blob not null,
-	keyconfig blob not null
+	keyconfig blob not null,
+	logged_in boolean not null default false
 	)`
 
 func (d *Data) CreateCharacter(accountID int, nick string) error {
@@ -143,7 +145,7 @@ func (d *Data) UpdateCharacter(ch msgs.Character) error {
 	inv := msgs.EncodeMsgpack(&ch.Inventory)
 
 	q := `update characters set 
-keyconfig = ?, skills = ?, kills = ?, deaths = ?, px = ?, py = ?, dir = ?, inventory = ? where id = ?`
+keyconfig = ?, skills = ?, kills = ?, deaths = ?, px = ?, py = ?, dir = ?, inventory = ?, logged_in = ? where id = ?`
 	res, err := d.db.Exec(q,
 		kcfg,
 		sk,
@@ -153,6 +155,7 @@ keyconfig = ?, skills = ?, kills = ?, deaths = ?, px = ?, py = ?, dir = ?, inven
 		ch.Py,
 		int(ch.Dir),
 		inv,
+		ch.LoggedIn,
 		ch.ID,
 	)
 	if err != nil {
@@ -208,39 +211,89 @@ func (d *Data) AddCharacterDeath(id int) error {
 	}
 	return nil
 }
+func (d *Data) LogInCharacter(id int) error {
+	tx, err := d.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	var loggedIn bool
+	q := `select logged_in from characters where id = ?`
+	err = d.db.QueryRow(q, id).Scan(&loggedIn)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return ErrAlreadyExist
+		}
+		return err
+	}
+
+	if loggedIn {
+		return errors.New("character is already logged in")
+	}
+	q = `update characters set logged_in = true where id = ?`
+	res, err := d.db.Exec(q, id)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return ErrAlreadyExist
+		}
+		return err
+	}
+	rowsAff, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAff == 0 {
+		return errors.New("not found")
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+	return nil
+}
+
+func rowToChar(rows *sql.Rows) (*msgs.Character, error) {
+	sk := []byte{}
+	kcfg := []byte{}
+	inven := []byte{}
+	char := msgs.Character{}
+	err := rows.Scan(
+		&char.ID,
+		&char.AccountID,
+		&char.Nick,
+		&char.Px,
+		&char.Py,
+		&char.Dir,
+		&char.Kills,
+		&char.Deaths,
+		&sk,
+		&inven,
+		&kcfg,
+		&char.LoggedIn)
+	if err != nil {
+		return nil, err
+	}
+	msgs.DecodeMsgpack(kcfg, &char.KeyConfig)
+	msgs.DecodeMsgpack(sk, &char.Skills)
+	msgs.DecodeMsgpack(inven, &char.Inventory)
+	return &char, nil
+}
+
 func (d *Data) GetAccountCharacters(accountID int) ([]msgs.Character, error) {
 	q := "SELECT * from characters where account_id = ?"
 	rows, err := d.db.Query(q, accountID)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 	defer rows.Close()
 	res := []msgs.Character{}
 	for rows.Next() {
-		sk := []byte{}
-		kcfg := []byte{}
-		inven := []byte{}
-		//var dir int
-		char := msgs.Character{}
-		err = rows.Scan(
-			&char.ID,
-			&char.AccountID,
-			&char.Nick,
-			&char.Px,
-			&char.Py,
-			&char.Dir,
-			&char.Kills,
-			&char.Deaths,
-			&sk,
-			&inven,
-			&kcfg)
+		char, err := rowToChar(rows)
 		if err != nil {
 			log.Fatal(err)
 		}
-		msgs.DecodeMsgpack(kcfg, &char.KeyConfig)
-		msgs.DecodeMsgpack(sk, &char.Skills)
-		msgs.DecodeMsgpack(inven, &char.Inventory)
-		res = append(res, char)
+		res = append(res, *char)
 	}
 	err = rows.Err()
 	if err != nil {
@@ -259,30 +312,10 @@ func (d *Data) GetCharacter(id int) (*msgs.Character, error) {
 	defer rows.Close()
 	var char *msgs.Character
 	for rows.Next() {
-		sk := []byte{}
-		kcfg := []byte{}
-		inven := []byte{}
-
-		char = &msgs.Character{}
-		err = rows.Scan(
-			&char.ID,
-			&char.AccountID,
-			&char.Nick,
-			&char.Px,
-			&char.Py,
-			&char.Dir,
-			&char.Kills,
-			&char.Deaths,
-			&sk,
-			&inven,
-			&kcfg)
-
+		char, err = rowToChar(rows)
 		if err != nil {
 			log.Fatal(err)
 		}
-		msgs.DecodeMsgpack(kcfg, &char.KeyConfig)
-		msgs.DecodeMsgpack(sk, &char.Skills)
-		msgs.DecodeMsgpack(inven, &char.Inventory)
 	}
 	err = rows.Err()
 	if err != nil {
@@ -295,7 +328,7 @@ func (d *Data) GetCharacter(id int) (*msgs.Character, error) {
 }
 
 func (d *Data) GetTop20Kills() ([]*msgs.Character, error) {
-	q := "select id, nick, kills, deaths  from characters order by kills desc limit 20"
+	q := "select id, nick, kills, deaths  from characters order by kills desc, deaths asc limit 20"
 
 	rows, err := d.db.Query(q)
 	if err != nil {

@@ -400,7 +400,12 @@ func (g *Game) HandleLogin(m msgs.Msgs, account *db.Account, characters []msgs.C
 				m.EncodeAndWrite(msgs.EError, &msgs.EventError{Msg: "GetCharacter " + err.Error()})
 				continue
 			}
-
+			err = g.db.LogInCharacter(char.ID)
+			if err != nil {
+				log.Printf("LOGIN CHARACTER err %v\n", err)
+				m.EncodeAndWrite(msgs.EError, &msgs.EventError{Msg: "LogInCharacter " + err.Error()})
+				continue
+			}
 			*character = *char
 			p := &Player{
 				g:             g,
@@ -1040,6 +1045,7 @@ func (p *Player) Logout() {
 		Skills:    p.exp.Skills,
 		KeyConfig: p.keyConfigs,
 		Inventory: *p.inv,
+		LoggedIn:  false,
 	}
 	go func() {
 		err := p.g.db.UpdateCharacter(updateData)

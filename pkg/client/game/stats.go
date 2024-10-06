@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"math"
 	"strings"
 	"time"
 
@@ -472,26 +471,28 @@ func (r *Ranking) Draw(screen *ebiten.Image) {
 	r.drawOp.GeoM.Translate(340, 40)
 	r.bg.Fill(color.RGBA{44, 9, 59, 210})
 
-	x := 60
+	x := 28
 	y := 30
 
-	text.PrintBigAt(r.bg, "Top", x, y-10)
-	text.PrintBigAt(r.bg, "Nick", x+155, y-10)
-	text.PrintBigAt(r.bg, "Kills", x+310, y-10)
+	text.PrintBigAt(r.bg, "Top", x-10, y-10)
+	text.PrintBigAt(r.bg, "Nick", x+64, y-10)
+	text.PrintBigAt(r.bg, "Kills", x+210, y-10)
+	text.PrintBigAt(r.bg, "Deaths", x+320, y-10)
 	text.PrintBigAt(r.bg, "Ratio", x+460, y-10)
 	offy := 60
 	for i, ch := range r.g.rankingList {
 
 		// TODO: hightlight if youre in the ranking
 		text.PrintBigAt(r.bg, fmt.Sprintf("%d", i+1), x, offy+y*i)
-		text.PrintBigAt(r.bg, ch.Nick, x+160, offy+y*i)
-		text.PrintBigAt(r.bg, fmt.Sprintf("%d", ch.Kills), x+320, offy+y*i)
-		ratio := float64(ch.Kills) / float64(ch.Deaths)
-		if !math.IsNaN(ratio) {
-			text.PrintBigAt(r.bg, fmt.Sprintf("%.2f", ratio), x+470, offy+y*i)
-		} else {
-			text.PrintBigAt(r.bg, "0", x+470, offy+y*i)
+		text.PrintBigAt(r.bg, ch.Nick, x+65, offy+y*i)
+		text.PrintBigAt(r.bg, fmt.Sprintf("%d", ch.Kills), x+220, offy+y*i)
+		text.PrintBigAt(r.bg, fmt.Sprintf("%d", ch.Deaths), x+330, offy+y*i)
+		deaths := ch.Deaths
+		if deaths == 0 {
+			deaths = 1 // Avoid division by zero
 		}
+		kda := float64(ch.Kills) / float64(deaths)
+		text.PrintBigAt(r.bg, fmt.Sprintf("%.2f", kda), x+470, offy+y*i)
 	}
 	screen.DrawImage(r.bg, r.drawOp)
 

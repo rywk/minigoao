@@ -948,6 +948,7 @@ type Character struct {
 	Skills    skill.Skills
 	Inventory Inventory
 	KeyConfig KeyConfig
+	LoggedIn  bool
 }
 
 func (inv *Inventory) SetTestItemsInventory() {
