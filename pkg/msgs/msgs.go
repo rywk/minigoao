@@ -141,6 +141,7 @@ func writeWithLen(w io.Writer, event E, data []byte) error {
 		bsLeft -= n
 		i += n
 	}
+	log.Println(buff)
 	return nil
 }
 
