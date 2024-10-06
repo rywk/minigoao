@@ -3,7 +3,6 @@ package msgs
 import (
 	"context"
 	"crypto/tls"
-	"log"
 	"net"
 
 	wswasm "github.com/coder/websocket"
@@ -91,7 +90,6 @@ func (ws *WSM2) EncodeAndWrite(e E, msg interface{}) error {
 
 func DialWS(address string) (Msgs, error) {
 	url := "ws://" + address + "/upgrader"
-	log.Print(url)
 	c, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
 		return nil, err

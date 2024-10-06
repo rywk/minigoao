@@ -192,13 +192,13 @@ func Handle(upgrader func(w http.ResponseWriter, r *http.Request)) http.HandlerF
 
 		if r.Method != "GET" {
 			log.Printf("NON GET:%v %v %v %v\n", r.RemoteAddr, r.Method, r.Host, r.URL.String())
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			http.Error(w, "ᕙ(⇀‸↼‶)ᕗ", http.StatusTeapot)
 			return
 		}
 
 		if !ValidPath(r.URL.Path) {
 			log.Printf("INVALID GET:%v %v %v %v\n", r.RemoteAddr, r.Method, r.Host, r.URL.String())
-			http.NotFound(w, r)
+			http.Error(w, "ᕙ(⇀‸↼‶)ᕗ", http.StatusTeapot)
 			return
 		}
 
@@ -230,6 +230,11 @@ func HandleWeb(w http.ResponseWriter, r *http.Request, path string) {
 	defer func() {
 		log.Printf("WEB:%v %v %v %v\n", r.RemoteAddr, r.Method, r.Host, r.URL.String())
 	}()
+
+	if len(r.URL.RawQuery) != 0 {
+		http.Error(w, "ᕙ(⇀‸↼‶)ᕗ", http.StatusTeapot)
+		return
+	}
 
 	switch path {
 	case "/":

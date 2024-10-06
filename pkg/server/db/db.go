@@ -3,23 +3,26 @@ package db
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"log"
 	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/rywk/minigoao/pkg/constants/skill"
+	"github.com/rywk/minigoao/pkg/msgs"
 )
 
 const accountsTable = `create table if not exists accounts (
 id integer primary key,
-nick text not null unique,
+account text not null unique,
 email text not null unique,
 password text not null
 )`
 
 type Account struct {
 	ID       int
+	Account  string
 	Email    string
-	Nick     string
 	Password string
 }
 
@@ -30,13 +33,23 @@ type Data struct {
 type DB interface {
 	CreateAccount(string, string, string) error
 	GetAccount(string, string) (*Account, error)
-	DeleteAccount(string, string) error
+	//DeleteAccount(string, string) error
+
+	GetTop20Kills() ([]*msgs.Character, error)
+	CreateCharacter(int, string) error
+	UpdateCharacter(ch msgs.Character) error
+	GetAccountCharacters(int) ([]msgs.Character, error)
+	GetCharacter(int) (*msgs.Character, error)
+	AddCharacterKill(id int) error
+	AddCharacterDeath(id int) error
+
+	//DeleteCharacter(int) error
 }
 
-var ErrAlreadyExist = errors.New("nick or email already exist")
+var ErrAlreadyExist = errors.New("account or email already exist")
 
-func (d *Data) CreateAccount(nick string, email string, password string) error {
-	_, err := d.db.Exec(`insert into accounts (nick, email, password) values(?, ?, ?)`, nick, email, password)
+func (d *Data) CreateAccount(account string, email string, password string) error {
+	_, err := d.db.Exec(`insert into accounts (account, email, password) values(?, ?, ?)`, account, email, password)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			return ErrAlreadyExist
@@ -46,36 +59,269 @@ func (d *Data) CreateAccount(nick string, email string, password string) error {
 	return nil
 }
 
-func (d *Data) GetAccount(nick string, email string) (*Account, error) {
-	q := "SELECT * from accounts"
-	if nick != "" {
-
+func (d *Data) GetAccount(account string, email string) (*Account, error) {
+	q := "SELECT * from accounts "
+	param := ""
+	if account != "" {
+		q += "where account = ?"
+		param = account
+	} else if email != "" {
+		q += "where email = ?"
+		param = email
+	} else {
+		return nil, fmt.Errorf("empty parameters")
 	}
-	rows, err := d.db.Query(q)
+	q += " limit 1"
+	rows, err := d.db.Query(q, param)
 	if err != nil {
 		panic(err)
 	}
 	defer rows.Close()
+	var acc *Account
 	for rows.Next() {
-		var id int
-		var name string
-		var account string
-		var password string
-		err = rows.Scan(&id, &name, &account, &password)
+		acc = &Account{}
+		err = rows.Scan(&acc.ID, &acc.Account, &acc.Email, &acc.Password)
 		if err != nil {
 			log.Fatal(err)
 		}
-		log.Printf("%v %v %v %v ", id, name, account, password)
 	}
 	err = rows.Err()
 	if err != nil {
 		log.Fatal(err)
 	}
-	return nil, nil
+	if acc == nil {
+		err = errors.New("account does not exist")
+	}
+	return acc, err
 }
+
 func (d *Data) DeleteAccount(nick string, email string) error {
 
 	return nil
+}
+
+const charatcersTable = `create table if not exists characters (
+	id integer primary key,
+	account_id integer not null,
+	nick text not null unique,
+	px integer not null default 50,
+	py integer not null default 50,
+	dir integer not null default 1,
+	kills integer not null default 0,
+	deaths integer not null default 0,
+	skills blob not null,
+	inventory blob not null,
+	keyconfig blob not null
+	)`
+
+func (d *Data) CreateCharacter(accountID int, nick string) error {
+	kcfg := msgs.EncodeMsgpack(&msgs.KeyConfig{})
+	sk := msgs.EncodeMsgpack(&skill.Skills{})
+	invd := msgs.NewInvetory()
+	invd.SetTestItemsInventory()
+	inv := msgs.EncodeMsgpack(invd)
+
+	q := `insert into characters (account_id, nick, skills, inventory, keyconfig) values(?, ?, ?, ?, ?)`
+	_, err := d.db.Exec(q,
+		accountID,
+		nick,
+		sk,
+		inv,
+		kcfg)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return ErrAlreadyExist
+		}
+		return err
+	}
+	return nil
+}
+
+func (d *Data) UpdateCharacter(ch msgs.Character) error {
+	kcfg := msgs.EncodeMsgpack(&ch.KeyConfig)
+	sk := msgs.EncodeMsgpack(&ch.Skills)
+	inv := msgs.EncodeMsgpack(&ch.Inventory)
+
+	q := `update characters set 
+keyconfig = ?, skills = ?, kills = ?, deaths = ?, px = ?, py = ?, dir = ?, inventory = ? where id = ?`
+	res, err := d.db.Exec(q,
+		kcfg,
+		sk,
+		ch.Kills,
+		ch.Deaths,
+		ch.Px,
+		ch.Py,
+		int(ch.Dir),
+		inv,
+		ch.ID,
+	)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return ErrAlreadyExist
+		}
+		return err
+	}
+	rowsAff, err := res.RowsAffected()
+	if err != nil {
+
+		return err
+	}
+	if rowsAff == 0 {
+		return errors.New("not found")
+	}
+	return nil
+}
+
+func (d *Data) AddCharacterKill(id int) error {
+	q := `update characters set kills = kills + 1 where id = ?`
+	res, err := d.db.Exec(q, id)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return ErrAlreadyExist
+		}
+		return err
+	}
+	rowsAff, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAff == 0 {
+		return errors.New("not found")
+	}
+	return nil
+}
+func (d *Data) AddCharacterDeath(id int) error {
+	q := `update characters set deaths = deaths + 1 where id = ?`
+	res, err := d.db.Exec(q, id)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return ErrAlreadyExist
+		}
+		return err
+	}
+	rowsAff, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAff == 0 {
+		return errors.New("not found")
+	}
+	return nil
+}
+func (d *Data) GetAccountCharacters(accountID int) ([]msgs.Character, error) {
+	q := "SELECT * from characters where account_id = ?"
+	rows, err := d.db.Query(q, accountID)
+	if err != nil {
+		panic(err)
+	}
+	defer rows.Close()
+	res := []msgs.Character{}
+	for rows.Next() {
+		sk := []byte{}
+		kcfg := []byte{}
+		inven := []byte{}
+		//var dir int
+		char := msgs.Character{}
+		err = rows.Scan(
+			&char.ID,
+			&char.AccountID,
+			&char.Nick,
+			&char.Px,
+			&char.Py,
+			&char.Dir,
+			&char.Kills,
+			&char.Deaths,
+			&sk,
+			&inven,
+			&kcfg)
+		if err != nil {
+			log.Fatal(err)
+		}
+		msgs.DecodeMsgpack(kcfg, &char.KeyConfig)
+		msgs.DecodeMsgpack(sk, &char.Skills)
+		msgs.DecodeMsgpack(inven, &char.Inventory)
+		res = append(res, char)
+	}
+	err = rows.Err()
+	if err != nil {
+		log.Fatal(err)
+	}
+	return res, nil
+}
+
+func (d *Data) GetCharacter(id int) (*msgs.Character, error) {
+	q := "select * from characters where id = ? limit 1 "
+
+	rows, err := d.db.Query(q, id)
+	if err != nil {
+		panic(err)
+	}
+	defer rows.Close()
+	var char *msgs.Character
+	for rows.Next() {
+		sk := []byte{}
+		kcfg := []byte{}
+		inven := []byte{}
+
+		char = &msgs.Character{}
+		err = rows.Scan(
+			&char.ID,
+			&char.AccountID,
+			&char.Nick,
+			&char.Px,
+			&char.Py,
+			&char.Dir,
+			&char.Kills,
+			&char.Deaths,
+			&sk,
+			&inven,
+			&kcfg)
+
+		if err != nil {
+			log.Fatal(err)
+		}
+		msgs.DecodeMsgpack(kcfg, &char.KeyConfig)
+		msgs.DecodeMsgpack(sk, &char.Skills)
+		msgs.DecodeMsgpack(inven, &char.Inventory)
+	}
+	err = rows.Err()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if char == nil {
+		err = errors.New("char does not exist")
+	}
+	return char, err
+}
+
+func (d *Data) GetTop20Kills() ([]*msgs.Character, error) {
+	q := "select id, nick, kills, deaths  from characters order by kills desc limit 20"
+
+	rows, err := d.db.Query(q)
+	if err != nil {
+		panic(err)
+	}
+	defer rows.Close()
+	chars := make([]*msgs.Character, 0)
+
+	for rows.Next() {
+		char := &msgs.Character{}
+		err = rows.Scan(
+			&char.ID,
+			&char.Nick,
+			&char.Kills,
+			&char.Deaths)
+		if err != nil {
+			log.Fatal(err)
+		}
+		chars = append(chars, char)
+	}
+	err = rows.Err()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return chars, err
 }
 func NewDB() DB {
 	db, err := sql.Open("sqlite3", "./test.db")
@@ -86,38 +332,9 @@ func NewDB() DB {
 	if err != nil {
 		panic(err)
 	}
-	a := Account{
-		Email:    "asd",
-		Nick:     "asd",
-		Password: "asd",
-	}
-	_, err = db.Exec(`insert into accounts (email, nick, password) values(?, ?, ?)`, a.Email, a.Nick, a.Password)
-	if err != nil {
-		if !strings.Contains(err.Error(), "UNIQUE constraint failed: accounts.email") {
-			panic(err)
-		} else {
-			log.Print("email already registered")
-		}
-	}
-	rows, err := db.Query("SELECT * from accounts")
+	_, err = db.Exec(charatcersTable)
 	if err != nil {
 		panic(err)
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var id int
-		var name string
-		var account string
-		var password string
-		err = rows.Scan(&id, &name, &account, &password)
-		if err != nil {
-			log.Fatal(err)
-		}
-		log.Printf("%v %v %v %v ", id, name, account, password)
-	}
-	err = rows.Err()
-	if err != nil {
-		log.Fatal(err)
 	}
 	return &Data{db: db}
 }

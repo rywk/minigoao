@@ -1,8 +1,6 @@
 package server
 
 import (
-	"log"
-
 	"github.com/rywk/minigoao/pkg/constants/item"
 	"github.com/rywk/minigoao/pkg/constants/skill"
 	"github.com/rywk/minigoao/pkg/msgs"
@@ -58,11 +56,8 @@ func (e *Experience) SetItemBuffs() {
 			continue
 		}
 		itm := item.ItemProps[items[i]]
-		log.Printf("item: %v, buffs: %v", itm.Type, itm.Buffs)
-
 		e.ItemBuffs = e.ItemBuffs.Add(itm.Buffs)
 	}
-	log.Print(e.ItemBuffs)
 }
 
 func (e *Experience) ToMsgs() msgs.Experience {

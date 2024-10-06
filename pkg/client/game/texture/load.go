@@ -461,7 +461,6 @@ func DecodeItem(i item.Item, icon bool) *ebiten.Image {
 	if i == item.None {
 		return nil
 	}
-	log.Printf("decoding item %v icon:%v", i.String(), icon)
 	img, _, err := image.Decode(bytes.NewReader(item.GetAsset(i, icon)))
 	if err != nil {
 		log.Fatal(err)

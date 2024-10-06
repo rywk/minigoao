@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"log"
 	"strconv"
 	"time"
 
@@ -334,18 +333,13 @@ func (p *P) AddStep(e *msgs.EventPlayerMoved) {
 }
 
 func (p *P) LoadAnimations() {
-	log.Printf("loading animations %v %v %v %v ", p.ArmorID, p.HelmetID, p.WeaponID, p.ShieldID)
 	p.Armor = texture.LoadItemAninmatio(p.ArmorID)
 	p.Helmet = texture.LoadItemHead(p.HelmetID)
 	p.Weapon = texture.LoadItemAninmatio(p.WeaponID)
 	p.Shield = texture.LoadItemAninmatio(p.ShieldID)
-	log.Printf("loaded animations %v %v %v %v ", p.ArmorID, p.HelmetID, p.WeaponID, p.ShieldID)
 }
 
 func (p *P) MaybeLoadAnimations(c *msgs.EventPlayerChangedSkin) {
-	log.Printf("maybe loading animations %v %v %v %v ", p.ArmorID, p.HelmetID, p.WeaponID, p.ShieldID)
-	log.Printf("new loading animations %v %v %v %v ", c.Armor, c.Head, c.Weapon, c.Shield)
-
 	if p.ArmorID != c.Armor {
 		p.ArmorID = c.Armor
 		p.Armor = texture.LoadItemAninmatio(p.ArmorID)
@@ -595,9 +589,9 @@ type AtkDmgFxTxt struct {
 
 func (adt *AtkDmgFxTxt) Play() bool {
 	adt.img.Clear()
-	col := color.RGBA{194, 6, 6, 100}
+	col := color.RGBA{194, 6, 6, 230}
 	if adt.heal {
-		col = color.RGBA{6, 153, 194, 100}
+		col = color.RGBA{6, 153, 194, 230}
 	}
 
 	text.DrawNumbers(adt.img, adt.dmg, 0, 10-adt.y, col)

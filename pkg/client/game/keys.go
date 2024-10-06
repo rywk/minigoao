@@ -13,6 +13,7 @@ import (
 	"github.com/rywk/minigoao/pkg/constants/attack"
 	"github.com/rywk/minigoao/pkg/constants/direction"
 	"github.com/rywk/minigoao/pkg/constants/item"
+	"github.com/rywk/minigoao/pkg/msgs"
 )
 
 type KeyConfig struct {
@@ -33,8 +34,48 @@ type KeyConfig struct {
 	PickElectricDischarge *Input
 	PickResurrect         *Input
 	PickHealWounds        *Input
+}
 
-	PotionCooldown time.Duration
+func (k *KeyConfig) ToMsgs() msgs.KeyConfig {
+	return msgs.KeyConfig{
+		Front: k.Front.ToMsgs(),
+		Back:  k.Back.ToMsgs(),
+		Left:  k.Left.ToMsgs(),
+		Right: k.Right.ToMsgs(),
+
+		PotionHP: k.PotionHP.ToMsgs(),
+		PotionMP: k.PotionMP.ToMsgs(),
+
+		Melee: k.Melee.ToMsgs(),
+
+		// Spell picker
+		PickParalize:          k.PickParalize.ToMsgs(),
+		PickParalizeRm:        k.PickParalizeRm.ToMsgs(),
+		PickExplode:           k.PickExplode.ToMsgs(),
+		PickElectricDischarge: k.PickElectricDischarge.ToMsgs(),
+		PickResurrect:         k.PickResurrect.ToMsgs(),
+		PickHealWounds:        k.PickHealWounds.ToMsgs(),
+	}
+}
+
+func (k *KeyConfig) FromMsgs(kdb msgs.KeyConfig) {
+	k.Front = InputFromMsgs(kdb.Front)
+	k.Back = InputFromMsgs(kdb.Back)
+	k.Left = InputFromMsgs(kdb.Left)
+	k.Right = InputFromMsgs(kdb.Right)
+
+	k.PotionHP = InputFromMsgs(kdb.PotionHP)
+	k.PotionMP = InputFromMsgs(kdb.PotionMP)
+
+	k.Melee = InputFromMsgs(kdb.Melee)
+
+	// Spell picker
+	k.PickParalize = InputFromMsgs(kdb.PickParalize)
+	k.PickParalizeRm = InputFromMsgs(kdb.PickParalizeRm)
+	k.PickExplode = InputFromMsgs(kdb.PickExplode)
+	k.PickElectricDischarge = InputFromMsgs(kdb.PickElectricDischarge)
+	k.PickResurrect = InputFromMsgs(kdb.PickResurrect)
+	k.PickHealWounds = InputFromMsgs(kdb.PickHealWounds)
 }
 
 var DefaultConfig = KeyConfig{
@@ -53,8 +94,7 @@ var DefaultConfig = KeyConfig{
 	PotionHP: NewInputPtr(ebiten.MouseButtonRight),
 	PotionMP: NewInputPtr(ebiten.KeyF),
 
-	Melee:          NewInputPtr(ebiten.MouseButton4),
-	PotionCooldown: time.Millisecond * 300,
+	Melee: NewInputPtr(ebiten.MouseButton4),
 }
 
 type Keys struct {
@@ -86,11 +126,15 @@ type Keys struct {
 	LastAction time.Time
 	LastMelee  time.Time
 	LastSpells [attack.SpellLen]time.Time
+
+	PotionCooldown time.Duration
 }
 
 func NewKeys(g *Game, cfg *KeyConfig) *Keys {
 	if cfg == nil {
 		cfg = &DefaultConfig
+	} else {
+
 	}
 	k := &Keys{
 		g:            g,
@@ -147,6 +191,7 @@ func NewKeys(g *Game, cfg *KeyConfig) *Keys {
 			time.Now().Add(-time.Second * 10), //ElectricDischarge
 			time.Now().Add(-time.Second * 10), //Explode
 		},
+		PotionCooldown: constants.PotionCooldown,
 	}
 	k.openCloseImg.Fill(color.RGBA{176, 82, 51, 0})
 	return k
@@ -345,7 +390,7 @@ func (k *Keys) PressedPotion() item.Item {
 		k.lastPotionInput = &NoInput
 	}
 	p := k.potionMap[k.lastPotionInput]
-	if p != item.None && time.Since(k.lastPotion) > k.cfg.PotionCooldown {
+	if p != item.None && time.Since(k.lastPotion) > k.PotionCooldown {
 		k.lastPotion = time.Now()
 		return p
 	}
@@ -410,6 +455,23 @@ func EmptyInput() *Input {
 type Input struct {
 	Mouse    ebiten.MouseButton
 	Keyboard ebiten.Key
+}
+
+func (i *Input) ToMsgs() msgs.Input {
+	return msgs.Input{
+		Mouse:    int16(i.Mouse),
+		Keyboard: int16(i.Keyboard),
+	}
+}
+func (i *Input) FromMsgs(m msgs.Input) {
+	i.Mouse = ebiten.MouseButton(m.Mouse)
+	i.Keyboard = ebiten.Key(m.Keyboard)
+}
+func InputFromMsgs(m msgs.Input) *Input {
+	i := &Input{}
+	i.Mouse = ebiten.MouseButton(m.Mouse)
+	i.Keyboard = ebiten.Key(m.Keyboard)
+	return i
 }
 
 type KBind interface {

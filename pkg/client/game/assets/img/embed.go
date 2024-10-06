@@ -14,8 +14,12 @@ var (
 	IconDisk_png []byte
 	//go:embed icon_plus.png
 	IconPlus_png []byte
+	//go:embed icon_plus_big.png
+	IconPlusBig_png []byte
 	//go:embed icon_substract.png
 	IconSubstract_png []byte
+	//go:embed icon_blood.png
+	IconBlood_png []byte
 	//go:embed equipped_item.png
 	EquippedItem_png []byte
 

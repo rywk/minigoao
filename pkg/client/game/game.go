@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"image"
 	"image/color"
 	_ "image/png"
 	"log"
@@ -38,7 +39,8 @@ import (
 type Mode int
 
 const (
-	ModeRegister Mode = iota
+	ModeLogin Mode = iota
+	ModeAccount
 	ModeGame
 	ModeOptions
 )
@@ -53,9 +55,15 @@ type Login struct {
 	err  error
 }
 
+type Register struct {
+	data *msgs.EventAccountLogin
+	err  error
+}
+
 type Game struct {
 	secureConn   bool
 	debug        bool
+	serverAddr   string
 	start        time.Time
 	memStats     *runtime.MemStats
 	totalRunTime time.Duration
@@ -66,19 +74,39 @@ type Game struct {
 	web  bool
 	mode Mode
 
+	escapePressed bool
+	tabPressed    bool
+
 	// register stuff
-	connecting          bool
-	connected           chan Login
-	serverTyper         *typing.Typer
-	typingServer        bool
-	nickTyper           *typing.Typer
+	connecting      bool
+	gameLogin       chan Login
+	accountResponse chan Register
+
+	btnLogin    *Button
+	btnRegister *Button
+	btnEnter    *Button
+
+	register      bool // true = create account, false = login (default)
+	accountTyper  *typing.Typer
+	passwordTyper *typing.Typer
+	emailTyper    *typing.Typer
+	typingInput   int
+	account       *msgs.EventAccountLogin
+
+	btnsCharacters   []*Button
+	btnNewCharacters *Button
+	creatingChar     bool
+	nickTyper        *typing.Typer
+
 	fsBtn               *Checkbox
 	vsyncBtn            *Checkbox
 	inputBox            *ebiten.Image
 	fullscreen          bool
 	vsync               bool
 	connErrorColorStart int
-
+	errorMsg            string
+	loadingX            int
+	loadingBar          *ebiten.Image
 	// game
 	mouseX, mouseY int
 	latency        string
@@ -98,6 +126,8 @@ type Game struct {
 	stats  *Hud
 
 	keys *Keys
+
+	rankingList []msgs.RankChar
 
 	SelectedSpell attack.Spell
 
@@ -139,33 +169,57 @@ func NewGame(web bool, serverAddr string) *Game {
 	start := time.Now()
 
 	g := &Game{
-		secureConn:  false,
-		debug:       false,
-		start:       start,
-		memStats:    &runtime.MemStats{},
-		vsync:       true,
-		mode:        ModeRegister,
-		web:         web,
-		connected:   make(chan Login),
-		nickTyper:   typing.NewTyper(),
-		serverTyper: typing.NewTyper(serverAddr),
-		worldImgOp:  &ebiten.DrawImageOptions{},
-		inputBox:    texture.Decode(img.InputBox_png),
+		serverAddr:      serverAddr,
+		secureConn:      false,
+		debug:           false,
+		start:           start,
+		memStats:        &runtime.MemStats{},
+		vsync:           true,
+		mode:            ModeLogin,
+		web:             web,
+		gameLogin:       make(chan Login),
+		accountResponse: make(chan Register),
+		accountTyper:    typing.NewTyper(),
+		emailTyper:      typing.NewTyper(),
+		passwordTyper:   typing.NewTyper(),
+		worldImgOp:      &ebiten.DrawImageOptions{},
+		inputBox:        texture.Decode(img.InputBox_png),
+		loadingBar:      ebiten.NewImage(400, 10),
 	}
 	if strings.Contains(serverAddr, ":443") {
 		g.secureConn = true
 	}
+	g.loadingBar.Fill(color.White)
 	g.fsBtn = NewCheckbox(g)
 	g.vsyncBtn = NewCheckbox(g)
 	g.vsyncBtn.On = false
 	g.SoundBoard = audio2d.NewSoundBoard(web)
+
+	btnImgLogin := ebiten.NewImage(120, 38)
+	btnImgLogin.Fill(color.RGBA{120, 21, 88, 200})
+	text.PrintBigAt(btnImgLogin, "Login", 26, 2)
+
+	btnImgRegister := ebiten.NewImage(120, 38)
+	btnImgRegister.Fill(color.RGBA{120, 21, 88, 200})
+	text.PrintBigAt(btnImgRegister, "Register", 14, 2)
+
+	btnImgEnter := ebiten.NewImage(120, 38)
+	btnImgEnter.Fill(color.RGBA{96, 21, 188, 200})
+	text.PrintBigAt(btnImgEnter, "Enter", 24, 2)
+
+	g.btnLogin = NewButton(g, nil, btnImgLogin, typ.P{X: HalfScreenX - 138, Y: 120})
+	g.btnRegister = NewButton(g, nil, btnImgRegister, typ.P{X: HalfScreenX + 24, Y: 120})
+	g.btnEnter = NewButton(g, nil, btnImgEnter, typ.P{X: HalfScreenX - 70, Y: 470})
+
 	return g
 }
 
 func (g *Game) Update() error {
 	switch g.mode {
-	case ModeRegister:
-		g.updateRegister()
+	case ModeLogin:
+		g.updateLogin()
+	case ModeAccount:
+		g.updateAccount()
 	case ModeGame:
 		g.updateGame()
 	case ModeOptions:
@@ -182,8 +236,10 @@ func (g *Game) Update() error {
 
 func (g *Game) Draw(screen *ebiten.Image) {
 	switch g.mode {
-	case ModeRegister:
+	case ModeLogin:
 		g.drawRegister(screen)
+	case ModeAccount:
+		g.drawAccount(screen)
 	case ModeGame:
 		g.drawGame(screen)
 	case ModeOptions:
@@ -220,7 +276,7 @@ func formatBytes(b uint64) string {
 		return fmt.Sprintf("%d B", b)
 	}
 }
-func (g *Game) updateRegister() {
+func (g *Game) updateLogin() {
 	if g.connErrorColorStart > 0 {
 		g.connErrorColorStart--
 	}
@@ -228,54 +284,287 @@ func (g *Game) updateRegister() {
 	g.fsBtn.Update()
 	// g.vsync = g.vsyncBtn.On
 	// g.vsyncBtn.Update()
-	if g.typingServer {
-		g.serverTyper.Update()
+
+	if g.btnLogin.Pressed() {
+		g.register = false
+	}
+
+	if g.btnRegister.Pressed() {
+		g.register = true
+	}
+
+	if g.register {
+		g.btnRegister.Over = true
 	} else {
-		g.nickTyper.Update()
+		g.btnLogin.Over = true
+	}
+
+	if ebiten.IsKeyPressed(ebiten.KeyTab) {
+		if !g.tabPressed {
+			g.typingInput++
+			if !g.register {
+				if g.typingInput > 1 {
+					g.typingInput = 0
+				}
+			} else {
+				if g.typingInput > 2 {
+					g.typingInput = 0
+				}
+			}
+		}
+		g.tabPressed = true
+	} else {
+		g.tabPressed = false
+	}
+
+	switch g.typingInput {
+	case 0:
+		g.accountTyper.Update()
+		g.emailTyper.Counter = 31
+		g.passwordTyper.Counter = 31
+	case 1:
+		g.passwordTyper.Update()
+		g.emailTyper.Counter = 31
+		g.accountTyper.Counter = 31
+	case 2:
+		g.emailTyper.Update()
+		g.accountTyper.Counter = 31
+		g.passwordTyper.Counter = 31
 	}
 
 	if g.connecting {
-		login, ok := conc.Check(g.connected)
+		login, ok := conc.Check(g.accountResponse)
 		if !ok {
 			return
 		}
 		g.connecting = false
 		if login.err != nil {
 			log.Println(login.err)
+			g.errorMsg = login.err.Error()
 			g.connErrorColorStart = 255
 			return
 		}
-		g.StartGame(login.data)
+		g.account = login.data
+		x := 200
+		w := 170
+		i := 0
+		g.btnsCharacters = []*Button{}
+		for _, char := range g.account.Characters {
+			charBtn := ebiten.NewImage(160, 178)
+			charBtn.Fill(color.RGBA{120, 21, 88, 200})
+			text.PrintBigAt(charBtn, char.Nick, 28, 12)
+			g.btnsCharacters = append(g.btnsCharacters, NewButton(g, nil, charBtn, typ.P{X: int32(x + w*i), Y: 190}))
+			i++
+		}
+		btnNewCharacter := ebiten.NewImage(48, 48)
+		btnNewCharacter.Fill(color.RGBA{77, 6, 58, 200})
+		g.btnNewCharacters = NewButton(g, texture.Decode(img.IconPlusBig_png), btnNewCharacter, typ.P{X: int32(x + w*i), Y: 190})
+		g.nickTyper = typing.NewTyper()
+		g.mode = ModeAccount
 		return
+	}
+	entrePressed := g.btnEnter.Pressed()
+	r := strings.NewReplacer("\n", "", " ", "")
+	accountText := g.accountTyper.String()
+	addressText := g.passwordTyper.String()
+	g.accountTyper.Text, g.passwordTyper.Text = r.Replace(accountText), r.Replace(addressText)
+	if g.register {
+		emailText := g.emailTyper.String()
+		g.emailTyper.Text = r.Replace(emailText)
+		if !strings.HasSuffix(accountText, "\n") &&
+			!strings.HasSuffix(addressText, "\n") &&
+			!strings.HasSuffix(emailText, "\n") &&
+			!entrePressed {
+			return
+		}
+	} else {
+		if !strings.HasSuffix(accountText, "\n") &&
+			!strings.HasSuffix(addressText, "\n") &&
+			!entrePressed {
+			return
+		}
 	}
 
-	r := strings.NewReplacer("\n", "", " ", "")
-	nickText := g.nickTyper.String()
-	addressText := g.serverTyper.String()
-	if !strings.HasSuffix(nickText, "\n") && !strings.HasSuffix(addressText, "\n") {
-		g.nickTyper.Text, g.serverTyper.Text = r.Replace(nickText), r.Replace(addressText)
-		return
-	}
-	g.nickTyper.Text, g.serverTyper.Text = r.Replace(nickText), r.Replace(addressText)
-	if g.nickTyper.Text != "" && g.serverTyper.Text != "" {
+	if g.accountTyper.Text != "" && g.passwordTyper.Text != "" {
 		g.connecting = true
-		go g.Connect(g.nickTyper.Text, g.serverTyper.Text)
+		if g.register {
+			if g.emailTyper.Text == "" {
+				return
+			}
+			go g.CreateAccount(g.accountTyper.Text, g.passwordTyper.Text, g.emailTyper.Text)
+		} else {
+			go g.LoginAccount(g.accountTyper.Text, g.passwordTyper.Text)
+		}
 	}
 }
+func (g *Game) updateAccount() {
+	if g.connErrorColorStart > 0 {
+		g.connErrorColorStart--
+	}
+	if ebiten.IsKeyPressed(ebiten.KeyEscape) {
+		if !g.escapePressed {
+			g.mode = ModeLogin
+			return
+		}
+		g.escapePressed = true
+	} else {
+		g.escapePressed = false
+	}
+	// in case we created a character
+	if g.connecting {
+		gameLogin, ok := conc.Check(g.gameLogin)
+		if ok {
+			g.connecting = false
+			if gameLogin.err != nil {
+				log.Println(gameLogin.err)
+				g.errorMsg = gameLogin.err.Error()
+				g.connErrorColorStart = 255
+				return
+			}
+			g.StartGame(gameLogin.data)
+			return
+		}
+		login, ok := conc.Check(g.accountResponse)
+		if !ok {
+			return
+		}
+		g.connecting = false
+		if login.err != nil {
+			log.Println(login.err)
+			g.errorMsg = login.err.Error()
+			g.connErrorColorStart = 255
+			return
+		}
+		g.account = login.data
+		x := 200
+		w := 170
+		i := 0
+		g.btnsCharacters = []*Button{}
+		for _, char := range g.account.Characters {
+			charBtn := ebiten.NewImage(160, 178)
+			charBtn.Fill(color.RGBA{120, 21, 88, 200})
+			text.PrintBigAt(charBtn, char.Nick, 28, 12)
+			g.btnsCharacters = append(g.btnsCharacters, NewButton(g, nil, charBtn, typ.P{X: int32(x + w*i), Y: 190}))
+			i++
+		}
+		btnNewCharacter := ebiten.NewImage(48, 48)
+		btnNewCharacter.Fill(color.RGBA{77, 6, 58, 255})
+		g.btnNewCharacters = NewButton(g, texture.Decode(img.IconPlusBig_png), btnNewCharacter, typ.P{X: int32(x + w*i), Y: 190})
+		g.nickTyper = typing.NewTyper()
+		return
+	}
 
+	if g.creatingChar {
+		g.nickTyper.Update()
+		r := strings.NewReplacer("\n", "", " ", "")
+		nickText := g.nickTyper.String()
+		g.nickTyper.Text = r.Replace(nickText)
+		if !strings.HasSuffix(nickText, "\n") {
+			return
+		}
+		g.creatingChar = false
+		if g.nickTyper.Text != "" {
+			g.connecting = true
+			go g.CreateCharacter(0, g.nickTyper.Text)
+		}
+		return
+	}
+
+	for i, btn := range g.btnsCharacters {
+		if btn.Pressed() {
+			g.connecting = true
+			go g.LoginCharacter(uint16(g.account.Characters[i].ID))
+		}
+	}
+	if g.btnNewCharacters.Pressed() {
+		g.creatingChar = true
+	}
+}
+func (g *Game) drawAccount(screen *ebiten.Image) {
+	g.mouseX, g.mouseY = ebiten.CursorPosition()
+
+	//text.PrintBigAt(screen, fmt.Sprintf("%d", g.account.ID), 100, 100)
+	text.PrintBigAt(screen, g.account.Account, 100, 100)
+	text.PrintBigAt(screen, g.account.Email, 200, 100)
+	for _, btn := range g.btnsCharacters {
+		btn.Draw(screen, int(btn.Pos.X), int(btn.Pos.Y))
+	}
+	g.btnNewCharacters.Draw(screen, int(g.btnNewCharacters.Pos.X), int(g.btnNewCharacters.Pos.Y))
+	if g.creatingChar {
+		g.nickTyper.Draw(screen, int(g.btnNewCharacters.Pos.X+50), int(g.btnNewCharacters.Pos.Y))
+	}
+	if g.connErrorColorStart > 0 {
+		text.PrintBigAtCol(screen, g.errorMsg, 80, ScreenHeight-80, color.RGBA{178, 0, 16, uint8(g.connErrorColorStart)})
+	}
+	if g.connecting {
+		rect := image.Rect(int(float64(g.loadingX)*0.4), 0, g.loadingX+400-int(float64(g.loadingX)*0.4), 10)
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Translate(float64(g.loadingX), 660)
+		screen.DrawImage(g.loadingBar.SubImage(rect).(*ebiten.Image), op)
+		g.loadingX += 3
+		if g.loadingX > ScreenWidth+400 {
+			g.loadingX = -400
+		}
+	} else {
+		g.loadingX = 0
+	}
+}
 func (g *Game) drawRegister(screen *ebiten.Image) {
 	g.mouseX, g.mouseY = ebiten.CursorPosition()
-	text.PrintBigAt(screen, "Nick", HalfScreenX-144, HalfScreenY-95)
+
+	g.btnLogin.Draw(screen, HalfScreenX-138, 120)
+	g.btnRegister.Draw(screen, HalfScreenX+24, 120)
+	g.btnEnter.Draw(screen, HalfScreenX-70, 470)
+
+	yoff := 160
+	if image.Pt(g.mouseX, g.mouseY).In(g.inputBox.Bounds().Add(image.Pt(HalfScreenX-150, yoff+28))) {
+		g.typingInput = 0
+	}
+	text.PrintBigAt(screen, "Account", HalfScreenX-144, yoff)
 	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(HalfScreenX-150, HalfScreenY-55)
+	op.GeoM.Translate(HalfScreenX-150, float64(yoff+28))
 	screen.DrawImage(g.inputBox, op)
-	g.nickTyper.Draw(screen, HalfScreenX-130, HalfScreenY-42)
-	text.PrintBigAt(screen, "Fullscreen", HalfScreenX-95, HalfScreenY+93)
-	g.fsBtn.Draw(screen, HalfScreenX+46, HalfScreenY+92)
-	// text.PrintBigAt(screen, "Vsync", HalfScreenX-95, HalfScreenY+135)
-	// g.vsyncBtn.Draw(screen, HalfScreenX+46, HalfScreenY+132)
+	g.accountTyper.Draw(screen, HalfScreenX-130, yoff+40)
+
+	yoff += 100
+	if image.Pt(g.mouseX, g.mouseY).In(g.inputBox.Bounds().Add(image.Pt(HalfScreenX-150, yoff+28))) {
+		g.typingInput = 1
+	}
+	text.PrintBigAt(screen, "Password", HalfScreenX-144, yoff)
+	op.GeoM.Translate(0, 100)
+	screen.DrawImage(g.inputBox, op)
+	//g.passwordTyper.Draw(screen, HalfScreenX-130, yoff+40)
+	str := strings.Repeat("#", len(g.passwordTyper.String()))
+	text.PrintBigAt(screen, str, HalfScreenX-130, yoff+40)
+
+	if g.register {
+		yoff += 100
+		if image.Pt(g.mouseX, g.mouseY).In(g.inputBox.Bounds().Add(image.Pt(HalfScreenX-150, yoff+28))) {
+			g.typingInput = 2
+		}
+		text.PrintBigAt(screen, "Email", HalfScreenX-144, yoff)
+		op.GeoM.Translate(0, 100)
+		screen.DrawImage(g.inputBox, op)
+		g.emailTyper.Draw(screen, HalfScreenX-130, yoff+40)
+	}
+
+	text.PrintBigAt(screen, "Fullscreen", HalfScreenX-95, 561)
+	g.fsBtn.Draw(screen, HalfScreenX+46, 560)
+
 	if g.connErrorColorStart > 0 {
-		text.PrintBigAtCol(screen, "Server offline", HalfScreenX-90, HalfScreenY+5, color.RGBA{178, 0, 16, uint8(g.connErrorColorStart)})
+		text.PrintBigAtCol(screen, g.errorMsg, 80, ScreenHeight-80, color.RGBA{178, 0, 16, uint8(g.connErrorColorStart)})
+	}
+	if g.connecting {
+		rect := image.Rect(int(float64(g.loadingX)*0.4), 0, g.loadingX+400-int(float64(g.loadingX)*0.4), 10)
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Translate(float64(g.loadingX), 660)
+		screen.DrawImage(g.loadingBar.SubImage(rect).(*ebiten.Image), op)
+		g.loadingX += 3
+		if g.loadingX > ScreenWidth+400 {
+			g.loadingX = -400
+		}
+	} else {
+		g.loadingX = 0
 	}
 }
 
@@ -298,17 +587,24 @@ func (g *Game) drawGame(screen *ebiten.Image) {
 
 func (g *Game) updateGame() error {
 	if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
+		g.escapePressed = true
 		g.Clear()
-		g.nickTyper = typing.NewTyper()
-		g.mode = ModeRegister
+		g.accountTyper = typing.NewTyper()
+		g.passwordTyper = typing.NewTyper()
+		g.emailTyper = typing.NewTyper()
+		g.mode = ModeAccount
 		ebiten.SetFullscreen(false)
-		g.ms.Close()
+		g.ms.Write(msgs.EPlayerLogout, []byte{0})
+		// g.ms.Close()
+		// g.ms = nil
 		return errors.New("esc exit")
 	}
 	if err := g.ProcessEventQueue(); err != nil {
 		g.Clear()
-		g.nickTyper = typing.NewTyper()
-		g.mode = ModeRegister
+		g.accountTyper = typing.NewTyper()
+		g.passwordTyper = typing.NewTyper()
+		g.emailTyper = typing.NewTyper()
+		g.mode = ModeLogin
 		ebiten.SetFullscreen(false)
 		return err
 	}
@@ -334,32 +630,166 @@ func (g *Game) updateGame() error {
 	g.counter++
 	return nil
 }
-
-func (g *Game) Connect(nick string, address string) {
+func (g *Game) CreateAccount(account string, password string, email string) {
 	var err error
-	g.ms, err = msgs.DialServer(address, g.web, g.secureConn)
+	if g.ms == nil {
+		g.ms, err = msgs.DialServer(g.serverAddr, g.web, g.secureConn)
+		if err != nil {
+			g.accountResponse <- Register{data: nil, err: err}
+			return
+		}
+	}
+	createAcc := &msgs.EventCreateAccount{
+		Account:  account,
+		Password: password,
+		Email:    email,
+	}
+
+	err = g.ms.EncodeAndWrite(msgs.ECreateAccount, createAcc)
 	if err != nil {
-		g.connected <- Login{data: nil, err: err}
+		g.accountResponse <- Register{data: nil, err: err}
 		return
 	}
-	register := &msgs.EventRegister{
-		Nick: nick,
-	}
-	err = g.ms.EncodeAndWrite(msgs.ERegister, register)
+
+	im, err := g.ms.Read()
 	if err != nil {
-		g.connected <- Login{data: nil, err: err}
+		log.Printf("read error: %v", err)
+		g.accountResponse <- Register{data: nil, err: err}
+		return
+	}
+
+	if im.Event == msgs.EError {
+		errstr := msgs.DecodeMsgpack(im.Data, &msgs.EventError{}).Msg
+		log.Printf("game err: %v", errstr)
+		g.accountResponse <- Register{data: nil, err: fmt.Errorf("%v", errstr)}
+		return
+	}
+	if im.Event != msgs.EAccountLoginOk {
+		log.Printf("not login response")
+		g.accountResponse <- Register{data: nil, err: fmt.Errorf("not login response")}
+		return
+	}
+	resp := msgs.DecodeMsgpack(im.Data, &msgs.EventAccountLogin{})
+	g.accountResponse <- Register{data: resp, err: nil}
+}
+
+func (g *Game) LoginAccount(account string, password string) {
+	var err error
+	if g.ms == nil {
+		g.ms, err = msgs.DialServer(g.serverAddr, g.web, g.secureConn)
+		if err != nil {
+			g.accountResponse <- Register{data: nil, err: err}
+			return
+		}
+	}
+	loginAcc := &msgs.EventLoginAccount{
+		Account:  account,
+		Password: password,
+	}
+	err = g.ms.EncodeAndWrite(msgs.ELoginAccount, loginAcc)
+	if err != nil {
+		g.accountResponse <- Register{data: nil, err: err}
+		return
+	}
+
+	im, err := g.ms.Read()
+	if err != nil {
+		log.Printf("read err %v", err)
+		g.accountResponse <- Register{data: nil, err: err}
+		return
+	}
+
+	if im.Event == msgs.EError {
+		errstr := msgs.DecodeMsgpack(im.Data, &msgs.EventError{}).Msg
+		log.Printf("game err: %v", errstr)
+		g.accountResponse <- Register{data: nil, err: fmt.Errorf("%v", errstr)}
+		return
+	}
+
+	if im.Event != msgs.EAccountLoginOk {
+		log.Printf("not login response")
+		g.accountResponse <- Register{data: nil, err: fmt.Errorf("not login response")}
+		return
+	}
+
+	resp := msgs.DecodeMsgpack(im.Data, &msgs.EventAccountLogin{})
+	g.accountResponse <- Register{data: resp, err: nil}
+}
+
+func (g *Game) LoginCharacter(id uint16) {
+	var err error
+	if g.ms == nil {
+		g.ms, err = msgs.DialServer(g.serverAddr, g.web, g.secureConn)
+		if err != nil {
+			g.gameLogin <- Login{data: nil, err: err}
+			return
+		}
+	}
+	loginChar := &msgs.EventLoginCharacter{
+		ID: id,
+	}
+	err = g.ms.EncodeAndWrite(msgs.ELoginCharacter, loginChar)
+	if err != nil {
+		g.gameLogin <- Login{data: nil, err: err}
+		return
+	}
+
+	im, err := g.ms.Read()
+	if err != nil {
+		g.gameLogin <- Login{data: nil, err: err}
+		return
+	}
+
+	if im.Event == msgs.EError {
+		errstr := msgs.DecodeMsgpack(im.Data, &msgs.EventError{}).Msg
+		log.Printf("game err: %v", errstr)
+		g.gameLogin <- Login{data: nil, err: fmt.Errorf("%v", errstr)}
+		return
+	}
+
+	if im.Event != msgs.EPlayerLogin {
+		log.Printf("not login response")
+		g.gameLogin <- Login{data: nil, err: fmt.Errorf("not login response")}
+		return
+	}
+
+	g.gameLogin <- Login{data: msgs.DecodeMsgpack(im.Data, &msgs.EventPlayerLogin{}), err: nil}
+}
+
+func (g *Game) CreateCharacter(accountID int, nick string) {
+	var err error
+	if g.ms == nil {
+		g.ms, err = msgs.DialServer(g.serverAddr, g.web, g.secureConn)
+		if err != nil {
+			g.accountResponse <- Register{data: nil, err: err}
+			return
+		}
+	}
+	createChar := &msgs.EventCreateCharacter{
+		AccountID: uint16(accountID),
+		Nick:      nick,
+	}
+	err = g.ms.EncodeAndWrite(msgs.ECreateCharacter, createChar)
+	if err != nil {
+		g.accountResponse <- Register{data: nil, err: err}
 		return
 	}
 	im, err := g.ms.Read()
 	if err != nil {
-		g.connected <- Login{data: nil, err: err}
+		g.accountResponse <- Register{data: nil, err: err}
 		return
 	}
-	if im.Event != msgs.EPlayerLogin {
-		g.connected <- Login{data: nil, err: fmt.Errorf("not login response")}
+	if im.Event == msgs.EError {
+		errstr := msgs.DecodeMsgpack(im.Data, &msgs.EventError{}).Msg
+		g.accountResponse <- Register{data: nil, err: fmt.Errorf("%v", errstr)}
 		return
 	}
-	g.connected <- Login{data: msgs.DecodeMsgpack(im.Data, &msgs.EventPlayerLogin{}), err: nil}
+	if im.Event != msgs.EAccountLoginOk {
+		g.accountResponse <- Register{data: nil, err: fmt.Errorf("not login response")}
+		return
+	}
+
+	g.accountResponse <- Register{data: msgs.DecodeMsgpack(im.Data, &msgs.EventAccountLogin{}), err: nil}
 }
 
 func (g *Game) StartGame(login *msgs.EventPlayerLogin) {
@@ -374,7 +804,12 @@ func (g *Game) StartGame(login *msgs.EventPlayerLogin) {
 	//g.ZoomFactor = 1
 	g.lastMove = time.Now()
 	g.lastMoveConfirmed = true
-	g.keys = NewKeys(g, nil)
+	var keyConfig *KeyConfig
+	if login.KeyConfig.Back.Keyboard != 0 || login.KeyConfig.Back.Mouse != 0 {
+		keyConfig = &KeyConfig{}
+		keyConfig.FromMsgs(login.KeyConfig)
+	}
+	g.keys = NewKeys(g, keyConfig)
 	g.keys.enterDown = true
 	g.playersY = append(g.playersY, g.player)
 
@@ -457,6 +892,17 @@ func (g *Game) WriteEventQueue() {
 			msg := &msgs.EventBroadcastChat{}
 			msgs.DecodeMsgpack(im.Data, msg)
 			dim.Data = msg
+		case msgs.EError:
+			msg := &msgs.EventError{}
+			msgs.DecodeMsgpack(im.Data, msg)
+			dim.Data = msg
+		case msgs.ERankList:
+			msg := &msgs.EventRankList{}
+			msgs.DecodeMsgpack(im.Data, msg)
+			dim.Data = msg
+		case msgs.ECharLogoutOk:
+			//log.Println("stopped client game read")
+			return
 		}
 		g.eventLock.Lock()
 		g.eventQueue = append(g.eventQueue, &dim)
@@ -482,7 +928,11 @@ func (g *Game) ProcessEventQueue() error {
 	g.eventLock.Lock()
 	for _, ev := range g.eventQueue {
 		switch ev.E {
+		case msgs.ERankList:
+			g.rankingList = ev.Data.(*msgs.EventRankList).Characters
 		case msgs.EServerDisconnect:
+			g.ms.Close()
+			g.ms = nil
 			log.Printf("Server disconnected\n")
 			return errors.New("server disconnected")
 		case msgs.EPingOk:
@@ -507,13 +957,13 @@ func (g *Game) ProcessEventQueue() error {
 			g.AddToGame(event)
 		case msgs.EPlayerMoved:
 			event := ev.Data.(*msgs.EventPlayerMoved)
-			log.Printf("Player [%v] moved\n", event.ID)
+			//log.Printf("Player [%v] moved\n", event.ID)
 			g.players[event.ID].AddStep(event)
 		case msgs.EMoveOk:
 			g.MovementResponse(ev.Data.([]byte))
 		case msgs.EMeleeOk:
 			event := ev.Data.(*msgs.EventMeleeOk)
-			log.Printf("CastMeleeOk m: %#v\n", event)
+			//log.Printf("CastMeleeOk m: %#v\n", event)
 			if g.player.Dead {
 				break
 			}
@@ -531,7 +981,7 @@ func (g *Game) ProcessEventQueue() error {
 			event := ev.Data.(*msgs.EventPlayerMeleeRecieved)
 			g.SoundBoard.Play(assets.MeleeBlood)
 			g.player.Effect.NewMeleeHit()
-			log.Printf("RecivedMelee m: %#v\n", event)
+			//log.Printf("RecivedMelee m: %#v\n", event)
 			g.players[event.ID].Effect.NewAttackNumber(int(event.Damage), false)
 			g.players[event.ID].Direction = event.Dir
 			g.player.Client.HP = int(event.NewHP)
@@ -542,7 +992,7 @@ func (g *Game) ProcessEventQueue() error {
 			}
 		case msgs.EPlayerMelee:
 			event := ev.Data.(*msgs.EventPlayerMelee)
-			log.Printf("EPlayerMelee m: %#v\n", event)
+			//log.Printf("EPlayerMelee m: %#v\n", event)
 			if !event.Hit {
 				g.players[event.From].Direction = event.Dir
 				g.SoundBoard.PlayFrom(assets.MeleeAir, g.player.X, g.player.Y, g.players[event.From].X, g.players[event.From].Y)
@@ -554,7 +1004,7 @@ func (g *Game) ProcessEventQueue() error {
 			g.players[event.ID].Dead = event.Killed
 		case msgs.ECastSpellOk:
 			event := ev.Data.(*msgs.EventCastSpellOk)
-			log.Printf("CastSpellOk m: %#v\n", event)
+			//log.Printf("CastSpellOk m: %#v\n", event)
 			g.player.Client.MP = int(event.NewMP)
 			if uint32(event.ID) != g.sessionID {
 				g.player.Effect.NewAttackNumber(int(event.Damage), event.Spell == attack.SpellHealWounds)
@@ -564,7 +1014,7 @@ func (g *Game) ProcessEventQueue() error {
 			}
 		case msgs.EPlayerSpellRecieved:
 			event := ev.Data.(*msgs.EventPlayerSpellRecieved)
-			log.Printf("RecivedSpell m: %#v\n", event)
+			//log.Printf("RecivedSpell m: %#v\n", event)
 			switch event.Spell {
 			case attack.SpellParalize:
 				g.player.Inmobilized = true
@@ -587,7 +1037,7 @@ func (g *Game) ProcessEventQueue() error {
 			}
 		case msgs.EPlayerSpell:
 			event := ev.Data.(*msgs.EventPlayerSpell)
-			log.Printf("SpellHit m: %#v\n", event)
+			//log.Printf("SpellHit m: %#v\n", event)
 			g.SoundBoard.PlayFrom(assets.SoundFromSpell(event.Spell), g.player.X, g.player.Y, g.players[event.ID].X, g.players[event.ID].Y)
 			g.players[event.ID].Effect.NewSpellHit(event.Spell)
 			g.players[event.ID].Dead = event.Killed
@@ -595,7 +1045,7 @@ func (g *Game) ProcessEventQueue() error {
 			event := ev.Data.(*msgs.EventUseItemOk)
 			if event.Item.Type() == item.TypeConsumable {
 
-				log.Printf("UsePotionOk m: %#v\n", event)
+				//log.Printf("UsePotionOk m: %#v\n", event)
 				switch event.Item {
 				case item.ManaPotion:
 					g.player.Client.MP = int(event.Change)
@@ -731,7 +1181,7 @@ func (g *Game) MovementResponse(data []byte) {
 	g.lastMoveConfirmed = true
 	allowed := data[0] != 0
 	dir := direction.D(data[1])
-	log.Printf("MovementResponse %v  %v\n", allowed, dir)
+	//log.Printf("MovementResponse %v  %v\n", allowed, dir)
 	if len(g.steps) == 0 {
 		g.player.Walking = false
 		log.Printf("move ok arrived without having a step sent\n")

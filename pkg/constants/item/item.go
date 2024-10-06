@@ -317,8 +317,8 @@ var ItemProps = [ItemLen]ItemProp{
 		},
 		WeaponProp: &WeaponProp{
 			Cooldown:  time.Millisecond * 1000,
-			Damage:    -35,
-			CritRange: 70,
+			Damage:    -15,
+			CritRange: 30,
 			Cast: func(from, to Player, calc int32) error {
 				if from == to {
 					return ErrorSelfCast

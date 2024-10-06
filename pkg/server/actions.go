@@ -44,8 +44,6 @@ func Cast(from, to *Player) (int32, error) {
 		return 0, attack.ErrorNoMana
 	}
 	from.mp = from.mp - sp.BaseManaCost
-	log.Printf("ITEM PhysicAtk %v vs PhysicDef %v", from.exp.ItemBuffs[skill.BuffPhysicalDamage], to.exp.ItemBuffs[skill.BuffPhysicalDefense])
-	log.Printf("PJ PhysicAtk %v vs PhysicDef %v", from.exp.SkillBuffs[skill.BuffPhysicalDamage], to.exp.SkillBuffs[skill.BuffPhysicalDefense])
 
 	itemBuff := int32(from.exp.ItemBuffs[skill.BuffMagicDamage] - to.exp.ItemBuffs[skill.BuffMagicDefense])
 	buff := int32(from.exp.SkillBuffs[skill.BuffMagicDamage] - to.exp.SkillBuffs[skill.BuffMagicDefense])
@@ -58,6 +56,14 @@ func Cast(from, to *Player) (int32, error) {
 	if err != nil {
 		from.mp = from.mp + sp.BaseManaCost
 		return 0, err
+	}
+	if to.dead {
+		from.kills++
+		to.deaths--
+	}
+	if from.SelectedSpell == attack.SpellParalize ||
+		from.SelectedSpell == attack.SpellRemoveParalize {
+		damage = 0
 	}
 	from.cds.LastAction = now
 	from.cds.LastSpells[from.SelectedSpell] = now
@@ -86,10 +92,6 @@ func Melee(from, to *Player) int32 {
 		return -1
 	}
 
-	log.Printf("base: %v, crit range: %v", wp.Damage, wp.CritRange)
-	log.Printf("ITEM PhysicAtk %v vs PhysicDef %v", from.exp.ItemBuffs[skill.BuffPhysicalDamage], to.exp.ItemBuffs[skill.BuffPhysicalDefense])
-	log.Printf("PJ PhysicAtk %v vs PhysicDef %v", from.exp.SkillBuffs[skill.BuffPhysicalDamage], to.exp.SkillBuffs[skill.BuffPhysicalDefense])
-
 	itemBuff := int32(from.exp.ItemBuffs[skill.BuffPhysicalDamage] - to.exp.ItemBuffs[skill.BuffPhysicalDefense])
 	buff := int32(from.exp.SkillBuffs[skill.BuffPhysicalDamage] - to.exp.SkillBuffs[skill.BuffPhysicalDefense])
 	damage := BaseMelee + (wp.Damage + rand.Int31n(wp.CritRange)) + buff + itemBuff
@@ -98,6 +100,10 @@ func Melee(from, to *Player) int32 {
 	}
 
 	wp.Cast(from, to, damage)
+	if to.dead {
+		from.kills++
+		to.deaths--
+	}
 	return damage
 }
 

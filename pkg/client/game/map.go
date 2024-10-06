@@ -2,7 +2,6 @@ package game
 
 import (
 	"image"
-	"log"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/rywk/minigoao/pkg/client/game/player"
@@ -24,7 +23,6 @@ type MapConfig struct {
 
 func MapConfigFromPlayerLogin(p *msgs.EventPlayerLogin) *MapConfig {
 	mc := MapConfig{}
-	log.Println(p.ID)
 	mc.Width, mc.Height = constants.PixelWorldX, constants.PixelWorldY
 	mc.StartX, mc.StartY = int(p.Pos.X)*constants.TileSize, int(p.Pos.Y)*constants.TileSize
 	mc.ViewWidth, mc.ViewHeight = int(constants.GridViewportX), int(constants.GridViewportX)
@@ -52,9 +50,7 @@ func NewMap(c *MapConfig) *Map {
 		m.floorTiles[i] = make([]texture.T, constants.PixelWorldY/texture.GrassTextureSize)
 		for j := range m.floorTiles[i] {
 			m.floorTiles[i][j] = texture.LoadTexture(c.GroundMapTextures[i][j])
-			if m.floorTiles[i][j] == nil {
-				log.Println("asdasd", c.GroundMapTextures[i][j])
-			}
+
 		}
 	}
 

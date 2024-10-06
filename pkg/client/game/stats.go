@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"math"
 	"strings"
 	"time"
 
@@ -98,8 +99,13 @@ func (b *Button) Draw(screen *ebiten.Image, x, y int) {
 		op.ColorScale.ScaleAlpha(.6)
 	}
 	screen.DrawImage(b.Img, op)
-	screen.DrawImage(b.Icon, op)
+	if b.Icon != nil {
+		screen.DrawImage(b.Icon, op)
+	}
+}
 
+func (b *Button) SetPos(pos typ.P) {
+	b.Pos = pos
 }
 
 func (b *Button) Pressed() bool {
@@ -191,7 +197,6 @@ func (b *Slider) Update() {
 	sliderRect := b.Line.Bounds().
 		Add(b.SliderPos).
 		Add(image.Pt(ScreenWidth-300, ScreenHeight-664))
-	//	log.Printf("pos : %v ", knobRect)
 
 	if cx > int(knobRect.Min.X) && cx < int(knobRect.Max.X) && cy > int(knobRect.Min.Y) && cy < int(knobRect.Max.Y) {
 		b.Over = true
@@ -437,6 +442,58 @@ func (inv *Inventory) Draw(screen *ebiten.Image) {
 		}
 
 	}
+
+}
+
+type Ranking struct {
+	g         *Game
+	drawOp    *ebiten.DrawImageOptions
+	bg        *ebiten.Image
+	highlight *ebiten.Image
+}
+
+func NewRanking(g *Game) *Ranking {
+	bg := ebiten.NewImage(600, 560)
+	bg.Fill(color.RGBA{44, 9, 59, 210})
+	highlight := ebiten.NewImage(550, 40)
+	highlight.Fill(color.RGBA{40, 9, 129, 210})
+	r := &Ranking{
+		drawOp: &ebiten.DrawImageOptions{},
+		g:      g,
+		bg:     bg,
+	}
+
+	return r
+}
+func (r *Ranking) Update() {
+}
+func (r *Ranking) Draw(screen *ebiten.Image) {
+	r.drawOp.GeoM.Reset()
+	r.drawOp.GeoM.Translate(340, 40)
+	r.bg.Fill(color.RGBA{44, 9, 59, 210})
+
+	x := 60
+	y := 30
+
+	text.PrintBigAt(r.bg, "Top", x, y-10)
+	text.PrintBigAt(r.bg, "Nick", x+155, y-10)
+	text.PrintBigAt(r.bg, "Kills", x+310, y-10)
+	text.PrintBigAt(r.bg, "Ratio", x+460, y-10)
+	offy := 60
+	for i, ch := range r.g.rankingList {
+
+		// TODO: hightlight if youre in the ranking
+		text.PrintBigAt(r.bg, fmt.Sprintf("%d", i+1), x, offy+y*i)
+		text.PrintBigAt(r.bg, ch.Nick, x+160, offy+y*i)
+		text.PrintBigAt(r.bg, fmt.Sprintf("%d", ch.Kills), x+320, offy+y*i)
+		ratio := float64(ch.Kills) / float64(ch.Deaths)
+		if !math.IsNaN(ratio) {
+			text.PrintBigAt(r.bg, fmt.Sprintf("%.2f", ratio), x+470, offy+y*i)
+		} else {
+			text.PrintBigAt(r.bg, "0", x+470, offy+y*i)
+		}
+	}
+	screen.DrawImage(r.bg, r.drawOp)
 
 }
 
@@ -754,6 +811,10 @@ type Hud struct {
 	skills       *Skills
 	skillsButton *Button
 
+	rankingOpen   bool
+	ranking       *Ranking
+	rankingButton *Button
+
 	inventory *Inventory
 
 	keyBinders []*KeyBinder[*Input]
@@ -791,11 +852,13 @@ func NewHud(g *Game) *Hud {
 		barOffsetEnd:       6,
 
 		optionsOpen: false,
-
-		options: NewOptions(g),
+		options:     NewOptions(g),
 
 		skillsOpen: false,
 		skills:     NewSkills(g),
+
+		rankingOpen: false,
+		ranking:     NewRanking(g),
 
 		hpBar: texture.Decode(img.HpBar_png),
 		mpBar: texture.Decode(img.MpBar_png),
@@ -823,6 +886,7 @@ func NewHud(g *Game) *Hud {
 	s.y = float64(ScreenHeight - s.hudBg.Bounds().Dy())
 	s.optionsButton = NewButton(g, texture.Decode(img.ConfigIcon_png), btnImg, typ.P{X: ScreenWidth - 64, Y: int32(s.y) + 16})
 	s.skillsButton = NewButton(g, texture.Decode(img.Icon_png), btnImg, typ.P{X: ScreenWidth - 128, Y: int32(s.y) + 16})
+	s.rankingButton = NewButton(g, texture.Decode(img.IconBlood_png), btnImg, typ.P{X: ScreenWidth - 192, Y: int32(s.y) + 16})
 
 	cooldownBarImg := texture.Decode(img.CooldownBase_png)
 	s.meleeCooldownInfo = &Cooldown{
@@ -993,9 +1057,14 @@ func (s *Hud) Update() {
 	mp := mapValue(float64(s.g.client.MP), 0, float64(s.g.player.Exp.Stats.MaxMP), float64(s.barOffsetStart), float64(s.mpBar.Bounds().Max.X-s.barOffsetEnd))
 	s.mpBarRect = image.Rect(s.mpBar.Bounds().Min.X, s.mpBar.Bounds().Min.Y, int(mp), s.mpBar.Bounds().Max.Y)
 	if s.optionsButton.Pressed() {
+		if s.optionsOpen {
+			keycfg := s.g.keys.cfg.ToMsgs()
+			s.g.outQueue <- &GameMsg{E: msgs.EUpdateKeyConfig, Data: &keycfg}
+		}
 		s.optionsOpen = !s.optionsOpen
-		if s.skillsOpen {
+		if s.skillsOpen || s.rankingOpen {
 			s.skillsOpen = false
+			s.rankingOpen = false
 		}
 	}
 	if s.optionsOpen {
@@ -1003,6 +1072,8 @@ func (s *Hud) Update() {
 		if (s.g.mouseX < ScreenWidth-300 || s.g.mouseY < ScreenHeight-664) &&
 			ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
 			s.optionsOpen = false
+			keycfg := s.g.keys.cfg.ToMsgs()
+			s.g.outQueue <- &GameMsg{E: msgs.EUpdateKeyConfig, Data: &keycfg}
 		}
 	}
 
@@ -1016,8 +1087,9 @@ func (s *Hud) Update() {
 			//s.g.player.Exp.Skills.FreePoints = uint16(s.skills.FreePoints)
 		}
 		s.skillsOpen = !s.skillsOpen
-		if s.optionsOpen {
+		if s.optionsOpen || s.rankingOpen {
 			s.optionsOpen = false
+			s.rankingOpen = false
 		}
 	}
 	if s.skillsOpen {
@@ -1027,6 +1099,24 @@ func (s *Hud) Update() {
 			s.skillsOpen = false
 			s.skills.FreePoints = int(s.g.player.Exp.FreePoints)
 			s.skills.updatedSkills = s.g.player.Exp.Skills
+		}
+	}
+
+	if s.rankingButton.Pressed() {
+		if !s.rankingOpen {
+			s.g.outQueue <- &GameMsg{E: msgs.EGetRankList}
+		}
+		s.rankingOpen = !s.rankingOpen
+		if s.skillsOpen || s.optionsOpen {
+			s.skillsOpen = false
+			s.optionsOpen = false
+		}
+	}
+	if s.rankingOpen {
+		s.ranking.Update()
+		if (s.g.mouseY < ScreenHeight-64) &&
+			ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
+			s.rankingOpen = false
 		}
 	}
 	s.RefreshTooltip()
@@ -1051,6 +1141,7 @@ func (s *Hud) Draw(screen *ebiten.Image) {
 	screen.DrawImage(s.hudBg, op)
 	s.optionsButton.Draw(screen, ScreenWidth-64, int(s.y)+16)
 	s.skillsButton.Draw(screen, ScreenWidth-128, int(s.y)+16)
+	s.rankingButton.Draw(screen, ScreenWidth-192, int(s.y)+16)
 	op = &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(s.x, s.y)
 	screen.DrawImage(s.hpBar.SubImage(s.hpBarRect).(*ebiten.Image), op)
@@ -1094,6 +1185,9 @@ func (s *Hud) Draw(screen *ebiten.Image) {
 	}
 	if s.skillsOpen {
 		s.skills.Draw(screen)
+	}
+	if s.rankingOpen {
+		s.ranking.Draw(screen)
 	}
 	s.inventory.Draw(screen)
 
@@ -1238,7 +1332,6 @@ func (cd *Cooldown) UpdateImage() {
 			cd.Img = nil
 			return
 		}
-		//log.Printf("%v %v", iconX, v)
 		cd.Img = cd.BaseImg.SubImage(image.Rect(0, 0, iconX, int(v))).(*ebiten.Image)
 	}
 }

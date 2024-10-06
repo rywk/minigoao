@@ -53,11 +53,11 @@ func NewUpgraderMiddleware() (MMsgs, http.HandlerFunc) {
 		c, err := upgrader.Upgrade(w, r, nil)
 
 		if err != nil {
-			log.Print("upgrade:", err)
+			log.Printf("upgrade: %v %v", r.RemoteAddr, err)
 			return
 		}
 		wss.newConns <- &WSM{c}
-		log.Print("upgraded")
+		log.Printf("upgraded %v", r.RemoteAddr)
 	}
 }
 

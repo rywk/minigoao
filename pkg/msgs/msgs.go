@@ -108,6 +108,7 @@ func write(w io.Writer, event E, data []byte) error {
 		if err != nil {
 			return err
 		}
+		return nil
 	}
 	_, err := w.Write(append(buf, data...))
 	if err != nil {
@@ -155,7 +156,10 @@ type E uint8
 const (
 	ENone E = iota
 	EPing
-	ERegister
+	ELoginCharacter
+	ECreateCharacter
+	ECreateAccount
+	ELoginAccount
 	EServerDisconnect
 	EMove
 	ECastSpell
@@ -164,7 +168,12 @@ const (
 	ESendChat
 	ESelectSpell
 	EUpdateSkills
+	EUpdateKeyConfig
+	EGetRankList
+	ERankList
 
+	EAccountLoginOk
+	ECharLogoutOk
 	EPingOk
 	EMoveOk
 	ECastSpellOk
@@ -188,6 +197,7 @@ const (
 	EPlayerMelee         // A Player in the viewport recieved a melee
 	EPlayerMeleeRecieved // Player recieved a melee
 
+	EError
 	ELen
 )
 
@@ -196,7 +206,10 @@ const mapCoordinateSize = int(unsafe.Sizeof(uint32(0)))
 var eventLen = [ELen]int{
 	0,
 	1,     // EPing
-	-1,    // ERegister
+	-1,    // ELoginCharacter
+	-1,    // ECreateCharacter
+	-1,    // ECreateAccount
+	-1,    // ELoginAccount
 	0,     // EServerDisconnect
 	1,     // EMove - 1 byte (uint8) to define the direction.
 	4 * 2, // ECastSpell - 1 byte (uint8) to define the spell picked in the client side. x, y map coords are 2 uint32
@@ -205,7 +218,12 @@ var eventLen = [ELen]int{
 	-1,    // ESendChat
 	1,     // ESelectSpell 1 byte (uint8) to define spell
 	-1,    // EUpdateSkills
+	-1,    // EUpdateKeyConfig
+	1,     // EGetRankList
+	-1,    // ERankList
 
+	-1,                // EAccountLoginOk
+	1,                 // ECharLogoutOk
 	2,                 // EPingOk
 	2,                 // EMoveOk - 1 byte (bool) move, 1 byte (bool) direction
 	1 + 2 + 4 + 4 + 1, // ECastSpellOk - 1 byte (uint8) spell, 2 bytes (uint16) to define the player id, 4 bytes (uint32) damage,  4 bytes (uint32) new mp,  1 byte (bool) killed target
@@ -216,7 +234,7 @@ var eventLen = [ELen]int{
 	6,  // EPlayerChangedSkin - 2 bytes (uint16) to define the player id 4 for the new skin
 	0,  // EPlayerConnect
 	-1, // EPlayerLogin - -1 dynamic size msgpack
-	0,  // EPlayerLogout
+	1,  // EPlayerLogout
 	-1, // EPlayerSpawned - -1 dynamic size msgpack
 	2,  // EPlayerDespawned - 2 bytes (uint16) to define the player id
 	-1, // EPlayerEnterViewport - -1 dynamic size msgpack
@@ -228,12 +246,17 @@ var eventLen = [ELen]int{
 	1 + 2 + 4 + 4,     // EPlayerSpellRecieved - 1 byte (uint8) to define the spell, 2 bytes (uint16) to define the (caster) player id, 4 bytes (uint32) to define the new hp, 4 bytes (uint32) to define the damage
 	1 + 1 + 1 + 2 + 2, // EPlayerMelee - 1 byte (bool) hit/miss, 1 byte (bool) killed target, 2 bytes (uint16) to define the target player id, 2 bytes (uint16) to define the attacker
 	1 + 2 + 4 + 4,     // EPlayerMeleeRecieved - 2 bytes (uint16) to define the (caster) player id, 4 bytes (uint32) to define the new hp, 4 bytes (uint32) to define the damage
+
+	-1, // EError
 }
 
 var eventString = [ELen]string{
 	"ENone",
 	"EPing",
-	"ERegister",
+	"ELoginCharacter",
+	"ECreateCharacter",
+	"ECreateAccount",
+	"ELoginAccount",
 	"EServerDisconnect",
 	"EMove",
 	"ECastSpell",
@@ -241,7 +264,12 @@ var eventString = [ELen]string{
 	"EUseItem",
 	"ESelectSpell",
 	"EUpdateSkills",
+	"EUpdateKeyConfig",
+	"EGetRankList",
+	"ERankList",
 
+	"EAccountLoginOk",
+	"ECharLogoutOk",
 	"EPingOk",
 	"EMoveOk",
 	"ECastSpellOk",
@@ -263,6 +291,8 @@ var eventString = [ELen]string{
 	"EPlayerSpellRecieved",
 	"EPlayerMelee",
 	"EPlayerMeleeRecieved",
+
+	"EError",
 }
 
 func (e E) Valid() bool {
@@ -281,8 +311,14 @@ func encodeAndWrite(m Msgs, e E, msg interface{}) error {
 	switch e {
 	case EPing:
 		return m.Write(e, make([]byte, 1))
-	case ERegister:
-		return m.WriteWithLen(e, EncodeMsgpack(msg.(*EventRegister)))
+	case ELoginCharacter:
+		return m.WriteWithLen(e, EncodeMsgpack(msg.(*EventLoginCharacter)))
+	case ECreateCharacter:
+		return m.WriteWithLen(e, EncodeMsgpack(msg.(*EventCreateCharacter)))
+	case ECreateAccount:
+		return m.WriteWithLen(e, EncodeMsgpack(msg.(*EventCreateAccount)))
+	case ELoginAccount:
+		return m.WriteWithLen(e, EncodeMsgpack(msg.(*EventLoginAccount)))
 	case EMove:
 		return m.Write(e, []byte{msg.(uint8)})
 	case ECastSpell:
@@ -297,6 +333,8 @@ func encodeAndWrite(m Msgs, e E, msg interface{}) error {
 		return m.Write(e, []byte{byte(msg.(attack.Spell))})
 	case EUpdateSkills:
 		return m.WriteWithLen(e, EncodeMsgpack(msg.(*skill.Skills)))
+	case EUpdateKeyConfig:
+		return m.WriteWithLen(e, EncodeMsgpack(msg.(*KeyConfig)))
 	case EPingOk:
 		return m.Write(e, binary.BigEndian.AppendUint16(make([]byte, 0, 2), msg.(uint16)))
 	case EMoveOk:
@@ -309,6 +347,10 @@ func encodeAndWrite(m Msgs, e E, msg interface{}) error {
 		return m.Write(e, EncodeEventUseItemOk(msg.(*EventUseItemOk)))
 	case EUpdateSkillsOk:
 		return m.WriteWithLen(e, EncodeMsgpack(msg.(*Experience)))
+	case EAccountLoginOk:
+		return m.WriteWithLen(e, EncodeMsgpack(msg.(*EventAccountLogin)))
+	case ECharLogoutOk:
+		return m.Write(e, []byte{0})
 	case EPlayerChangedSkin:
 		return m.Write(e, EncodeEventPlayerChangedSkin(msg.(*EventPlayerChangedSkin)))
 	case EPlayerSpawned:
@@ -331,6 +373,13 @@ func encodeAndWrite(m Msgs, e E, msg interface{}) error {
 		return m.Write(e, EncodeEventPlayerMelee(msg.(*EventPlayerMelee)))
 	case EPlayerMeleeRecieved:
 		return m.Write(e, EncodeEventPlayerMeleeRecieved(msg.(*EventPlayerMeleeRecieved)))
+	case EError:
+		return m.WriteWithLen(e, EncodeMsgpack(msg.(*EventError)))
+	case EGetRankList:
+		return m.Write(e, []byte{0})
+	case ERankList:
+		return m.WriteWithLen(e, EncodeMsgpack(msg.(*EventRankList)))
+
 	default:
 		log.Printf("unknown event %v\n", e.String())
 		return fmt.Errorf("unknown event %v", e.String())
@@ -338,6 +387,26 @@ func encodeAndWrite(m Msgs, e E, msg interface{}) error {
 }
 func (m *M) EncodeAndWrite(e E, msg interface{}) error {
 	return encodeAndWrite(m, e, msg)
+}
+
+type EventRankList struct {
+	Characters []RankChar
+}
+
+type RankChar struct {
+	ID     int
+	Nick   string
+	Kills  int
+	Deaths int
+}
+
+func (c *Character) ToRankChar() RankChar {
+	return RankChar{
+		ID:     c.ID,
+		Nick:   c.Nick,
+		Kills:  c.Kills,
+		Deaths: c.Deaths,
+	}
 }
 
 type EventSendChat struct {
@@ -356,8 +425,30 @@ func BoolByte(b bool) byte {
 	return 0
 }
 
-type EventRegister struct {
-	Nick string
+type EventLoginCharacter struct {
+	ID uint16
+}
+type EventCreateCharacter struct {
+	AccountID uint16
+	Nick      string
+}
+type EventCreateAccount struct {
+	Account  string
+	Email    string
+	Password string
+}
+type EventLoginAccount struct {
+	Account  string
+	Password string
+}
+type EventError struct {
+	Msg string
+}
+type EventAccountLogin struct {
+	ID         uint16
+	Account    string
+	Email      string
+	Characters []Character
 }
 
 // msgpack
@@ -373,6 +464,7 @@ type EventPlayerLogin struct {
 	Inv            Inventory
 	Exp            Experience
 	VisiblePlayers []EventNewPlayer
+	KeyConfig      KeyConfig
 }
 type Inventory struct {
 	HealthPotions  InventoryPos
@@ -503,7 +595,6 @@ type HelmetData struct {
 }
 
 func DecodeMsgpack[T any](data []byte, to *T) *T {
-	log.Print(len(data))
 	err := msgpack.Unmarshal(data, to)
 	if err != nil {
 		panic(err)
@@ -818,4 +909,74 @@ func EncodeEventUseItem(c *EventUseItem) []byte {
 	bs[0] = c.X
 	bs[1] = c.Y
 	return bs
+}
+
+type KeyConfig struct {
+	Front Input
+	Back  Input
+	Left  Input
+	Right Input
+
+	PotionHP Input
+	PotionMP Input
+
+	Melee Input
+
+	// Spell picker
+	PickParalize          Input
+	PickParalizeRm        Input
+	PickExplode           Input
+	PickElectricDischarge Input
+	PickResurrect         Input
+	PickHealWounds        Input
+}
+
+type Input struct {
+	Mouse    int16
+	Keyboard int16
+}
+
+type Character struct {
+	ID        int
+	AccountID int
+	Nick      string
+	Dir       direction.D
+	Px        int
+	Py        int
+	Kills     int
+	Deaths    int
+	Skills    skill.Skills
+	Inventory Inventory
+	KeyConfig KeyConfig
+}
+
+func (inv *Inventory) SetTestItemsInventory() {
+	inv.Slots[7][0].Item = item.HealthPotion
+	inv.Slots[7][0].Count = 9999
+	inv.HealthPotions = InventoryPos{X: 7, Y: 0}
+	inv.Slots[6][0].Item = item.WeaponMightySword
+	inv.Slots[6][0].Count = 1
+	inv.Slots[5][0].Item = item.WeaponWindSword
+	inv.Slots[5][0].Count = 1
+	inv.Slots[4][0].Item = item.WeaponDarkDagger
+	inv.Slots[4][0].Count = 1
+	inv.Slots[3][0].Item = item.WeaponFireStaff
+	inv.Slots[3][0].Count = 1
+
+	inv.Slots[7][1].Item = item.ManaPotion
+	inv.Slots[7][1].Count = 9999
+	inv.ManaPotions = InventoryPos{X: 7, Y: 1}
+
+	inv.Slots[4][1].Item = item.HelmetPaladin
+	inv.Slots[4][1].Count = 1
+	inv.Slots[1][1].Item = item.HatMage
+	inv.Slots[1][1].Count = 1
+	inv.Slots[2][1].Item = item.ShieldArcane
+	inv.Slots[2][1].Count = 1
+	inv.Slots[3][1].Item = item.ArmorShadow
+	inv.Slots[3][1].Count = 1
+	inv.Slots[6][1].Item = item.ArmorDark
+	inv.Slots[6][1].Count = 1
+	inv.Slots[5][1].Item = item.ShieldTower
+	inv.Slots[5][1].Count = 1
 }

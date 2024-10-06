@@ -19,6 +19,8 @@ const (
 	GridViewportX, GridViewportY = 43, 31
 
 	ChatMsgTTL = time.Second * 10
+
+	PotionCooldown = time.Millisecond * 275
 )
 
 type Err struct{}
