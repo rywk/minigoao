@@ -76,6 +76,7 @@ type Game struct {
 
 	escapePressed bool
 	tabPressed    bool
+	clickPressed  bool
 
 	// register stuff
 	connecting      bool
@@ -521,8 +522,18 @@ func (g *Game) drawRegister(screen *ebiten.Image) {
 	g.btnRegister.Draw(screen, HalfScreenX+24, 120)
 	g.btnEnter.Draw(screen, HalfScreenX-70, 470)
 
+	clicked := false
+	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
+		if !g.clickPressed {
+			clicked = true
+		}
+		g.clickPressed = true
+	} else {
+		g.clickPressed = false
+	}
+
 	yoff := 160
-	if image.Pt(g.mouseX, g.mouseY).In(g.inputBox.Bounds().Add(image.Pt(HalfScreenX-150, yoff+28))) {
+	if clicked && image.Pt(g.mouseX, g.mouseY).In(g.inputBox.Bounds().Add(image.Pt(HalfScreenX-150, yoff+28))) {
 		g.typingInput = 0
 	}
 	text.PrintBigAt(screen, "Account", HalfScreenX-144, yoff)
@@ -532,7 +543,7 @@ func (g *Game) drawRegister(screen *ebiten.Image) {
 	g.accountTyper.Draw(screen, HalfScreenX-130, yoff+40)
 
 	yoff += 100
-	if image.Pt(g.mouseX, g.mouseY).In(g.inputBox.Bounds().Add(image.Pt(HalfScreenX-150, yoff+28))) {
+	if clicked && image.Pt(g.mouseX, g.mouseY).In(g.inputBox.Bounds().Add(image.Pt(HalfScreenX-150, yoff+28))) {
 		g.typingInput = 1
 	}
 	text.PrintBigAt(screen, "Password", HalfScreenX-144, yoff)
@@ -540,11 +551,14 @@ func (g *Game) drawRegister(screen *ebiten.Image) {
 	screen.DrawImage(g.inputBox, op)
 	//g.passwordTyper.Draw(screen, HalfScreenX-130, yoff+40)
 	str := strings.Repeat("#", len(g.passwordTyper.String()))
+	if g.passwordTyper.Counter%40 < 20 {
+		str += "_"
+	}
 	text.PrintBigAt(screen, str, HalfScreenX-130, yoff+40)
 
 	if g.register {
 		yoff += 100
-		if image.Pt(g.mouseX, g.mouseY).In(g.inputBox.Bounds().Add(image.Pt(HalfScreenX-150, yoff+28))) {
+		if clicked && image.Pt(g.mouseX, g.mouseY).In(g.inputBox.Bounds().Add(image.Pt(HalfScreenX-150, yoff+28))) {
 			g.typingInput = 2
 		}
 		text.PrintBigAt(screen, "Email", HalfScreenX-144, yoff)
