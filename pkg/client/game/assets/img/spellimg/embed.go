@@ -11,7 +11,7 @@ var (
 	IconRmParalize_png []byte
 	//go:embed icon_paralize64.png
 	IconParalize_png []byte
-	//go:embed icon_electric_discharge64.png
+	//go:embed icon_electric_discharge_new64.png
 	IconElectricDischarge_png []byte
 	//go:embed icon_apoca264.png
 	IconExplode_png []byte
@@ -24,14 +24,16 @@ var (
 	SpellApoca_png []byte
 	//go:embed spell_apoca22.png
 	SpellApoca2_png []byte
-	//go:embed spell_desca2.png
+	//go:embed spell_desca_new.png
 	SpellDesca_png []byte
 	//go:embed spell_paralize.png
 	SpellParalize_png []byte
 	//go:embed spell_inmo_rm.png
 	SpellInmoRm_png []byte
 
-	//go:embed heal_wounds_new.png
+	// //go:embed heal_wounds_new.png
+	// SpellHealWoundsNew_png []byte
+	//go:embed spell_heal_wounds_3.png
 	SpellHealWoundsNew_png []byte
 	//go:embed spell_resurrect.png
 	SpellResurrect_png []byte

@@ -555,8 +555,8 @@ var spellOffsets = map[assets.Image]struct{ x, y int }{
 	assets.SpellApoca:      {-20, -40},
 	assets.SpellInmo:       {-30, -55},
 	assets.SpellInmoRm:     {-20, -30},
-	assets.SpellDesca:      {-45, -70},
-	assets.SpellHealWounds: {-36, -38},
+	assets.SpellDesca:      {-6, -178},
+	assets.SpellHealWounds: {-40, -56},
 	assets.SpellResurrect:  {-24, -36},
 }
 
@@ -599,7 +599,7 @@ func (adt *AtkDmgFxTxt) Play() bool {
 		adt.y = 0
 		return false
 	}
-	if adt.c%2 == 0 {
+	if adt.c%3 == 0 {
 		adt.y++
 	}
 	adt.c++

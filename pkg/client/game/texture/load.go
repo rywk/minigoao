@@ -76,11 +76,11 @@ var (
 		},
 		asset.SpellDesca: {
 			c: SpriteConfig{
-				Width:      127,
-				Height:     127,
-				GridW:      5,
-				GridH:      3,
-				FrameCount: 15,
+				Width:  54,
+				Height: 256,
+				DirectionLength: map[direction.D]int{
+					direction.Right: 20,
+				},
 			},
 			img: spellimg.SpellDesca_png,
 		},
@@ -108,8 +108,8 @@ var (
 
 		asset.SpellHealWounds: {
 			c: SpriteConfig{
-				Width:  95,
-				Height: 95,
+				Width:  112,
+				Height: 112,
 				DirectionLength: map[direction.D]int{
 					direction.Right: 10,
 				},

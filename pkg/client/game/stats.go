@@ -1120,6 +1120,14 @@ func (s *Hud) Update() {
 			s.rankingOpen = false
 		}
 	}
+
+	if s.rankingButton.Over {
+		s.ChangeSetTooltip("Ranking\n")
+	} else if s.skillsButton.Over {
+		s.ChangeSetTooltip("Skills\n")
+	} else if s.optionsButton.Over {
+		s.ChangeSetTooltip("Config\n")
+	}
 	s.RefreshTooltip()
 }
 
