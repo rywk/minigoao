@@ -557,7 +557,7 @@ func (g *Game) consumeIncomingData() {
 			// consumable behaviour
 			if is.Item.Type() == item.TypeConsumable {
 				now := time.Now()
-				if now.Sub(player.lastConsumable) < constants.PotionCooldown {
+				if now.Sub(player.lastConsumable) < constants.PotionCooldown-time.Millisecond*5 {
 					log.Printf("%v is drinking potions too fast", player.nick)
 					continue
 				}

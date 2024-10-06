@@ -20,7 +20,7 @@ const (
 
 	ChatMsgTTL = time.Second * 10
 
-	PotionCooldown = time.Millisecond * 275
+	PotionCooldown = time.Millisecond * 280
 )
 
 type Err struct{}
