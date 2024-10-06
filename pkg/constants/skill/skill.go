@@ -86,7 +86,7 @@ type Stats struct {
 // Flatters
 const (
 	//actionCDF Value = 0.016
-	healthF Value = 1.7
+	healthF Value = 1.9
 	manaF   Value = 16
 )
 
@@ -94,12 +94,12 @@ const (
 const (
 	BaseHP             = 330
 	BaseMP             = 1200
-	BaseActionCooldown = time.Millisecond * 720
+	BaseActionCooldown = time.Millisecond * 700
 )
 
 func (s Skills) Stats() Stats {
 	stats := Stats{
-		ActionCD: BaseActionCooldown,
+		ActionCD: BaseActionCooldown - time.Duration(s[Intelligence]*Value(time.Millisecond)),
 		MaxHP:    int32(BaseHP + s[Vitality]*healthF),
 		MaxMP:    int32(BaseMP + s[Intelligence]*manaF),
 	}
