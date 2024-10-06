@@ -589,9 +589,9 @@ type AtkDmgFxTxt struct {
 
 func (adt *AtkDmgFxTxt) Play() bool {
 	adt.img.Clear()
-	col := color.RGBA{194, 6, 6, 230}
+	col := color.RGBA{194, 6, 6, 255}
 	if adt.heal {
-		col = color.RGBA{6, 153, 194, 230}
+		col = color.RGBA{6, 153, 194, 255}
 	}
 
 	text.DrawNumbers(adt.img, adt.dmg, 0, 10-adt.y, col)
