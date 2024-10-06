@@ -90,6 +90,7 @@ func readMsg(r io.Reader) (*IncomingData, error) {
 		return nil, err
 	}
 	msgSize := binary.BigEndian.Uint16(msgSizeBs)
+	log.Printf("msgpk size %d", msgSize)
 	incd.Data = make([]byte, msgSize)
 	_, err = r.Read(incd.Data)
 	return incd, err
@@ -110,9 +111,14 @@ func write(w io.Writer, event E, data []byte) error {
 		}
 		return nil
 	}
-	_, err := w.Write(append(buf, data...))
-	if err != nil {
-		return err
+	buf = append(buf, data...)
+	bsLeft := len(buf)
+	for bsLeft > 0 {
+		n, err := w.Write(buf)
+		if err != nil {
+			return err
+		}
+		bsLeft -= n
 	}
 	return nil
 }
