@@ -113,24 +113,33 @@ func write(w io.Writer, event E, data []byte) error {
 	}
 	buf = append(buf, data...)
 	bsLeft := len(buf)
+	i := 0
 	for bsLeft > 0 {
-		n, err := w.Write(buf)
+		n, err := w.Write(buf[i:])
 		if err != nil {
 			return err
 		}
 		bsLeft -= n
+		i += n
 	}
 	return nil
 }
 
 // Write sends the event to the connection
 func writeWithLen(w io.Writer, event E, data []byte) error {
-	pref := make([]byte, 3)
-	pref[0] = byte(event)
-	binary.BigEndian.PutUint16(pref[1:], uint16(len(data)))
-	_, err := w.Write(append(pref, data...))
-	if err != nil {
-		return err
+	buff := make([]byte, 3)
+	buff[0] = byte(event)
+	binary.BigEndian.PutUint16(buff[1:], uint16(len(data)))
+	buff = append(buff, data...)
+	bsLeft := len(buff)
+	i := 0
+	for bsLeft > 0 {
+		n, err := w.Write(buff[i:])
+		if err != nil {
+			return err
+		}
+		bsLeft -= n
+		i += n
 	}
 	return nil
 }
