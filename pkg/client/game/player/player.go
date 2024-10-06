@@ -541,8 +541,8 @@ func (pfx *PEffects) NewAttackNumber(dmg int, heal bool) {
 		} else {
 			dmgs = strconv.FormatInt(int64(dmg), 10)
 		}
-		offy := len(dmgs) * 4
-		pfx.active = append(pfx.active, &AtkDmgFxTxt{img: ebiten.NewImage(40, 40), dmg: dmgs, heal: heal, offy: offy})
+		offx := len(dmgs) * 4
+		pfx.active = append(pfx.active, &AtkDmgFxTxt{img: ebiten.NewImage(40, 50), dmg: dmgs, heal: heal, offx: offx})
 	}
 }
 
@@ -584,7 +584,7 @@ type AtkDmgFxTxt struct {
 	img  *ebiten.Image
 	y    int
 	c    int
-	offy int
+	offx int
 }
 
 func (adt *AtkDmgFxTxt) Play() bool {
@@ -594,12 +594,12 @@ func (adt *AtkDmgFxTxt) Play() bool {
 		col = color.RGBA{6, 153, 194, 255}
 	}
 
-	text.DrawNumbers(adt.img, adt.dmg, 0, 10-adt.y, col)
-	if adt.y == 10 {
+	text.DrawNumbers(adt.img, adt.dmg, 0, 34-adt.y, col)
+	if adt.y == 20 {
 		adt.y = 0
 		return false
 	}
-	if adt.c%3 == 0 {
+	if adt.c%2 == 0 {
 		adt.y++
 	}
 	adt.c++
@@ -612,7 +612,7 @@ func (adt *AtkDmgFxTxt) EffectFrame() *ebiten.Image {
 }
 
 func (a *AtkDmgFxTxt) EffectOpt(op *ebiten.DrawImageOptions) *ebiten.DrawImageOptions {
-	op.GeoM.Translate(float64(12-a.offy), -50)
+	op.GeoM.Translate(float64(18-a.offx), -70)
 	return op
 }
 
