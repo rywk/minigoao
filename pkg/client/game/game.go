@@ -206,11 +206,11 @@ func NewGame(web bool, serverAddr string) *Game {
 
 	btnImgEnter := ebiten.NewImage(120, 38)
 	btnImgEnter.Fill(color.RGBA{96, 21, 188, 200})
-	text.PrintBigAt(btnImgEnter, "Enter", 24, 2)
+	text.PrintBigAt(btnImgEnter, "Enter", 30, 2)
 
-	g.btnLogin = NewButton(g, nil, btnImgLogin, typ.P{X: HalfScreenX - 138, Y: 120})
-	g.btnRegister = NewButton(g, nil, btnImgRegister, typ.P{X: HalfScreenX + 24, Y: 120})
-	g.btnEnter = NewButton(g, nil, btnImgEnter, typ.P{X: HalfScreenX - 70, Y: 470})
+	g.btnLogin = NewButton(g, nil, btnImgLogin, typ.P{X: HalfScreenX - 138, Y: 100})
+	g.btnRegister = NewButton(g, nil, btnImgRegister, typ.P{X: HalfScreenX + 24, Y: 100})
+	g.btnEnter = NewButton(g, nil, btnImgEnter, typ.P{X: HalfScreenX - 60, Y: 470})
 
 	return g
 }
@@ -518,9 +518,9 @@ func (g *Game) drawAccount(screen *ebiten.Image) {
 func (g *Game) drawRegister(screen *ebiten.Image) {
 	g.mouseX, g.mouseY = ebiten.CursorPosition()
 
-	g.btnLogin.Draw(screen, HalfScreenX-138, 120)
-	g.btnRegister.Draw(screen, HalfScreenX+24, 120)
-	g.btnEnter.Draw(screen, HalfScreenX-70, 470)
+	g.btnLogin.Draw(screen, HalfScreenX-138, 100)
+	g.btnRegister.Draw(screen, HalfScreenX+24, 100)
+	g.btnEnter.Draw(screen, HalfScreenX-60, 470)
 
 	clicked := false
 	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
@@ -574,11 +574,16 @@ func (g *Game) drawRegister(screen *ebiten.Image) {
 		text.PrintBigAtCol(screen, g.errorMsg, 80, ScreenHeight-80, color.RGBA{178, 0, 16, uint8(g.connErrorColorStart)})
 	}
 	if g.connecting {
-		rect := image.Rect(int(float64(g.loadingX)*0.4), 0, g.loadingX+400-int(float64(g.loadingX)*0.4), 10)
-		op := &ebiten.DrawImageOptions{}
+		start := mapValue(float64(g.loadingX), -400, ScreenWidth+400, 0, 400)
+		end := mapValue(float64(g.loadingX), -400, ScreenWidth+400, 400, 0)
+		if start > end {
+			start, end = end, start
+		}
+		rect := image.Rect(int(start), 0, int(end), 10)
+		op = &ebiten.DrawImageOptions{}
 		op.GeoM.Translate(float64(g.loadingX), 660)
 		screen.DrawImage(g.loadingBar.SubImage(rect).(*ebiten.Image), op)
-		g.loadingX += 3
+		g.loadingX += 8
 		if g.loadingX > ScreenWidth+400 {
 			g.loadingX = -400
 		}
@@ -654,6 +659,7 @@ func (g *Game) CreateAccount(account string, password string, email string) {
 	if g.ms == nil {
 		g.ms, err = msgs.DialServer(g.serverAddr, g.web, g.secureConn)
 		if err != nil {
+
 			g.accountResponse <- Register{data: nil, err: err}
 			return
 		}
@@ -666,6 +672,21 @@ func (g *Game) CreateAccount(account string, password string, email string) {
 
 	err = g.ms.EncodeAndWrite(msgs.ECreateAccount, createAcc)
 	if err != nil {
+
+		if strings.Contains(err.Error(), "closed by the remote host") {
+			g.ms, err = msgs.DialServer(g.serverAddr, g.web, g.secureConn)
+			if err != nil {
+
+				g.accountResponse <- Register{data: nil, err: err}
+				return
+			}
+			err = g.ms.EncodeAndWrite(msgs.ECreateAccount, createAcc)
+			if err != nil {
+				g.accountResponse <- Register{data: nil, err: err}
+				return
+			}
+		}
+
 		g.accountResponse <- Register{data: nil, err: err}
 		return
 	}
@@ -707,6 +728,19 @@ func (g *Game) LoginAccount(account string, password string) {
 	}
 	err = g.ms.EncodeAndWrite(msgs.ELoginAccount, loginAcc)
 	if err != nil {
+		if strings.Contains(err.Error(), "closed by the remote host") {
+			g.ms, err = msgs.DialServer(g.serverAddr, g.web, g.secureConn)
+			if err != nil {
+
+				g.accountResponse <- Register{data: nil, err: err}
+				return
+			}
+			err = g.ms.EncodeAndWrite(msgs.ELoginAccount, loginAcc)
+			if err != nil {
+				g.accountResponse <- Register{data: nil, err: err}
+				return
+			}
+		}
 		g.accountResponse <- Register{data: nil, err: err}
 		return
 	}

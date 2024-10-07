@@ -216,8 +216,15 @@ func MatchPassword(password, hash string) bool {
 }
 
 func (g *Game) HandleLogin(m msgs.Msgs, account *db.Account, characters []msgs.Character) {
-	last := time.Now()
-	last = last.Add(-time.Second * 2)
+	defer func() {
+		r := recover()
+		if r == nil {
+			return
+		}
+		m.Close()
+		log.Printf("HandleLogin panic: %v", r)
+	}()
+	last := time.Now().Add(-time.Second)
 	for {
 		var err error
 		var msg *msgs.IncomingData
@@ -237,23 +244,29 @@ func (g *Game) HandleLogin(m msgs.Msgs, account *db.Account, characters []msgs.C
 			return
 		case <-done:
 		}
+
+		if err == msgs.ErrBadData {
+			m.Close()
+			return
+		}
+
 		if err != nil {
 			log.Printf("HandleLogin:%v", err)
 			return
 		}
 
-		// now := time.Now()
-		// if now.Sub(last) < time.Millisecond*1500 {
-		// 	acc := ""
-		// 	if account != nil {
-		// 		acc = account.Account + " " + account.Email
-		// 	}
-		// 	m.EncodeAndWrite(msgs.EError, &msgs.EventError{Msg: "Chill..."})
+		now := time.Now()
+		if now.Sub(last) < time.Millisecond*1000 {
+			acc := ""
+			if account != nil {
+				acc = account.Account + " " + account.Email
+			}
+			m.EncodeAndWrite(msgs.EError, &msgs.EventError{Msg: "Chill..."})
 
-		// 	log.Printf("Loggin in too fast %v   %v", m.IP(), acc)
-		// 	continue
-		// }
-		// last = now
+			log.Printf("Loggin in too fast %v   %v", m.IP(), acc)
+			continue
+		}
+		last = now
 
 		handle := func(fn func() (msgs.E, interface{})) {
 			var (
@@ -920,7 +933,11 @@ func (p *Player) HandleIncomingMessages() {
 	for {
 
 		im, err := p.m.Read()
+		if err == msgs.ErrBadData {
+			continue
+		}
 		if err != nil {
+
 			p.g.incomingData <- IncomingMsg{
 				ID:    uint16(p.id),
 				Event: msgs.EPlayerLogout,
