@@ -161,7 +161,7 @@ func NewSoundBoard(web bool) *SoundBoard {
 	}
 	if web {
 		sb.sampleRate = SampleRateWeb
-		speaker.Init(sb.sampleRate, 514)
+		speaker.Init(sb.sampleRate, 1027)
 		sb.sounds = map[assets.Sound]*Sound{
 			assets.Spawn:                NewOggSound(audiofile.SpawnLow_ogg),
 			assets.MeleeAir:             NewOggSound(audiofile.MeleeAirLow_ogg),
@@ -175,6 +175,8 @@ func NewSoundBoard(web bool) *SoundBoard {
 			assets.SpellResurrectSound:  NewOggSound(audiofile.SpellResurrectLow_ogg),
 			assets.SpellInmoRmSound:     NewOggSound(audiofile.SpellInmoRmLow_ogg),
 			assets.Potion:               NewOggSound(audiofile.PotionLow_ogg),
+			assets.Death:                NewOggSound(audiofile.Death_ogg),
+			assets.KillBell:             NewOggSound(audiofile.KillBell_ogg),
 		}
 		return sb
 	}
@@ -193,6 +195,8 @@ func NewSoundBoard(web bool) *SoundBoard {
 		assets.SpellResurrectSound:  NewSound(audiofile.SpellResurrect_wav),
 		assets.SpellInmoRmSound:     NewSound(audiofile.SpellInmoRm_wav),
 		assets.Potion:               NewSound(audiofile.Potion_wav),
+		assets.Death:                NewSound(audiofile.Death_wav),
+		assets.KillBell:             NewSound(audiofile.KillBell_wav),
 	}
 	return sb
 }

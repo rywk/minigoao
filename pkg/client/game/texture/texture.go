@@ -24,6 +24,15 @@ func (t *Texture) Draw(screen *ebiten.Image, options *ebiten.DrawImageOptions) {
 
 func NewTexture(img *ebiten.Image, config SpriteConfig) *Texture {
 	t := &Texture{}
+
 	t.i = img.SubImage(image.Rect(config.X, config.Y, config.X+config.Width, config.Y+config.Height)).(*ebiten.Image)
+	return t
+}
+
+func NewFloorTexture(img *ebiten.Image, config SpriteConfig, x, y int) *Texture {
+	t := &Texture{}
+	sx, sy := config.X+config.Width*x, config.Y+config.Height*y
+	ex, ey := config.X+config.Width+config.Width*x, config.Y+config.Height+config.Height*y
+	t.i = img.SubImage(image.Rect(sx, sy, ex, ey)).(*ebiten.Image)
 	return t
 }

@@ -5,7 +5,6 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"image"
 	"log"
 	"net/http"
 	"os"
@@ -15,10 +14,10 @@ import (
 	"time"
 
 	"github.com/rywk/minigoao/pkg/constants"
-	"github.com/rywk/minigoao/pkg/constants/assets"
 	"github.com/rywk/minigoao/pkg/constants/attack"
 	"github.com/rywk/minigoao/pkg/constants/direction"
 	"github.com/rywk/minigoao/pkg/constants/item"
+	"github.com/rywk/minigoao/pkg/constants/mapdef"
 	"github.com/rywk/minigoao/pkg/constants/skill"
 	"github.com/rywk/minigoao/pkg/grid"
 	"github.com/rywk/minigoao/pkg/msgs"
@@ -1130,44 +1129,9 @@ func (p *Player) IsParalized() bool {
 }
 
 func (g *Game) AddObjectsToSpace() {
-	arena1v1 := image.Rect(0, 0, 8, 8)
-	arena2v2 := image.Rect(0, 0, 16, 12)
-
-	arena1v1n1 := arena1v1.Add(image.Point{X: 25, Y: 29})
-	arena2v2n1 := arena2v2.Add(image.Point{X: 40, Y: 29})
-
-	for y := arena1v1n1.Min.Y; y < arena1v1n1.Max.Y; y++ {
-		g.space.Set(1, typ.P{X: int32(arena1v1n1.Min.X), Y: int32(y)}, uint16(assets.Shroom))
-		g.space.Set(1, typ.P{X: int32(arena1v1n1.Max.X), Y: int32(y)}, uint16(assets.Shroom))
-	}
-	for x := arena1v1n1.Min.X; x < arena1v1n1.Max.X; x++ {
-		g.space.Set(1, typ.P{X: int32(x), Y: int32(arena1v1n1.Min.Y)}, uint16(assets.Shroom))
-		g.space.Set(1, typ.P{X: int32(x), Y: int32(arena1v1n1.Max.Y)}, uint16(assets.Shroom))
-	}
-	g.space.Unset(1, typ.P{X: 32, Y: 37})
-
-	for y := arena2v2n1.Min.Y; y < arena2v2n1.Max.Y; y++ {
-		g.space.Set(1, typ.P{X: int32(arena2v2n1.Min.X), Y: int32(y)}, uint16(assets.Shroom))
-		g.space.Set(1, typ.P{X: int32(arena2v2n1.Max.X), Y: int32(y)}, uint16(assets.Shroom))
-	}
-	for x := arena2v2n1.Min.X; x < arena2v2n1.Max.X; x++ {
-		g.space.Set(1, typ.P{X: int32(x), Y: int32(arena2v2n1.Min.Y)}, uint16(assets.Shroom))
-		g.space.Set(1, typ.P{X: int32(x), Y: int32(arena2v2n1.Max.Y)}, uint16(assets.Shroom))
-	}
-	g.space.Unset(1, typ.P{X: 55, Y: 41})
-	g.space.Unset(1, typ.P{X: 54, Y: 41})
-	g.space.Unset(1, typ.P{X: 40, Y: 41})
-	g.space.Unset(1, typ.P{X: 41, Y: 41})
-
-	for y := 0; y < constants.WorldY; y++ {
-		g.space.Set(1, typ.P{X: int32(0), Y: int32(y)}, uint16(assets.Shroom))
-		g.space.Set(1, typ.P{X: int32(constants.WorldX - 1), Y: int32(y)}, uint16(assets.Shroom))
-		for x := 0; x < constants.WorldX; x++ {
-			g.space.Set(1, typ.P{X: int32(x), Y: int32(0)}, uint16(assets.Shroom))
-			g.space.Set(1, typ.P{X: int32(x), Y: int32(constants.WorldY - 1)}, uint16(assets.Shroom))
-			if x%25 == 0 && y%25 == 0 {
-				g.space.Set(1, typ.P{X: int32(x), Y: int32(y)}, uint16(assets.Shroom))
-			}
+	for y := range mapdef.MapLayers[mapdef.Stuff] {
+		for x := range mapdef.MapLayers[mapdef.Stuff][y] {
+			g.space.Set(1, typ.P{X: int32(x), Y: int32(y)}, uint16(mapdef.MapLayers[mapdef.Stuff][y][x]))
 		}
 	}
 }

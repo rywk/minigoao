@@ -30,11 +30,15 @@ var (
 	// Textures
 
 	//go:embed brick_patch.png
+	BrickPatches_png []byte
+	//go:embed grass_patches.png
 	GrassPatches_png []byte
 	//go:embed rock.png
+	Rock_png []byte
+	//go:embed ongo.png
 	Ongo_png []byte
-	//go:embed tiletest.png
-	Tiletest_png []byte
+	//go:embed excalibur.png
+	Excalibur_png []byte
 
 	// Spell Icons
 

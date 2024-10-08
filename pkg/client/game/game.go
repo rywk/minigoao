@@ -1030,6 +1030,10 @@ func (g *Game) ProcessEventQueue() error {
 			g.player.Effect.NewAttackNumber(int(event.Damage), false)
 			g.players[event.ID].Effect.NewMeleeHit()
 			g.players[event.ID].Dead = event.Killed
+			if event.Killed {
+				g.SoundBoard.PlayFrom(assets.KillBell, g.player.X, g.player.Y, g.players[event.ID].X, g.players[event.ID].Y)
+				g.SoundBoard.PlayFrom(assets.Death, g.player.X, g.player.Y, g.players[event.ID].X, g.players[event.ID].Y)
+			}
 		case msgs.EPlayerMeleeRecieved:
 			event := ev.Data.(*msgs.EventPlayerMeleeRecieved)
 			g.SoundBoard.Play(assets.MeleeBlood)
@@ -1040,6 +1044,7 @@ func (g *Game) ProcessEventQueue() error {
 			g.player.Client.HP = int(event.NewHP)
 
 			if g.player.Client.HP == 0 {
+				g.SoundBoard.Play(assets.Death)
 				g.player.Dead = true
 				g.player.Inmobilized = false
 			}
@@ -1055,6 +1060,9 @@ func (g *Game) ProcessEventQueue() error {
 			g.SoundBoard.PlayFrom(assets.MeleeBlood, g.player.X, g.player.Y, g.players[event.ID].X, g.players[event.ID].Y)
 			g.players[event.ID].Effect.NewMeleeHit()
 			g.players[event.ID].Dead = event.Killed
+			if event.Killed {
+				g.SoundBoard.PlayFrom(assets.Death, g.player.X, g.player.Y, g.players[event.ID].X, g.players[event.ID].Y)
+			}
 		case msgs.ECastSpellOk:
 			event := ev.Data.(*msgs.EventCastSpellOk)
 			//log.Printf("CastSpellOk m: %#v\n", event)
@@ -1064,6 +1072,11 @@ func (g *Game) ProcessEventQueue() error {
 				g.players[event.ID].Effect.NewSpellHit(event.Spell)
 				g.SoundBoard.PlayFrom(assets.SoundFromSpell(event.Spell), g.player.X, g.player.Y, g.players[event.ID].X, g.players[event.ID].Y)
 				g.players[event.ID].Dead = event.Killed
+				if event.Killed {
+
+					g.SoundBoard.PlayFrom(assets.Death, g.player.X, g.player.Y, g.players[event.ID].X, g.players[event.ID].Y)
+					g.SoundBoard.PlayFrom(assets.KillBell, g.player.X, g.player.Y, g.players[event.ID].X, g.players[event.ID].Y)
+				}
 			}
 		case msgs.EPlayerSpellRecieved:
 			event := ev.Data.(*msgs.EventPlayerSpellRecieved)
@@ -1087,6 +1100,9 @@ func (g *Game) ProcessEventQueue() error {
 			if g.player.Client.HP == 0 {
 				g.player.Inmobilized = false
 				g.player.Dead = true
+				if g.player.Dead {
+					g.SoundBoard.Play(assets.Death)
+				}
 			}
 		case msgs.EPlayerSpell:
 			event := ev.Data.(*msgs.EventPlayerSpell)
@@ -1094,6 +1110,9 @@ func (g *Game) ProcessEventQueue() error {
 			g.SoundBoard.PlayFrom(assets.SoundFromSpell(event.Spell), g.player.X, g.player.Y, g.players[event.ID].X, g.players[event.ID].Y)
 			g.players[event.ID].Effect.NewSpellHit(event.Spell)
 			g.players[event.ID].Dead = event.Killed
+			if event.Killed {
+				g.SoundBoard.PlayFrom(assets.Death, g.player.X, g.player.Y, g.players[event.ID].X, g.players[event.ID].Y)
+			}
 		case msgs.EUseItemOk:
 			event := ev.Data.(*msgs.EventUseItemOk)
 			if event.Item.Type() == item.TypeConsumable {

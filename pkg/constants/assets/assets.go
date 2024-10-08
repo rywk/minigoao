@@ -12,7 +12,7 @@ const (
 	Nothing Image = iota
 	// Ground assets
 	Grass
-
+	Bricks
 	// Default skins
 	NakedBody
 	Head
@@ -37,13 +37,13 @@ const (
 	SpellHealWounds
 	SpellHealArea
 	SpellResurrect
-	Tiletest
 
 	// Mark
 	// Place ever asset that is a solid block after `SolidBlocks`
 	SolidBlocks
 	// ---
 	Shroom
+	Rock
 	Tree1
 	// ---
 
@@ -74,6 +74,8 @@ const (
 	SpellInmoRmSound
 	SpellApocaSound
 	SpellDescaSound
+	Death
+	KillBell
 )
 
 func SoundFromSpell(s attack.Spell) Sound {

@@ -32,7 +32,9 @@ type (
 		Width, Height int
 		GridW, GridH  int
 		FrameCount    int
-
+		Speed         int
+		OffsetX       int
+		OffsetY       int
 		// frames for in game direction
 		DirectionLength map[direction.D]int
 

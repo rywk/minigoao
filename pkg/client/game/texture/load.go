@@ -10,6 +10,7 @@ import (
 	"github.com/rywk/minigoao/pkg/client/game/assets/img"
 	"github.com/rywk/minigoao/pkg/client/game/assets/img/body"
 	"github.com/rywk/minigoao/pkg/client/game/assets/img/spellimg"
+	"github.com/rywk/minigoao/pkg/constants"
 	asset "github.com/rywk/minigoao/pkg/constants/assets"
 	"github.com/rywk/minigoao/pkg/constants/attack"
 	"github.com/rywk/minigoao/pkg/constants/direction"
@@ -25,17 +26,28 @@ var (
 	}{
 		asset.Grass: {
 			c: SpriteConfig{
-				Width:  GrassTextureSize,
-				Height: GrassTextureSize,
+				Width:  constants.TileSize,
+				Height: constants.TileSize,
+				GridW:  4,
+				GridH:  4,
 			},
 			img: img.GrassPatches_png,
 		},
-		asset.Tiletest: {
+		asset.Bricks: {
+			c: SpriteConfig{
+				Width:  constants.TileSize,
+				Height: constants.TileSize,
+				GridW:  4,
+				GridH:  4,
+			},
+			img: img.BrickPatches_png,
+		},
+		asset.Rock: {
 			c: SpriteConfig{
 				Width:  32,
 				Height: 32,
 			},
-			img: img.Tiletest_png,
+			img: img.Rock_png,
 		},
 		asset.Shroom: {
 			c: SpriteConfig{
@@ -243,6 +255,25 @@ func LoadTexture(a asset.Image) T {
 	return NewTexture(ei, cfg.c)
 }
 
+// x, y is the floor tile (its divided in 4 x 4)
+// 0, 1, 2, 3
+func LoadFloorTexture(a asset.Image, x, y int) T {
+	if a == asset.Nothing {
+		return &EmptyTexture{}
+	}
+	v, ok := loaded.Load(a)
+	if ok {
+		return NewFloorTexture(v.(*ebiten.Image), assetConfig[a].c, x, y)
+	}
+	cfg := assetConfig[a]
+	img, _, err := image.Decode(bytes.NewReader(cfg.img))
+	if err != nil {
+		log.Fatal(err)
+	}
+	ei := ebiten.NewImageFromImage(img)
+	loaded.Store(a, ei)
+	return NewFloorTexture(ei, cfg.c, x, y)
+}
 func LoadEffect(a asset.Image) Effect {
 	v, ok := loaded.Load(a)
 	if ok {

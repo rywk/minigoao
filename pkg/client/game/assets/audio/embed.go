@@ -15,6 +15,11 @@ var (
 	//go:embed melee_hit.wav
 	MeleeHit_wav []byte
 
+	//go:embed death.wav
+	Death_wav []byte
+	//go:embed kill_bell.wav
+	KillBell_wav []byte
+
 	//go:embed potion.wav
 	Potion_wav []byte
 
@@ -43,6 +48,11 @@ var (
 	MeleeAirLow_ogg []byte
 	//go:embed melee_hit_low.ogg
 	MeleeHitLow_ogg []byte
+
+	//go:embed death.ogg
+	Death_ogg []byte
+	//go:embed kill_bell.ogg
+	KillBell_ogg []byte
 
 	//go:embed potion_low.ogg
 	PotionLow_ogg []byte

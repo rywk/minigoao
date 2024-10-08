@@ -542,7 +542,7 @@ func (pfx *PEffects) NewAttackNumber(dmg int, heal bool) {
 			dmgs = strconv.FormatInt(int64(dmg), 10)
 		}
 		offx := len(dmgs) * 4
-		pfx.active = append(pfx.active, &AtkDmgFxTxt{img: ebiten.NewImage(40, 50), dmg: dmgs, heal: heal, offx: offx})
+		pfx.active = append(pfx.active, &AtkDmgFxTxt{img: ebiten.NewImage(40, 60), dmg: dmgs, heal: heal, offx: offx})
 	}
 }
 
@@ -594,8 +594,8 @@ func (adt *AtkDmgFxTxt) Play() bool {
 		col = color.RGBA{6, 153, 194, 255}
 	}
 
-	text.DrawNumbers(adt.img, adt.dmg, 0, 44-adt.y, col)
-	if adt.y == 38 {
+	text.DrawNumbers(adt.img, adt.dmg, 0, 46-adt.y, col)
+	if adt.y == 46 {
 		adt.y = 0
 		return false
 	}
