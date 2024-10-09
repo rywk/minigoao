@@ -94,12 +94,12 @@ const (
 const (
 	BaseHP             = 330
 	BaseMP             = 1200
-	BaseActionCooldown = time.Millisecond * 720
+	BaseActionCooldown = time.Millisecond * 725
 )
 
 func (s Skills) Stats() Stats {
 	stats := Stats{
-		ActionCD: BaseActionCooldown - time.Duration(s[Intelligence]*Value(time.Millisecond)*3),
+		ActionCD: BaseActionCooldown - time.Duration(s[Intelligence]*Value(time.Millisecond)*0.5),
 		MaxHP:    int32(BaseHP + s[Vitality]*healthF),
 		MaxMP:    int32(BaseMP + s[Intelligence]*manaF),
 	}
