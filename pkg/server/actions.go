@@ -27,10 +27,6 @@ func Cast(from, to *Player) (int32, error) {
 	if to.dead && sp.Spell != attack.SpellResurrect {
 		return 0, attack.ErrorTargetDead
 	}
-	if from.dead && sp.Spell == attack.SpellResurrect {
-		sp.Cast(from, to, 0)
-		return 0, nil
-	}
 
 	now := time.Now()
 	if now.Sub(from.cds.LastAction) < from.exp.Stats.ActionCD {
@@ -38,6 +34,23 @@ func Cast(from, to *Player) (int32, error) {
 	}
 	if now.Sub(from.cds.LastSpells[from.SelectedSpell]) < from.exp.Stats.ActionCD {
 		return 0, attack.ErrorTooFast
+	}
+
+	if sp.Spell == attack.SpellResurrect {
+		if !from.dead {
+			if from.mp < sp.BaseManaCost {
+				return 0, attack.ErrorNoMana
+			}
+			from.mp = from.mp - sp.BaseManaCost
+		}
+		reviveHealMod := sp.BaseDamage + int32(from.exp.SkillBuffs[skill.BuffMagicDamage]+from.exp.ItemBuffs[skill.BuffMagicDamage])
+		err := sp.Cast(from, to, reviveHealMod)
+		if err != nil {
+			return 0, err
+		}
+		from.cds.LastAction = now
+		from.cds.LastSpells[from.SelectedSpell] = now
+		return reviveHealMod, nil
 	}
 
 	if from.mp < sp.BaseManaCost {

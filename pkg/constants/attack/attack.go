@@ -101,13 +101,13 @@ var SpellProps = [SpellLen]SpellProp{
 		Spell:        SpellResurrect,
 		BaseCooldown: time.Second,
 		BaseManaCost: 1200,
-		BaseDamage:   0,
+		BaseDamage:   60,
 		Cast: func(from, to Player, calc int32) error {
 			if !to.Dead() {
 				return ErrorTargetAlive
 			}
 			to.Revive()
-			to.Heal(40)
+			to.Heal(calc)
 			return nil
 		},
 	},

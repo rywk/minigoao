@@ -145,7 +145,9 @@ type Game struct {
 
 	steps []player.Step
 
-	SoundBoard audio2d.AudioMixer
+	SoundBoardOnce sync.Once
+	SoundBoard     audio2d.AudioMixer
+	firstFrameDone bool
 
 	ViewPort   f64.Vec2
 	ZoomFactor float64
@@ -194,7 +196,6 @@ func NewGame(web bool, serverAddr string) *Game {
 	g.fsBtn = NewCheckbox(g)
 	g.vsyncBtn = NewCheckbox(g)
 	g.vsyncBtn.On = false
-	g.SoundBoard = audio2d.NewSoundBoard(web)
 
 	btnImgLogin := ebiten.NewImage(120, 38)
 	btnImgLogin.Fill(color.RGBA{120, 21, 88, 200})
@@ -238,7 +239,7 @@ func (g *Game) Update() error {
 func (g *Game) Draw(screen *ebiten.Image) {
 	switch g.mode {
 	case ModeLogin:
-		g.drawRegister(screen)
+		g.drawLogin(screen)
 	case ModeAccount:
 		g.drawAccount(screen)
 	case ModeGame:
@@ -515,7 +516,7 @@ func (g *Game) drawAccount(screen *ebiten.Image) {
 		g.loadingX = 0
 	}
 }
-func (g *Game) drawRegister(screen *ebiten.Image) {
+func (g *Game) drawLogin(screen *ebiten.Image) {
 	g.mouseX, g.mouseY = ebiten.CursorPosition()
 
 	g.btnLogin.Draw(screen, HalfScreenX-138, 100)
@@ -590,6 +591,16 @@ func (g *Game) drawRegister(screen *ebiten.Image) {
 	} else {
 		g.loadingX = 0
 	}
+
+	// this is to avoid the web browser of blocking the execution to allow the audio
+	// we only draw the first frame and the user input to
+	// select a text box/write will unblock execution
+	if g.firstFrameDone {
+		g.SoundBoardOnce.Do(func() {
+			g.SoundBoard = audio2d.NewSoundBoard(g.web)
+		})
+	}
+	g.firstFrameDone = true
 }
 
 func (g *Game) drawGame(screen *ebiten.Image) {
@@ -1068,7 +1079,7 @@ func (g *Game) ProcessEventQueue() error {
 			//log.Printf("CastSpellOk m: %#v\n", event)
 			g.player.Client.MP = int(event.NewMP)
 			if uint32(event.ID) != g.sessionID {
-				g.player.Effect.NewAttackNumber(int(event.Damage), event.Spell == attack.SpellHealWounds)
+				g.player.Effect.NewAttackNumber(int(event.Damage), event.Spell == attack.SpellHealWounds || event.Spell == attack.SpellResurrect)
 				g.players[event.ID].Effect.NewSpellHit(event.Spell)
 				g.SoundBoard.PlayFrom(assets.SoundFromSpell(event.Spell), g.player.X, g.player.Y, g.players[event.ID].X, g.players[event.ID].Y)
 				g.players[event.ID].Dead = event.Killed
@@ -1095,7 +1106,7 @@ func (g *Game) ProcessEventQueue() error {
 			}
 			g.SoundBoard.Play(assets.SoundFromSpell(event.Spell))
 			g.player.Effect.NewSpellHit(event.Spell)
-			caster.Effect.NewAttackNumber(int(event.Damage), event.Spell == attack.SpellHealWounds)
+			caster.Effect.NewAttackNumber(int(event.Damage), event.Spell == attack.SpellHealWounds || event.Spell == attack.SpellResurrect)
 			g.player.Client.HP = int(event.NewHP)
 			if g.player.Client.HP == 0 {
 				g.player.Inmobilized = false

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"os"
 	"time"
@@ -181,7 +182,14 @@ func NewSoundBoard(web bool) *SoundBoard {
 		return sb
 	}
 	sb.sampleRate = SampleRate
-	speaker.Init(sb.sampleRate, sb.sampleRate.N(time.Second/45))
+	buff := sb.sampleRate.N(time.Second / 45)
+	log.Println("buff", buff)
+	if web {
+		buff = 4099
+		log.Println("web buff", buff)
+
+	}
+	speaker.Init(sb.sampleRate, buff)
 	sb.sounds = map[assets.Sound]*Sound{
 		assets.Spawn:                NewSound(audiofile.Spawn_wav),
 		assets.MeleeAir:             NewSound(audiofile.MeleeAir_wav),

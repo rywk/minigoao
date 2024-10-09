@@ -97,10 +97,28 @@ func (s *Server) Start(exposed bool) error {
 		sigint := make(chan os.Signal, 1)
 		signal.Notify(sigint, os.Interrupt)
 		<-sigint
-		err := s.db.LogOutAll()
-		if err != nil {
-			log.Printf("LogOutAll err %v", err)
+		chars := []msgs.Character{}
+		for _, pid := range s.game.playersIndex {
+			p := s.game.players[pid]
+			chars = append(chars, msgs.Character{
+				ID:        p.characterID,
+				Px:        int(p.pos.X),
+				Py:        int(p.pos.Y),
+				Dir:       p.dir,
+				Kills:     p.kills,
+				Deaths:    p.deaths,
+				Skills:    p.exp.Skills,
+				KeyConfig: p.keyConfigs,
+				Inventory: *p.inv,
+				LoggedIn:  false,
+			})
+
 		}
+		err := s.db.SaveAndLogOutAll(chars)
+		if err != nil {
+			log.Printf("SaveAndLogOutAll err %v", err)
+		}
+
 		log.Printf("Shutting down web...")
 
 		// Received an interrupt signal, shut down.
@@ -127,7 +145,7 @@ func (s *Server) Start(exposed bool) error {
 		if exposed {
 			err := web.ListenAndServeTLS(string(CertPath), string(PKPath))
 			if err != nil && !errors.Is(err, http.ErrServerClosed) {
-				log.Fatalf("Error at server.ListenAndServe: %v", err)
+				log.Fatalf("Error at server.ListenAndServeTLS: %v", err)
 			}
 		} else {
 			err := web.ListenAndServe()
