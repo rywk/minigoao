@@ -375,7 +375,7 @@ func (d *Data) GetCharacter(id int) (*msgs.Character, error) {
 }
 
 func (d *Data) GetTop20Kills() ([]*msgs.Character, error) {
-	q := "select id, nick, kills, deaths  from characters order by kills desc, deaths asc limit 20"
+	q := "select id, nick, kills, deaths  from characters order by kills desc, deaths asc limit 16"
 
 	rows, err := d.db.Query(q)
 	if err != nil {

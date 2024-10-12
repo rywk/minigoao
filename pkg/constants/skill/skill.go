@@ -87,14 +87,14 @@ type Stats struct {
 const (
 	//actionCDF Value = 0.016
 	healthF Value = 1.9
-	manaF   Value = 16
+	manaF   Value = 19
 )
 
 // Base stats
 const (
 	BaseHP             = 330
-	BaseMP             = 1200
-	BaseActionCooldown = time.Millisecond * 725
+	BaseMP             = 1300
+	BaseActionCooldown = time.Millisecond * 1000
 )
 
 func (s Skills) Stats() Stats {
