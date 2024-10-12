@@ -62,7 +62,7 @@ var SpellProps = [SpellLen]SpellProp{
 	{Spell: SpellNone},
 	{
 		Spell:        SpellParalize,
-		BaseCooldown: time.Millisecond * 1000,
+		BaseCooldown: time.Millisecond * 1100,
 		BaseManaCost: 300,
 		Cast: func(from, to Player, calc int32) error {
 			if from == to {
@@ -77,7 +77,7 @@ var SpellProps = [SpellLen]SpellProp{
 	},
 	{
 		Spell:        SpellRemoveParalize,
-		BaseCooldown: time.Millisecond * 940,
+		BaseCooldown: time.Millisecond * 1100,
 		BaseManaCost: 340,
 		Cast: func(from, to Player, calc int32) error {
 			if !to.IsParalized() {
@@ -99,7 +99,7 @@ var SpellProps = [SpellLen]SpellProp{
 	},
 	{
 		Spell:        SpellResurrect,
-		BaseCooldown: time.Second,
+		BaseCooldown: time.Millisecond * 1100,
 		BaseManaCost: 1200,
 		BaseDamage:   60,
 		Cast: func(from, to Player, calc int32) error {
@@ -113,8 +113,8 @@ var SpellProps = [SpellLen]SpellProp{
 	},
 	{
 		Spell:        SpellElectricDischarge,
-		BaseCooldown: time.Millisecond * 900,
-		BaseManaCost: 400,
+		BaseCooldown: time.Millisecond * 1100,
+		BaseManaCost: 440,
 		BaseDamage:   96,
 		Cast: func(from, to Player, calc int32) error {
 			if from == to {
@@ -126,8 +126,8 @@ var SpellProps = [SpellLen]SpellProp{
 	},
 	{
 		Spell:        SpellExplode,
-		BaseCooldown: time.Second,
-		BaseManaCost: 900,
+		BaseCooldown: time.Millisecond * 1100,
+		BaseManaCost: 1000,
 		BaseDamage:   149,
 		Cast: func(from, to Player, calc int32) error {
 			if from == to {
