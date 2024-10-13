@@ -47,7 +47,7 @@ const (
 
 type YSortable interface {
 	ValueY() float64
-	Draw(*ebiten.Image)
+	DrawOff(*ebiten.Image, ebiten.GeoM)
 }
 
 type Login struct {
@@ -239,9 +239,17 @@ func (g *Game) Update() error {
 func (g *Game) Draw(screen *ebiten.Image) {
 	switch g.mode {
 	case ModeLogin:
-		g.drawLogin(screen)
+		if ebiten.IsScreenClearedEveryFrame() {
+			g.drawLogin(screen)
+		} else {
+			ebiten.SetScreenClearedEveryFrame(true)
+		}
 	case ModeAccount:
-		g.drawAccount(screen)
+		if ebiten.IsScreenClearedEveryFrame() {
+			g.drawAccount(screen)
+		} else {
+			ebiten.SetScreenClearedEveryFrame(true)
+		}
 	case ModeGame:
 		g.drawGame(screen)
 	case ModeOptions:
@@ -604,20 +612,39 @@ func (g *Game) drawLogin(screen *ebiten.Image) {
 }
 
 func (g *Game) drawGame(screen *ebiten.Image) {
-
 	g.mouseX, g.mouseY = ebiten.CursorPosition()
-	g.world.Draw(typ.P{X: g.player.X, Y: g.player.Y})
-	for _, p := range g.playersY {
-		if p == nil {
-			continue
+
+	g.world.RenderWorld(screen, func(wi *ebiten.Image, offset ebiten.GeoM) {
+		for _, p := range g.playersY {
+			if p == nil {
+				continue
+			}
+			p.DrawOff(wi, offset)
 		}
-		p.Draw(g.world.Image())
-	}
-	g.keys.DrawChat(g.world.Image(), int(g.player.Pos[0]+16), int(g.player.Pos[1]-40))
-	g.Render(g.world.Image(), screen)
+		g.keys.DrawChat(wi, int(g.player.Pos[0]+16), int(g.player.Pos[1]-40))
+	})
+
 	g.stats.Draw(screen)
 	text.PrintAt(screen, fmt.Sprintf("%vFPS\n%v", int(ebiten.ActualFPS()), g.latency), 0, 0)
 	text.PrintAt(screen, fmt.Sprintf("Online: %v", g.onlines), 50, 0)
+}
+
+const HalfScreenX, HalfScreenY = ScreenWidth / 2, ScreenHeight / 2
+
+func (g *Game) updateWorldMatrix() {
+	g.worldImgOp.GeoM.Reset()
+	g.worldImgOp.GeoM.Translate(-g.player.Pos[0]+HalfScreenX-16, -g.player.Pos[1]+HalfScreenY-48)
+}
+
+func (g *Game) ScreenToWorld(posX, posY int) (float64, float64) {
+	g.updateWorldMatrix()
+	if g.worldImgOp.GeoM.IsInvertible() {
+		g.worldImgOp.GeoM.Invert()
+		return g.worldImgOp.GeoM.Apply(float64(posX), float64(posY))
+	} else {
+		// When scaling it can happened that matrix is not invertable
+		return math.NaN(), math.NaN()
+	}
 }
 
 func (g *Game) updateGame() error {
@@ -647,7 +674,6 @@ func (g *Game) updateGame() error {
 	g.SendChat()
 	g.UpdateGamePos()
 	g.ListenInputs()
-	g.world.Update()
 	g.player.Update(g.counter)
 	g.player.Effect.Update(g.counter)
 	for _, p := range g.players {
@@ -860,6 +886,7 @@ func (g *Game) StartGame(login *msgs.EventPlayerLogin) {
 	if g.web {
 		g.vsync = true
 	}
+	ebiten.SetScreenClearedEveryFrame(false)
 	ebiten.SetVsyncEnabled(g.vsync)
 	ebiten.SetFullscreen(g.fullscreen)
 	g.mode = ModeGame
@@ -891,7 +918,7 @@ func (g *Game) StartGame(login *msgs.EventPlayerLogin) {
 
 func (g *Game) Login(e *msgs.EventPlayerLogin) {
 	g.sessionID = uint32(e.ID)
-	g.world = NewMap(MapConfigFromPlayerLogin(e))
+	g.world = NewMap(g, MapConfigFromPlayerLogin(e))
 	g.player = player.NewLogin(e)
 	g.client = g.player.Client
 	for _, p := range e.VisiblePlayers {
@@ -1430,29 +1457,5 @@ COMBAT:
 			}
 		}
 
-	}
-}
-
-const HalfScreenX, HalfScreenY = ScreenWidth / 2, ScreenHeight / 2
-
-func (g *Game) updateWorldMatrix() {
-	g.worldImgOp.GeoM.Reset()
-	g.worldImgOp.GeoM.Translate(-g.player.Pos[0]+HalfScreenX-16, -g.player.Pos[1]+HalfScreenY-48)
-}
-
-func (g *Game) Render(world, screen *ebiten.Image) {
-	g.updateWorldMatrix()
-
-	screen.DrawImage(world, g.worldImgOp)
-}
-
-func (g *Game) ScreenToWorld(posX, posY int) (float64, float64) {
-	g.updateWorldMatrix()
-	if g.worldImgOp.GeoM.IsInvertible() {
-		g.worldImgOp.GeoM.Invert()
-		return g.worldImgOp.GeoM.Apply(float64(posX), float64(posY))
-	} else {
-		// When scaling it can happened that matrix is not invertable
-		return math.NaN(), math.NaN()
 	}
 }

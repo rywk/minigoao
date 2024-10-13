@@ -26,18 +26,18 @@ var MapLayers = [layerTypes][][]assets.Image{
 }
 
 func RandomShroomLayer(width, height int) [][]assets.Image {
-	layer := make([][]assets.Image, height)
-	for y := 0; y < height; y++ {
-		layer[y] = make([]assets.Image, width)
-		layer[y][0] = assets.Shroom
-		layer[y][width-1] = assets.Shroom
+	layer := make([][]assets.Image, width)
+	for x := 0; x < width; x++ {
+		layer[x] = make([]assets.Image, height)
+		layer[x][0] = assets.Shroom
+		layer[x][height-1] = assets.Shroom
 	}
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
-			layer[0][x] = assets.Shroom
-			layer[height-1][x] = assets.Shroom
+	for x := 0; x < width; x++ {
+		for y := 0; y < height; y++ {
+			layer[0][y] = assets.Shroom
+			layer[width-1][y] = assets.Shroom
 			if x%25 == 0 && y%25 == 0 {
-				layer[y][x] = assets.Shroom
+				layer[x][y] = assets.Shroom
 			}
 
 		}
@@ -48,30 +48,30 @@ func RandomShroomLayer(width, height int) [][]assets.Image {
 	arena2v2n1 := arena2v2.Add(image.Point{X: 40, Y: 29})
 
 	for y := arena1v1n1.Min.Y; y < arena1v1n1.Max.Y; y++ {
-		layer[y][arena1v1n1.Min.X] = assets.Rock
-		layer[y][arena1v1n1.Max.X] = assets.Rock
+		layer[arena1v1n1.Min.X][y] = assets.Rock
+		layer[arena1v1n1.Max.X][y] = assets.Rock
 	}
 	for x := arena1v1n1.Min.X; x < arena1v1n1.Max.X; x++ {
-		layer[arena1v1n1.Min.Y][x] = assets.Rock
-		layer[arena1v1n1.Max.Y][x] = assets.Rock
+		layer[x][arena1v1n1.Min.Y] = assets.Rock
+		layer[x][arena1v1n1.Max.Y] = assets.Rock
 
 	}
-	layer[35][30] = assets.Nothing
+	layer[30][35] = assets.Nothing
 
 	for y := arena2v2n1.Min.Y; y < arena2v2n1.Max.Y; y++ {
-		layer[y][arena2v2n1.Min.X] = assets.Rock
-		layer[y][arena2v2n1.Max.X] = assets.Rock
+		layer[arena2v2n1.Min.X][y] = assets.Rock
+		layer[arena2v2n1.Max.X][y] = assets.Rock
 	}
 	for x := arena2v2n1.Min.X; x < arena2v2n1.Max.X; x++ {
-		layer[arena2v2n1.Min.Y][x] = assets.Rock
-		layer[arena2v2n1.Max.Y][x] = assets.Rock
+		layer[x][arena2v2n1.Min.Y] = assets.Rock
+		layer[x][arena2v2n1.Max.Y] = assets.Rock
 
 	}
-	layer[41][55] = assets.Nothing
-	layer[41][54] = assets.Nothing
-	layer[41][40] = assets.Nothing
+	layer[55][41] = assets.Nothing
+	layer[54][41] = assets.Nothing
+	layer[40][41] = assets.Nothing
 	layer[41][41] = assets.Nothing
-	layer[41][42] = assets.Nothing
+	layer[42][41] = assets.Nothing
 	return layer
 }
 
@@ -80,21 +80,19 @@ type MapLayer struct {
 }
 
 func NewLayer(width, height int, a assets.Image) *MapLayer {
-	layer := make([][]assets.Image, height)
-	for y := 0; y < height; y++ {
-		layer[y] = make([]assets.Image, width)
-		for x := 0; x < width; x++ {
-			layer[y][x] = a
+	layer := make([][]assets.Image, width)
+	for x := 0; x < width; x++ {
+		layer[x] = make([]assets.Image, height)
+		for y := 0; y < height; y++ {
+			layer[x][y] = a
 		}
 	}
 	return &MapLayer{l: layer}
 }
 func (ml *MapLayer) Fill(a assets.Image, rect image.Rectangle) *MapLayer {
-	y := rect.Min.Y
-	for ; y < rect.Max.Y; y++ {
-		x := rect.Min.X
-		for ; x < rect.Max.X; x++ {
-			ml.l[y][x] = a
+	for x := rect.Min.X; x < rect.Max.X; x++ {
+		for y := rect.Min.Y; y < rect.Max.Y; y++ {
+			ml.l[x][y] = a
 		}
 	}
 	return ml

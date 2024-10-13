@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/rywk/minigoao/pkg/client/audio2d"
 	"github.com/rywk/minigoao/pkg/client/game/text"
 	"github.com/rywk/minigoao/pkg/client/game/texture"
@@ -28,6 +27,7 @@ type P struct {
 	local       *P
 	ID          uint32
 	Nick        string
+	NickImg     *ebiten.Image
 	X, Y        int32
 	DX, DY      int
 	Pos         f64.Vec2
@@ -126,15 +126,16 @@ func (p *P) SetChatMsg(msg string) {
 const PlayerDrawOffsetX, PlayerDrawOffsetY = 3, -14
 const PlayerHeadDrawOffsetX, PlayerHeadDrawOffsetY = 4, -8
 
-func (p *P) Draw(screen *ebiten.Image) {
+func (p *P) DrawOff(screen *ebiten.Image, offset ebiten.GeoM) {
 	p.drawOp.GeoM.Reset()
+	p.drawOp.GeoM.Concat(offset)
 	p.drawOp.GeoM.Translate(p.Pos[0]+PlayerDrawOffsetX, p.Pos[1]+PlayerDrawOffsetY)
 	if p.Dead {
 		p.drawOp.GeoM.Translate(2, 5)
 		screen.DrawImage(p.DeadBody.Frame(), p.drawOp)
 		p.drawOp.GeoM.Translate(PlayerHeadDrawOffsetX, PlayerHeadDrawOffsetY)
 		screen.DrawImage(p.DeadHead.Frame(), p.drawOp)
-		p.Effect.Draw(screen)
+		p.Effect.Draw(screen, offset)
 		return
 	}
 	if p.Direction == direction.Back || p.Direction == direction.Left {
@@ -173,26 +174,30 @@ func (p *P) Draw(screen *ebiten.Image) {
 		screen.DrawImage(p.Helmet.Frame(), p.drawOp)
 	}
 	if p.local == nil {
-		p.DrawPlayerHPMP(screen)
+		p.DrawPlayerHPMP(screen, offset)
 
 	} else {
-		p.DrawNick(screen)
+		p.DrawNick(screen, offset)
 	}
-	p.Effect.Draw(screen)
+	p.Effect.Draw(screen, offset)
 	if p.chatMsg != "" {
 		off := len(p.chatMsg) * 3
 		text.PrintAt(screen, p.chatMsg, int(p.Pos[0])+16-off, int(p.Pos[1]-40))
 	}
 }
 
-func (p *P) DrawNick(screen *ebiten.Image) {
-	tx, ty := int(p.Pos[0]+14), int(p.Pos[1]+26)
-	xoff := (len(p.Nick) * 3)
-	ebitenutil.DebugPrintAt(screen, p.Nick, tx-xoff, ty)
+func (p *P) DrawNick(screen *ebiten.Image, offset ebiten.GeoM) {
+	p.drawOp.GeoM.Reset()
+	p.drawOp.GeoM.Concat(offset)
+	p.drawOp.GeoM.Translate(p.Pos[0]+PlayerDrawOffsetX, p.Pos[1]+PlayerDrawOffsetY)
+	xoff := (len(p.Nick) * 3) - 1
+	p.drawOp.GeoM.Translate(-float64(xoff-12), 40)
+	screen.DrawImage(p.NickImg, p.drawOp)
 }
 
-func (p *P) DrawPlayerHPMP(screen *ebiten.Image) {
+func (p *P) DrawPlayerHPMP(screen *ebiten.Image, offset ebiten.GeoM) {
 	p.drawOp.GeoM.Reset()
+	p.drawOp.GeoM.Concat(offset)
 	p.drawOp.GeoM.Translate(p.Pos[0]+PlayerDrawOffsetX, p.Pos[1]+PlayerDrawOffsetY)
 	p.drawOp.GeoM.Translate(-2, 45)
 	hpx, mpx := p.HPImg.Bounds().Max.X, p.MPImg.Bounds().Max.X
@@ -205,9 +210,9 @@ func (p *P) DrawPlayerHPMP(screen *ebiten.Image) {
 	screen.DrawImage(p.HPImg.SubImage(hpRect).(*ebiten.Image), p.drawOp)
 	p.drawOp.GeoM.Translate(0, 5)
 	screen.DrawImage(p.MPImg.SubImage(mpRect).(*ebiten.Image), p.drawOp)
-	tx, ty := int(p.Pos[0]+14), int(p.Pos[1]+38)
 	xoff := (len(p.Nick) * 3) - 1
-	ebitenutil.DebugPrintAt(screen, p.Nick, tx-xoff, ty)
+	p.drawOp.GeoM.Translate(-float64(xoff-12), 0)
+	screen.DrawImage(p.NickImg, p.drawOp)
 }
 
 func (p *P) UpdateFrames(c int) {
@@ -428,6 +433,7 @@ func Create(a *msgs.EventPlayerLogin) *P {
 			float64(a.Pos.X) * constants.TileSize,
 			float64(a.Pos.Y) * constants.TileSize},
 		Nick:      a.Nick,
+		NickImg:   text.PrintImg(a.Nick),
 		Dead:      a.Dead,
 		Exp:       a.Exp,
 		MoveSpeed: float64(a.Speed),
@@ -435,38 +441,6 @@ func Create(a *msgs.EventPlayerLogin) *P {
 		HelmetID:  a.Inv.GetHead(),
 		WeaponID:  a.Inv.GetWeapon(),
 		ShieldID:  a.Inv.GetShield(),
-		NakedBody: texture.LoadAnimation(assets.NakedBody),
-		Head:      texture.LoadStill(assets.Head),
-		DeadBody:  texture.LoadAnimation(assets.DeadBody),
-		DeadHead:  texture.LoadStill(assets.DeadHead),
-	}
-	p.Effect = &PEffects{
-		drawOp: &ebiten.DrawImageOptions{},
-		p:      p,
-		active: make([]texture.Effect, 0),
-	}
-	p.LoadAnimations()
-	return p
-}
-
-func CreateFromLogin(local *P, a *msgs.EventNewPlayer) *P {
-	p := &P{
-		drawOp:    &ebiten.DrawImageOptions{},
-		local:     local,
-		ID:        uint32(a.ID),
-		X:         a.Pos.X,
-		Y:         a.Pos.Y,
-		Direction: a.Dir,
-		Pos: f64.Vec2{ // pixel value of position
-			float64(a.Pos.X) * constants.TileSize,
-			float64(a.Pos.Y) * constants.TileSize},
-		Nick:      a.Nick,
-		Dead:      a.Dead,
-		MoveSpeed: float64(a.Speed),
-		ArmorID:   a.Body,
-		HelmetID:  a.Head,
-		WeaponID:  a.Weapon,
-		ShieldID:  a.Shield,
 		NakedBody: texture.LoadAnimation(assets.NakedBody),
 		Head:      texture.LoadStill(assets.Head),
 		DeadBody:  texture.LoadAnimation(assets.DeadBody),
@@ -493,6 +467,7 @@ func CreatePlayerSpawned(local *P, a *msgs.EventPlayerSpawned) *P {
 			float64(a.Pos.X) * constants.TileSize,
 			float64(a.Pos.Y) * constants.TileSize},
 		Nick:      a.Nick,
+		NickImg:   text.PrintImg(a.Nick),
 		Dead:      a.Dead,
 		MoveSpeed: float64(a.Speed),
 		ArmorID:   a.Body,
@@ -632,9 +607,10 @@ func (pfx *PEffects) Update(counter int) {
 	}
 }
 
-func (pfx *PEffects) Draw(screen *ebiten.Image) {
+func (pfx *PEffects) Draw(screen *ebiten.Image, offset ebiten.GeoM) {
 	for _, fx := range pfx.active {
 		pfx.drawOp.GeoM.Reset()
+		pfx.drawOp.GeoM.Concat(offset)
 		pfx.drawOp.GeoM.Translate(pfx.p.Pos[0], pfx.p.Pos[1])
 		screen.DrawImage(fx.EffectFrame(), fx.EffectOpt(pfx.drawOp))
 	}
