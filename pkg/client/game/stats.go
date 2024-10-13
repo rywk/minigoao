@@ -309,22 +309,22 @@ func (inv *Inventory) Update() {
 			inv.locked = true
 		}
 	}
-	for i := range inv.slotBtns {
-		if inv.slotBtns[i][0].Pressed() {
-			it := inv.g.player.Inv.Slots[i][0]
+	checkSlot := func(x, y int) {
+		if inv.slotBtns[x][y].Pressed() {
+			it := inv.g.player.Inv.Slots[x][y]
 			if it.Item != item.None {
 				if it.Item == item.HealthPotion || it.Item == item.ManaPotion {
 					if time.Since(inv.g.stats.lastHudPotion) > inv.g.stats.hudPotionCooldown {
 						inv.g.stats.lastHudPotion = time.Now()
-						inv.g.outQueue <- &GameMsg{E: msgs.EUseItem, Data: &msgs.EventUseItem{byte(i), 0}}
+						inv.g.outQueue <- &GameMsg{E: msgs.EUseItem, Data: &msgs.EventUseItem{byte(x), uint8(y)}}
 					}
 				} else {
-					inv.g.outQueue <- &GameMsg{E: msgs.EUseItem, Data: &msgs.EventUseItem{byte(i), 0}}
+					inv.g.outQueue <- &GameMsg{E: msgs.EUseItem, Data: &msgs.EventUseItem{byte(x), uint8(y)}}
 				}
 			}
 		}
-		if inv.slotBtns[i][0].Over {
-			up := inv.g.player.Inv.Slots[i][0]
+		if inv.slotBtns[x][y].Over {
+			up := inv.g.player.Inv.Slots[x][y]
 			w := item.ItemProps[up.Item]
 
 			str := fmt.Sprintf("%v\n", up.Item.Name())
@@ -343,54 +343,17 @@ func (inv *Inventory) Update() {
 			case item.TypeWeapon:
 				str += fmt.Sprintf("%v\nDamage: %d\nCrit Range: %d",
 					w.WeaponProp.Cooldown,
-					w.WeaponProp.Damage,
+					w.WeaponProp.Damage+inv.g.player.Exp.Stats.BaseMelee,
 					w.WeaponProp.CritRange,
 				)
 
 			}
 			inv.g.stats.ChangeSetTooltip(str)
 		}
-		if inv.slotBtns[i][1].Pressed() {
-			it := inv.g.player.Inv.Slots[i][1]
-			if it.Item != item.None {
-				if it.Item == item.HealthPotion || it.Item == item.ManaPotion {
-					if time.Since(inv.g.stats.lastHudPotion) > inv.g.stats.hudPotionCooldown {
-						inv.g.stats.lastHudPotion = time.Now()
-						inv.g.outQueue <- &GameMsg{E: msgs.EUseItem, Data: &msgs.EventUseItem{byte(i), 1}}
-					}
-				} else {
-					inv.g.outQueue <- &GameMsg{E: msgs.EUseItem, Data: &msgs.EventUseItem{byte(i), 1}}
-				}
-			}
-		}
-		if inv.slotBtns[i][1].Over {
-			down := inv.g.player.Inv.Slots[i][1]
-			w := item.ItemProps[down.Item]
-
-			str := fmt.Sprintf("%v\n", down.Item.Name())
-
-			buffStr := item.ItemProps[down.Item].Buffs.String()
-			if buffStr != "" {
-				str += fmt.Sprintf("%v\n", buffStr)
-			}
-
-			switch down.Item.Type() {
-			case item.TypeConsumable:
-				if down.Item == item.HealthPotion {
-					str += "Heals +30 HP"
-				} else {
-					str += "Restores %5 of max MP"
-				}
-			case item.TypeWeapon:
-				str += fmt.Sprintf("%v\nDamage: %d\nCrit Range: %d",
-					w.WeaponProp.Cooldown,
-					w.WeaponProp.Damage,
-					w.WeaponProp.CritRange,
-				)
-
-			}
-			inv.g.stats.ChangeSetTooltip(str)
-		}
+	}
+	for i := range inv.slotBtns {
+		checkSlot(i, 0)
+		checkSlot(i, 1)
 	}
 }
 
@@ -545,7 +508,7 @@ func NewSkills(g *Game) *Skills {
 func (b *Skills) Update() {
 	if b.saveButton.Pressed() {
 		b.g.outQueue <- &GameMsg{E: msgs.EUpdateSkills, Data: &b.updatedSkills}
-		b.g.stats.skillsOpen = false
+		//b.g.stats.skillsOpen = false
 	}
 	//b.Agility.Update()
 
@@ -563,7 +526,7 @@ func (b *Skills) Update() {
 	}
 }
 func (b *Skills) Draw(screen *ebiten.Image) {
-	b.Background.Fill(color.RGBA{0, 0, 0, 170})
+	b.Background.Fill(color.RGBA{0, 0, 0, 210})
 	b.saveButton.Draw(b.Background, 80, 40)
 	b.zeroButton.Draw(b.Background, 280, 40)
 
@@ -582,6 +545,18 @@ func (b *Skills) Draw(screen *ebiten.Image) {
 	text.PrintBigAt(b.Background, "Vitality", xoff, yoff+height*2)
 	b.Vitality.Draw(b.Background, xoff*7, yoff+height*2)
 
+	text.PrintBigAt(b.Background, "Max HP", xoff, yoff+height*4)
+	text.PrintBigAt(b.Background, fmt.Sprintf("%d", b.g.player.Exp.Stats.MaxHP), xoff*7, yoff+height*4)
+	text.PrintBigAt(b.Background, "Max MP", xoff, yoff+height*5)
+	text.PrintBigAt(b.Background, fmt.Sprintf("%d", b.g.player.Exp.Stats.MaxMP), xoff*7, yoff+height*5)
+	text.PrintBigAt(b.Background, "Base Melee", xoff, yoff+height*6)
+	text.PrintBigAt(b.Background, fmt.Sprintf("%d", b.g.player.Exp.Stats.BaseMelee), xoff*7, yoff+height*6)
+	text.PrintBigAt(b.Background, "Base Spell", xoff, yoff+height*7)
+	text.PrintBigAt(b.Background, fmt.Sprintf("%d", b.g.player.Exp.Stats.BaseSpell), xoff*7, yoff+height*7)
+	text.PrintBigAt(b.Background, "Cast CD", xoff, yoff+height*8)
+	text.PrintBigAt(b.Background, fmt.Sprintf("%dms", b.g.player.Exp.Stats.ActionCD.Milliseconds()), xoff*7, yoff+height*8)
+	text.PrintBigAt(b.Background, "Melee-Case CD", xoff, yoff+height*9)
+	text.PrintBigAt(b.Background, fmt.Sprintf("%dms", b.g.player.Exp.Stats.SwitchCD.Milliseconds()), xoff*7, yoff+height*9)
 	b.drawOp.GeoM.Reset()
 	b.drawOp.GeoM.Translate(ScreenWidth-400, 0)
 	screen.DrawImage(b.Background, b.drawOp)
@@ -1479,23 +1454,20 @@ func (kb *KeyBinder[A]) DrawTooltips(screen *ebiten.Image, x, y int) {
 		op.GeoM.Translate(float64(kb.Rect.Min.X), float64(kb.Rect.Min.Y))
 		op.ColorScale.ScaleAlpha(0.3)
 		screen.DrawImage(kb.Img, op)
-		//text.PrintAtBg(screen, kb.Active.String(), x+16, y-48)
-		//text.PrintAt(screen, kb.Desc, x+15, y-30)
 		if kb.Spell != attack.SpellNone {
+			if kb.Spell == attack.SpellParalize || kb.Spell == attack.SpellRemoveParalize {
+				kb.g.stats.ChangeSetTooltip(fmt.Sprintf("%v\n%v\nMana: %d",
+					kb.Desc,
+					roundDuration(attack.SpellProps[kb.Spell].BaseCooldown, 1).String(),
+					attack.SpellProps[kb.Spell].BaseManaCost))
+				return
+			}
 			kb.g.stats.ChangeSetTooltip(fmt.Sprintf("%v\n%v\nDamage: %d\nMana: %d",
 				kb.Desc,
 				roundDuration(attack.SpellProps[kb.Spell].BaseCooldown, 1).String(),
-				attack.SpellProps[kb.Spell].BaseDamage,
+				attack.SpellProps[kb.Spell].BaseDamage+kb.g.player.Exp.Stats.BaseSpell,
 				attack.SpellProps[kb.Spell].BaseManaCost))
-			// text.PrintAt(screen, kb.Exp.Spells[kb.Spell].Cooldown.String(), x+15, y-15)
-			// text.PrintAt(screen, fmt.Sprintf("Damage: %d", kb.Exp.Spells[kb.Spell].Damage), x+15, y)
-			// text.PrintAt(screen, fmt.Sprintf("Mana: %d", kb.Exp.Spells[kb.Spell].ManaCost), x+15, y+15)
 		}
-		//  else if kb.Weapon != item.None {
-		// 	text.PrintAt(screen, kb.Exp.Weapons[kb.Weapon].Cooldown.String(), x+15, y-15)
-		// 	text.PrintAt(screen, fmt.Sprintf("Damage: %d", kb.Exp.Weapons[kb.Weapon].Damage), x+15, y)
-		// 	text.PrintAt(screen, fmt.Sprintf("Crit range: %d", kb.Exp.Weapons[kb.Weapon].CriticRange), x+15, y+15)
-		// }
 	}
 }
 

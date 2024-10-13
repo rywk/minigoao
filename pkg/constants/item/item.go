@@ -250,16 +250,12 @@ var ItemProps = [ItemLen]ItemProp{
 		},
 	},
 	{
-		Type: WeaponWindSword,
-		Buffs: skill.Buffs{}.AddValue(skill.BuffMagicDamage, 2).
-			AddValue(skill.BuffPhysicalDamage, 1),
-		Use: func(p Player) uint32 {
-			// use means equip or unequip in the case of wearable items
-			return 0
-		},
+		Type:  WeaponWindSword,
+		Buffs: skill.Buffs{}.AddValue(skill.BuffMagicDamage, 5),
+		Use:   func(p Player) uint32 { return 0 },
 		WeaponProp: &WeaponProp{
-			Cooldown:  time.Millisecond * 900,
-			Damage:    1,
+			Cooldown:  time.Millisecond * 1000,
+			Damage:    95,
 			CritRange: 2,
 			Cast: func(from, to Player, calc int32) error {
 				if from == to {
@@ -272,14 +268,11 @@ var ItemProps = [ItemLen]ItemProp{
 	},
 	{
 		Type:  WeaponMightySword,
-		Buffs: skill.Buffs{}.AddValue(skill.BuffPhysicalDamage, 3),
-		Use: func(p Player) uint32 {
-			// use means equip or unequip in the case of wearable items
-			return 0
-		},
+		Buffs: skill.Buffs{},
+		Use:   func(p Player) uint32 { return 0 },
 		WeaponProp: &WeaponProp{
 			Cooldown:  time.Millisecond * 1000,
-			Damage:    6,
+			Damage:    100,
 			CritRange: 2,
 			Cast: func(from, to Player, calc int32) error {
 				if from == to {
@@ -292,11 +285,11 @@ var ItemProps = [ItemLen]ItemProp{
 	},
 	{
 		Type:  WeaponFireStaff,
-		Buffs: skill.Buffs{}.AddValue(skill.BuffMagicDamage, 3),
+		Buffs: skill.Buffs{}.AddValue(skill.BuffMagicDamage, 8),
 		Use:   func(p Player) uint32 { return 0 },
 		WeaponProp: &WeaponProp{
-			Cooldown:  time.Millisecond * 1000,
-			Damage:    -20,
+			Cooldown:  time.Millisecond * 900,
+			Damage:    35,
 			CritRange: 6,
 			Cast: func(from, to Player, calc int32) error {
 				if from == to {
@@ -308,16 +301,12 @@ var ItemProps = [ItemLen]ItemProp{
 		},
 	},
 	{
-		Type: WeaponDarkDagger,
-		Buffs: skill.Buffs{}.AddValue(skill.BuffMagicDamage, 1).
-			AddValue(skill.BuffPhysicalDamage, 2),
-		Use: func(p Player) uint32 {
-			// use means equip or unequip in the case of wearable items
-			return 0
-		},
+		Type:  WeaponDarkDagger,
+		Buffs: skill.Buffs{},
+		Use:   func(p Player) uint32 { return 0 },
 		WeaponProp: &WeaponProp{
 			Cooldown:  time.Millisecond * 1000,
-			Damage:    -15,
+			Damage:    82,
 			CritRange: 30,
 			Cast: func(from, to Player, calc int32) error {
 				if from == to {

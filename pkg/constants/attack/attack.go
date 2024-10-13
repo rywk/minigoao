@@ -91,7 +91,7 @@ var SpellProps = [SpellLen]SpellProp{
 		Spell:        SpellHealWounds,
 		BaseCooldown: time.Second,
 		BaseManaCost: 320,
-		BaseDamage:   62,
+		BaseDamage:   12,
 		Cast: func(_, to Player, calc int32) error {
 			to.Heal(calc)
 			return nil
@@ -101,7 +101,7 @@ var SpellProps = [SpellLen]SpellProp{
 		Spell:        SpellResurrect,
 		BaseCooldown: time.Millisecond * 1100,
 		BaseManaCost: 1200,
-		BaseDamage:   60,
+		BaseDamage:   10,
 		Cast: func(from, to Player, calc int32) error {
 			if !to.Dead() {
 				return ErrorTargetAlive
@@ -115,7 +115,7 @@ var SpellProps = [SpellLen]SpellProp{
 		Spell:        SpellElectricDischarge,
 		BaseCooldown: time.Millisecond * 1100,
 		BaseManaCost: 440,
-		BaseDamage:   96,
+		BaseDamage:   56,
 		Cast: func(from, to Player, calc int32) error {
 			if from == to {
 				return ErrorSelfCast
@@ -128,7 +128,7 @@ var SpellProps = [SpellLen]SpellProp{
 		Spell:        SpellExplode,
 		BaseCooldown: time.Millisecond * 1100,
 		BaseManaCost: 1000,
-		BaseDamage:   149,
+		BaseDamage:   99,
 		Cast: func(from, to Player, calc int32) error {
 			if from == to {
 				return ErrorSelfCast

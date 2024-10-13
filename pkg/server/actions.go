@@ -47,7 +47,7 @@ func Cast(from, to *Player) (int32, error) {
 			}
 			from.mp = from.mp - sp.BaseManaCost
 		}
-		reviveHealMod := sp.BaseDamage + int32(from.exp.SkillBuffs[skill.BuffMagicDamage]+from.exp.ItemBuffs[skill.BuffMagicDamage])
+		reviveHealMod := from.exp.Stats.BaseSpell + sp.BaseDamage + int32(from.exp.SkillBuffs[skill.BuffMagicDamage]+from.exp.ItemBuffs[skill.BuffMagicDamage])
 		err := sp.Cast(from, to, reviveHealMod)
 		if err != nil {
 			return 0, err
@@ -64,7 +64,7 @@ func Cast(from, to *Player) (int32, error) {
 
 	itemBuff := int32(from.exp.ItemBuffs[skill.BuffMagicDamage] - to.exp.ItemBuffs[skill.BuffMagicDefense])
 	buff := int32(from.exp.SkillBuffs[skill.BuffMagicDamage] - to.exp.SkillBuffs[skill.BuffMagicDefense])
-	damage := sp.BaseDamage + buff + itemBuff
+	damage := from.exp.Stats.BaseSpell + sp.BaseDamage + buff + itemBuff
 	if damage < 0 {
 		damage = 0
 	}
@@ -91,8 +91,6 @@ func Cast(from, to *Player) (int32, error) {
 	return damage, nil
 }
 
-const BaseMelee = 126
-
 func Melee(from, to *Player) int32 {
 	if from == to {
 		return -1
@@ -115,7 +113,7 @@ func Melee(from, to *Player) int32 {
 
 	itemBuff := int32(from.exp.ItemBuffs[skill.BuffPhysicalDamage] - to.exp.ItemBuffs[skill.BuffPhysicalDefense])
 	buff := int32(from.exp.SkillBuffs[skill.BuffPhysicalDamage] - to.exp.SkillBuffs[skill.BuffPhysicalDefense])
-	damage := BaseMelee + (wp.Damage + rand.Int31n(wp.CritRange)) + buff + itemBuff
+	damage := from.exp.Stats.BaseMelee + (wp.Damage + rand.Int31n(wp.CritRange)) + buff + itemBuff
 	if damage < 0 {
 		damage = 0
 	}

@@ -78,10 +78,12 @@ func (s Buffs) Add(sk Buffs) Buffs {
 
 // Player Stats
 type Stats struct {
-	MaxHP    int32
-	MaxMP    int32
-	ActionCD time.Duration
-	SwitchCD time.Duration
+	MaxHP     int32
+	MaxMP     int32
+	ActionCD  time.Duration
+	SwitchCD  time.Duration
+	BaseMelee int32
+	BaseSpell int32
 }
 
 // Flatters
@@ -89,6 +91,9 @@ const (
 	//actionCDF Value = 0.016
 	healthF Value = 1.9
 	manaF   Value = 19
+
+	meleeF Value = 2
+	spellF Value = 2
 )
 
 // Base stats
@@ -97,14 +102,18 @@ const (
 	BaseMP             = 1300
 	BaseActionCooldown = time.Millisecond * 1000
 	BaseSwitchCooldown = time.Millisecond * 700
+	BaseMeleeDamage    = 1
+	BaseSpellDamage    = 1
 )
 
 func (s Skills) Stats() Stats {
 	stats := Stats{
-		SwitchCD: BaseSwitchCooldown - time.Duration(s[Vitality]*Value(time.Millisecond)*3),
-		ActionCD: BaseActionCooldown - time.Duration(s[Intelligence]*Value(time.Millisecond)*0.5),
-		MaxHP:    int32(BaseHP + s[Vitality]*healthF),
-		MaxMP:    int32(BaseMP + s[Intelligence]*manaF),
+		SwitchCD:  BaseSwitchCooldown - time.Duration(s[Vitality]*Value(time.Millisecond)*3),
+		ActionCD:  BaseActionCooldown - time.Duration(s[Intelligence]*Value(time.Millisecond)*2),
+		MaxHP:     int32(BaseHP + s[Vitality]*healthF),
+		MaxMP:     int32(BaseMP + s[Intelligence]*manaF),
+		BaseMelee: int32(BaseMeleeDamage + s[Vitality]*meleeF),
+		BaseSpell: int32(BaseSpellDamage + s[Intelligence]*spellF),
 	}
 	return stats
 }
@@ -112,10 +121,10 @@ func (s Skills) Stats() Stats {
 func (s Skills) Buffs() Buffs {
 	b := Buffs{}
 
-	b[BuffPhysicalDamage] += s[Vitality]
-	b[BuffPhysicalDamage] -= s[Intelligence] * 0.4
+	// b[BuffPhysicalDamage] += s[Vitality]
+	// b[BuffPhysicalDamage] -= s[Intelligence] * 0.4
 
-	b[BuffMagicDamage] += s[Intelligence] * 0.9
+	// b[BuffMagicDamage] += s[Intelligence] * 0.9
 	//b[BuffMagicDamage] -= s[Vitality]
 
 	return b
