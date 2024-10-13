@@ -20,6 +20,14 @@ type Cooldowns struct {
 }
 
 func Cast(from, to *Player) (int32, error) {
+	now := time.Now()
+	if now.Sub(from.cds.LastMelee) < from.exp.Stats.SwitchCD {
+		return 0, attack.ErrorTooFast
+	}
+	if now.Sub(from.cds.LastAction) < from.exp.Stats.ActionCD {
+		return 0, attack.ErrorTooFast
+	}
+
 	sp := attack.SpellProps[from.SelectedSpell]
 	if from.dead && sp.Spell != attack.SpellResurrect {
 		return 0, attack.ErrorCasterDead
@@ -28,11 +36,7 @@ func Cast(from, to *Player) (int32, error) {
 		return 0, attack.ErrorTargetDead
 	}
 
-	now := time.Now()
-	if now.Sub(from.cds.LastAction) < from.exp.Stats.ActionCD {
-		return 0, attack.ErrorTooFast
-	}
-	if now.Sub(from.cds.LastSpells[from.SelectedSpell]) < from.exp.Stats.ActionCD {
+	if now.Sub(from.cds.LastSpells[from.SelectedSpell]) < sp.BaseCooldown {
 		return 0, attack.ErrorTooFast
 	}
 
@@ -94,7 +98,7 @@ func Melee(from, to *Player) int32 {
 		return -1
 	}
 	now := time.Now()
-	if now.Sub(from.cds.LastAction) < from.exp.Stats.ActionCD {
+	if now.Sub(from.cds.LastAction) < from.exp.Stats.SwitchCD {
 		log.Printf("melee error, too fast action")
 		return -1
 	}
@@ -121,6 +125,7 @@ func Melee(from, to *Player) int32 {
 		from.kills++
 		to.deaths++
 	}
+	from.cds.LastMelee = now
 	return damage
 }
 

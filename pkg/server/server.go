@@ -1147,9 +1147,9 @@ func (p *Player) IsParalized() bool {
 }
 
 func (g *Game) AddObjectsToSpace() {
-	for x := range mapdef.MapLayers[mapdef.Stuff] {
-		for y := range mapdef.MapLayers[mapdef.Stuff][x] {
-			g.space.Set(1, typ.P{X: int32(x), Y: int32(y)}, uint16(mapdef.MapLayers[mapdef.Stuff][x][y]))
+	for x := range mapdef.LobbyMapLayers[mapdef.Stuff] {
+		for y := range mapdef.LobbyMapLayers[mapdef.Stuff][x] {
+			g.space.Set(1, typ.P{X: int32(x), Y: int32(y)}, uint16(mapdef.LobbyMapLayers[mapdef.Stuff][x][y]))
 		}
 	}
 }

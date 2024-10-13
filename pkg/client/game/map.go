@@ -27,8 +27,8 @@ func MapConfigFromPlayerLogin(p *msgs.EventPlayerLogin) *MapConfig {
 	mc.Width, mc.Height = constants.PixelWorldX, constants.PixelWorldY
 	mc.StartX, mc.StartY = int(p.Pos.X)*constants.TileSize, int(p.Pos.Y)*constants.TileSize
 	mc.ViewWidth, mc.ViewHeight = int(constants.GridViewportX), int(constants.GridViewportX)
-	mc.GroundMapTextures = mapdef.MapLayers[mapdef.Ground]
-	mc.StuffMapTextures = mapdef.MapLayers[mapdef.Stuff]
+	mc.GroundMapTextures = mapdef.LobbyMapLayers[mapdef.Ground]
+	mc.StuffMapTextures = mapdef.LobbyMapLayers[mapdef.Stuff]
 	return &mc
 }
 

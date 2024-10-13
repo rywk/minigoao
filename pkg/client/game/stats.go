@@ -1181,7 +1181,8 @@ func (s *Hud) Draw(screen *ebiten.Image) {
 	// op.GeoM.Translate(s.x+304, s.y+31)
 	// screen.DrawImage(s.bluePotionImg, op)
 
-	text.PrintAt(screen, fmt.Sprintf("Action\n%dms", s.g.player.Exp.Stats.ActionCD.Milliseconds()), int(s.x+990), int(s.y+16))
+	text.PrintAt(screen, fmt.Sprintf("Cast       %dms", s.g.player.Exp.Stats.ActionCD.Milliseconds()), int(s.x+958), int(s.y+14))
+	text.PrintAt(screen, fmt.Sprintf("Cast-Melee %dms", s.g.player.Exp.Stats.SwitchCD.Milliseconds()), int(s.x+958), int(s.y+34))
 
 	for _, kb := range s.keyBinders {
 		kb.Draw(screen)
@@ -1318,31 +1319,57 @@ func (cd *Cooldown) UpdateImage() {
 	if cd == nil {
 		return
 	}
+	now := time.Now()
+
 	var val time.Duration
+	var sdt time.Duration
+	dt := now.Sub(*cd.Last)
 	if cd.Spell != attack.SpellNone {
 		val = attack.SpellProps[cd.Spell].BaseCooldown
+		sdt = now.Sub(cd.g.keys.LastMelee)
+		gdt := now.Sub(*cd.GlobalLast)
+		v := mapValue(float64(dt), float64(val), 0, 0, iconY)
+		gv := mapValue(float64(gdt), float64(cd.g.player.Exp.Stats.ActionCD), 0, 0, iconY)
+		sv := mapValue(float64(sdt), float64(cd.g.player.Exp.Stats.SwitchCD), 0, 0, iconY)
+		if sv > gv && sv > v {
+			if sv < 1 {
+				cd.Img = nil
+				return
+			}
+			cd.Img = cd.BaseImg.SubImage(image.Rect(0, 0, iconX, int(sv))).(*ebiten.Image)
+		} else if gv > v && gv > sv {
+			if gv < 1 {
+				cd.Img = nil
+				return
+			}
+			cd.Img = cd.BaseImg.SubImage(image.Rect(0, 0, iconX, int(gv))).(*ebiten.Image)
+		} else {
+			if v < 1 {
+				cd.Img = nil
+				return
+			}
+			cd.Img = cd.BaseImg.SubImage(image.Rect(0, 0, iconX, int(v))).(*ebiten.Image)
+		}
 	} else {
 		val = item.ItemProps[cd.Weapon].WeaponProp.Cooldown
+		sdt = now.Sub(cd.g.keys.LastAction)
+		v := mapValue(float64(dt), float64(val), 0, 0, iconY)
+		sv := mapValue(float64(sdt), float64(cd.g.player.Exp.Stats.SwitchCD), 0, 0, iconY)
+		if sv > v {
+			if sv < 1 {
+				cd.Img = nil
+				return
+			}
+			cd.Img = cd.BaseImg.SubImage(image.Rect(0, 0, iconX, int(sv))).(*ebiten.Image)
+		} else {
+			if v < 1 {
+				cd.Img = nil
+				return
+			}
+			cd.Img = cd.BaseImg.SubImage(image.Rect(0, 0, iconX, int(v))).(*ebiten.Image)
+		}
 	}
-	now := time.Now()
-	dt := now.Sub(*cd.Last)
-	v := mapValue(float64(dt), float64(val), 0, 0, iconY)
-	gdt := now.Sub(*cd.GlobalLast)
-	gv := mapValue(float64(gdt), float64(cd.g.player.Exp.Stats.ActionCD), 0, 0, iconY)
 
-	if gv > (v) {
-		if gv < 1 {
-			cd.Img = nil
-			return
-		}
-		cd.Img = cd.BaseImg.SubImage(image.Rect(0, 0, iconX, int(gv))).(*ebiten.Image)
-	} else {
-		if v < 1 {
-			cd.Img = nil
-			return
-		}
-		cd.Img = cd.BaseImg.SubImage(image.Rect(0, 0, iconX, int(v))).(*ebiten.Image)
-	}
 }
 
 func (cd *Cooldown) Draw(screen *ebiten.Image, x, y int) {

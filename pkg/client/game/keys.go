@@ -258,9 +258,9 @@ func (k *Keys) MeleeHit() bool {
 	hit := false
 	if k.cfg.Melee.IsPressed() &&
 		time.Since(k.LastMelee) > item.ItemProps[k.g.player.Inv.GetWeapon()].WeaponProp.Cooldown &&
-		time.Since(k.LastAction) > k.g.player.Exp.Stats.ActionCD {
+		time.Since(k.LastAction) > k.g.player.Exp.Stats.SwitchCD {
 		k.LastMelee = time.Now()
-		k.LastAction = k.LastMelee
+		//k.LastAction = k.LastMelee
 		hit = true
 	}
 	return hit
@@ -347,7 +347,8 @@ func (k *Keys) CastSpell() (bool, int, int) {
 	} else {
 		if k.clickDown && selectedSpell != attack.SpellNone && k.g.mouseY < ScreenHeight-64 &&
 			time.Since(k.LastSpells[selectedSpell]) > attack.SpellProps[selectedSpell].BaseCooldown &&
-			time.Since(k.LastAction) > k.g.player.Exp.Stats.ActionCD {
+			time.Since(k.LastAction) > k.g.player.Exp.Stats.ActionCD &&
+			time.Since(k.LastMelee) > k.g.player.Exp.Stats.SwitchCD {
 			k.LastAction = time.Now()
 			k.LastSpells[selectedSpell] = k.LastAction
 			k.clickDown = false

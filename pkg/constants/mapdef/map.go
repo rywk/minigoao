@@ -15,15 +15,23 @@ type Layer uint8
 const (
 	Ground Layer = iota
 	Stuff
+	TallStuff
 	layerTypes
 )
 
-var MapLayers = [layerTypes][][]assets.Image{
+var LobbyMapLayers = [layerTypes][][]assets.Image{
 	NewLayer(constants.WorldX, constants.WorldY, assets.Grass).
 		Fill(assets.Bricks, image.Rect(24, 28, 32, 36)).
 		Fill(assets.Bricks, image.Rect(40, 29, 57, 42)).L(),
 	RandomShroomLayer(constants.WorldX, constants.WorldY),
 }
+var Onev1MapLayers = [layerTypes][][]assets.Image{
+	NewLayer(arena1v1.Max.X, arena1v1.Max.Y, assets.Bricks).L(),
+	NewLayer(arena1v1.Max.X, arena1v1.Max.Y, assets.Nothing).
+		Edges(assets.Rock, arena1v1).L(),
+}
+var arena1v1 = image.Rect(0, 0, 7, 7)
+var arena2v2 = image.Rect(0, 0, 16, 12)
 
 func RandomShroomLayer(width, height int) [][]assets.Image {
 	layer := make([][]assets.Image, width)
@@ -94,6 +102,17 @@ func (ml *MapLayer) Fill(a assets.Image, rect image.Rectangle) *MapLayer {
 		for y := rect.Min.Y; y < rect.Max.Y; y++ {
 			ml.l[x][y] = a
 		}
+	}
+	return ml
+}
+func (ml *MapLayer) Edges(a assets.Image, rect image.Rectangle) *MapLayer {
+	for x := rect.Min.X; x < rect.Max.X; x++ {
+		ml.l[x][0] = a
+		ml.l[x][rect.Max.Y-1] = a
+	}
+	for y := rect.Min.Y; y < rect.Max.Y; y++ {
+		ml.l[0][y] = a
+		ml.l[rect.Max.X-1][y] = a
 	}
 	return ml
 }
