@@ -379,9 +379,20 @@ func (g *Game) updateLogin() {
 	accountText := g.accountTyper.String()
 	addressText := g.passwordTyper.String()
 	g.accountTyper.Text, g.passwordTyper.Text = r.Replace(accountText), r.Replace(addressText)
+	maxString := 14
+	if len(g.accountTyper.Text) > maxString {
+		g.accountTyper.Text = g.accountTyper.Text[:maxString]
+	}
+	if len(g.passwordTyper.Text) > maxString {
+		g.passwordTyper.Text = g.passwordTyper.Text[:maxString]
+	}
 	if g.register {
 		emailText := g.emailTyper.String()
 		g.emailTyper.Text = r.Replace(emailText)
+		maxStringEmail := 40
+		if len(g.emailTyper.Text) > maxStringEmail {
+			g.emailTyper.Text = g.emailTyper.Text[:maxStringEmail]
+		}
 		if !strings.HasSuffix(accountText, "\n") &&
 			!strings.HasSuffix(addressText, "\n") &&
 			!strings.HasSuffix(emailText, "\n") &&
@@ -474,6 +485,10 @@ func (g *Game) updateAccount() {
 		r := strings.NewReplacer("\n", "", " ", "")
 		nickText := g.nickTyper.String()
 		g.nickTyper.Text = r.Replace(nickText)
+		maxString := 14
+		if len(g.nickTyper.Text) > maxString {
+			g.nickTyper.Text = g.nickTyper.Text[:maxString]
+		}
 		if !strings.HasSuffix(nickText, "\n") {
 			return
 		}
