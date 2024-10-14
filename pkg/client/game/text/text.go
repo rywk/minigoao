@@ -101,6 +101,16 @@ func PrintImg(str string) *ebiten.Image {
 	})
 	return image
 }
+func PrintBigImg(str string) *ebiten.Image {
+	image := ebiten.NewImage((bcw+1)*len(str), bch+1)
+	drawDebugTextOpt(image, str, 1, 1, options{
+		textimg: bigDebugPrintTextImage,
+		bgimg:   bigBgImage,
+		runemap: bigDebugPrintTextSubImages,
+		cw:      bcw, ch: bch,
+	})
+	return image
+}
 func PrintImgCol(str string, col color.Color) *ebiten.Image {
 	image := ebiten.NewImage((scw+1)*len(str), sch+1)
 	drawDebugTextOpt(image, str, 1, 1, options{

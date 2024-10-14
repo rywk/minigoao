@@ -567,6 +567,11 @@ type Skills struct {
 	saveButton    *Button
 	zeroButton    *Button
 
+	presetMageBtn    *Button
+	presetNecroBtn   *Button
+	presetClericBtn  *Button
+	presetPaladinBtn *Button
+
 	FreePoints int
 
 	Agility      *SkillInput
@@ -598,6 +603,25 @@ func NewSkills(g *Game) *Skills {
 	s.Intelligence = NewSkillInput(g, skill.Intelligence, windowStart.Add(xoff*7, yoff+height))
 	s.Vitality = NewSkillInput(g, skill.Vitality, windowStart.Add(xoff*7, yoff+height*2))
 
+	mageWord := text.PrintBigImg(" Mago ")
+	magePresetBtnImg := ebiten.NewImage(mageWord.Bounds().Dx(), mageWord.Bounds().Dy())
+	magePresetBtnImg.Fill(color.RGBA{101, 32, 133, 0})
+	s.presetMageBtn = NewButton(g, mageWord, magePresetBtnImg, windowStart.Add(20, 220))
+
+	nigroWord := text.PrintBigImg(" Nigro ")
+	nigroPresetBtnImg := ebiten.NewImage(nigroWord.Bounds().Dx(), nigroWord.Bounds().Dy())
+	nigroPresetBtnImg.Fill(color.RGBA{101, 32, 133, 0})
+	s.presetNecroBtn = NewButton(g, nigroWord, nigroPresetBtnImg, windowStart.Add(110, 220))
+
+	cleroWord := text.PrintBigImg(" Clero ")
+	cleroPresetBtnImg := ebiten.NewImage(cleroWord.Bounds().Dx(), cleroWord.Bounds().Dy())
+	cleroPresetBtnImg.Fill(color.RGBA{101, 32, 133, 0})
+	s.presetClericBtn = NewButton(g, cleroWord, cleroPresetBtnImg, windowStart.Add(210, 220))
+
+	palaWord := text.PrintBigImg(" Pala ")
+	palaPresetBtnImg := ebiten.NewImage(palaWord.Bounds().Dx(), palaWord.Bounds().Dy())
+	palaPresetBtnImg.Fill(color.RGBA{101, 32, 133, 0})
+	s.presetPaladinBtn = NewButton(g, palaWord, palaPresetBtnImg, windowStart.Add(310, 220))
 	return s
 }
 
@@ -606,7 +630,27 @@ func (b *Skills) Update() {
 		b.g.outQueue <- &GameMsg{E: msgs.EUpdateSkills, Data: &b.updatedSkills}
 		//b.g.stats.skillsOpen = false
 	}
-	//b.Agility.Update()
+
+	if b.presetMageBtn.Pressed() {
+		b.updatedSkills[skill.Intelligence] = 46
+		b.updatedSkills[skill.Vitality] = 4
+		b.g.outQueue <- &GameMsg{E: msgs.EUpdateSkills, Data: &b.updatedSkills}
+	}
+	if b.presetNecroBtn.Pressed() {
+		b.updatedSkills[skill.Intelligence] = 32
+		b.updatedSkills[skill.Vitality] = 18
+		b.g.outQueue <- &GameMsg{E: msgs.EUpdateSkills, Data: &b.updatedSkills}
+	}
+	if b.presetClericBtn.Pressed() {
+		b.updatedSkills[skill.Intelligence] = 18
+		b.updatedSkills[skill.Vitality] = 32
+		b.g.outQueue <- &GameMsg{E: msgs.EUpdateSkills, Data: &b.updatedSkills}
+	}
+	if b.presetPaladinBtn.Pressed() {
+		b.updatedSkills[skill.Intelligence] = 4
+		b.updatedSkills[skill.Vitality] = 46
+		b.g.outQueue <- &GameMsg{E: msgs.EUpdateSkills, Data: &b.updatedSkills}
+	}
 
 	b.Intelligence.Update()
 
@@ -626,6 +670,11 @@ func (b *Skills) Draw(screen *ebiten.Image) {
 	b.saveButton.Draw(b.Background, 80, 40)
 	b.zeroButton.Draw(b.Background, 280, 40)
 
+	b.presetMageBtn.Draw(b.Background, 20, 220)
+	b.presetNecroBtn.Draw(b.Background, 110, 220)
+	b.presetClericBtn.Draw(b.Background, 210, 220)
+	b.presetPaladinBtn.Draw(b.Background, 310, 220)
+
 	text.PrintBigAt(b.Background, "Free points", 138, 0)
 	text.PrintBigAt(b.Background, fmt.Sprintf("%d", b.FreePoints), 180, 28)
 
@@ -641,7 +690,9 @@ func (b *Skills) Draw(screen *ebiten.Image) {
 	text.PrintBigAt(b.Background, "Vitality", xoff, yoff+height*2)
 	b.Vitality.Draw(b.Background, xoff*7, yoff+height*2)
 
-	yoff += 120
+	yoff += 80
+
+	yoff += 80
 	text.PrintBigAt(b.Background, "Stats", 168, yoff+height*2)
 	text.PrintBigAt(b.Background, "HP", xoff, yoff+height*4)
 	text.PrintBigAt(b.Background, fmt.Sprintf("%d", b.g.player.Exp.Stats.MaxHP), xoff*8, yoff+height*4)
@@ -932,7 +983,7 @@ func NewHud(g *Game) *Hud {
 		optionsOpen: false,
 		options:     NewOptions(g),
 
-		skillsOpen: false,
+		skillsOpen: g.player.Exp.FreePoints == 50,
 		skills:     NewSkills(g),
 
 		rankingOpen: false,
