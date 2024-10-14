@@ -930,7 +930,7 @@ func (g *Game) Tp(e *msgs.EventPlayerTp) {
 	g.ClearOthers()
 	g.world.Space.SetSlot(mapdef.Players.Int(), typ.P{g.player.X, g.player.Y}, 0)
 	g.world.Reload(e.MapType)
-	//g.leftForMove = 0
+	g.leftForMove = 0
 	g.player = g.player.Tp(e)
 	g.world.Space.SetSlot(mapdef.Players.Int(), typ.P{g.player.X, g.player.Y}, uint16(g.player.ID))
 
