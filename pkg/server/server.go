@@ -823,10 +823,10 @@ func (g *Game) playerMove(player *Player, incomingData IncomingMsg) {
 			Pos:    newPlayer.pos,
 			Dir:    newPlayer.dir,
 			Dead:   newPlayer.dead,
-			Weapon: player.inv.GetWeapon(),
-			Shield: player.inv.GetShield(),
-			Head:   player.inv.GetHead(),
-			Body:   player.inv.GetBody(),
+			Weapon: newPlayer.inv.GetWeapon(),
+			Shield: newPlayer.inv.GetShield(),
+			Head:   newPlayer.inv.GetHead(),
+			Body:   newPlayer.inv.GetBody(),
 			Speed:  uint8(newPlayer.speedPxXFrame),
 		}}
 	}, func(x, y int32) {
