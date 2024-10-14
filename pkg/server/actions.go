@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"log"
 	"math/rand"
 	"time"
@@ -9,7 +10,9 @@ import (
 	"github.com/rywk/minigoao/pkg/constants/attack"
 	"github.com/rywk/minigoao/pkg/constants/direction"
 	"github.com/rywk/minigoao/pkg/constants/item"
+	"github.com/rywk/minigoao/pkg/constants/mapdef"
 	"github.com/rywk/minigoao/pkg/constants/skill"
+	"github.com/rywk/minigoao/pkg/grid"
 	"github.com/rywk/minigoao/pkg/typ"
 )
 
@@ -28,8 +31,15 @@ func Cast(from, to *Player) (int32, error) {
 		return 0, attack.ErrorTooFast
 	}
 
+	for _, tid := range from.team {
+		if tid == to.id {
+			log.Printf("spell attacking teamate")
+			return 0, errors.New("cannot attack teamate")
+		}
+	}
+
 	sp := attack.SpellProps[from.SelectedSpell]
-	if from.dead && sp.Spell != attack.SpellResurrect {
+	if from.dead {
 		return 0, attack.ErrorCasterDead
 	}
 	if to.dead && sp.Spell != attack.SpellResurrect {
@@ -100,7 +110,13 @@ func Melee(from, to *Player) int32 {
 		log.Printf("melee error, too fast action")
 		return -1
 	}
+	for _, tid := range from.team {
+		if tid == to.id {
+			log.Printf("melee attacking teamate")
 
+			return -1
+		}
+	}
 	w := from.inv.GetWeapon()
 	wp := item.ItemProps[w].WeaponProp
 	if wp == nil {
@@ -158,13 +174,13 @@ func (p *Player) CalcHitbox() typ.Rect {
 	return playerHitbox.OnPoint(tilePxCenter)
 }
 
-func (g *Game) CheckSpellTargets(px typ.P) uint16 {
+func (g *Game) CheckSpellTargets(space *grid.Grid, px typ.P) uint16 {
 	tilePos := typ.P{
 		X: int32(px.X) / constants.TileSize,
 		Y: int32(px.Y) / constants.TileSize,
 	}
 
-	offR := g.space.Rect
+	offR := space.Rect
 	offR.Min.Y--
 	if tilePos.Out(offR) {
 		return 0
@@ -185,7 +201,7 @@ func (g *Game) CheckSpellTargets(px typ.P) uint16 {
 	downTilePos := tilePos
 	downTilePos.Y++
 	if downTilePos.In(offR) {
-		downTargetId := g.space.GetSlot(0, downTilePos)
+		downTargetId := space.GetSlot(mapdef.Players.Int(), downTilePos)
 		if downTargetId != 0 {
 			if px.In(g.players[downTargetId].CalcHitbox()) {
 				return downTargetId
@@ -195,8 +211,8 @@ func (g *Game) CheckSpellTargets(px typ.P) uint16 {
 
 	leftDownTilePos := downTilePos
 	leftDownTilePos.X--
-	if leftDownTilePos.In(g.space.Rect) {
-		leftDownTargetId := g.space.GetSlot(0, leftDownTilePos)
+	if leftDownTilePos.In(space.Rect) {
+		leftDownTargetId := space.GetSlot(mapdef.Players.Int(), leftDownTilePos)
 		if leftDownTargetId != 0 {
 			if px.In(g.players[leftDownTargetId].CalcHitbox()) {
 				return leftDownTargetId
@@ -206,8 +222,8 @@ func (g *Game) CheckSpellTargets(px typ.P) uint16 {
 
 	rightDownTilePos := downTilePos
 	rightDownTilePos.X++
-	if rightDownTilePos.In(g.space.Rect) {
-		rightDownTargetId := g.space.GetSlot(0, rightDownTilePos)
+	if rightDownTilePos.In(space.Rect) {
+		rightDownTargetId := space.GetSlot(mapdef.Players.Int(), rightDownTilePos)
 		if rightDownTargetId != 0 {
 			if px.In(g.players[rightDownTargetId].CalcHitbox()) {
 				return rightDownTargetId
@@ -217,8 +233,8 @@ func (g *Game) CheckSpellTargets(px typ.P) uint16 {
 
 	downDownTilePos := downTilePos
 	downDownTilePos.Y++
-	if downDownTilePos.In(g.space.Rect) {
-		downDownTargetId := g.space.GetSlot(0, downDownTilePos)
+	if downDownTilePos.In(space.Rect) {
+		downDownTargetId := space.GetSlot(mapdef.Players.Int(), downDownTilePos)
 		if downDownTargetId != 0 {
 			if px.In(g.players[downDownTargetId].CalcHitbox()) {
 				return downDownTargetId
@@ -226,8 +242,8 @@ func (g *Game) CheckSpellTargets(px typ.P) uint16 {
 		}
 	}
 
-	if tilePos.In(g.space.Rect) {
-		targetId := g.space.GetSlot(0, tilePos)
+	if tilePos.In(space.Rect) {
+		targetId := space.GetSlot(mapdef.Players.Int(), tilePos)
 		if targetId != 0 {
 			if px.In(g.players[targetId].CalcHitbox()) {
 				return targetId
@@ -236,8 +252,8 @@ func (g *Game) CheckSpellTargets(px typ.P) uint16 {
 	}
 	upTilePos := tilePos
 	upTilePos.Y--
-	if upTilePos.In(g.space.Rect) {
-		upTargetId := g.space.GetSlot(0, upTilePos)
+	if upTilePos.In(space.Rect) {
+		upTargetId := space.GetSlot(mapdef.Players.Int(), upTilePos)
 		if upTargetId != 0 {
 			if px.In(g.players[upTargetId].CalcHitbox()) {
 				return upTargetId
@@ -247,9 +263,9 @@ func (g *Game) CheckSpellTargets(px typ.P) uint16 {
 
 	leftTilePos := tilePos
 	leftTilePos.X--
-	if leftTilePos.In(g.space.Rect) {
+	if leftTilePos.In(space.Rect) {
 
-		leftTargetId := g.space.GetSlot(0, leftTilePos)
+		leftTargetId := space.GetSlot(mapdef.Players.Int(), leftTilePos)
 		if leftTargetId != 0 {
 			if px.In(g.players[leftTargetId].CalcHitbox()) {
 				return leftTargetId
@@ -259,8 +275,8 @@ func (g *Game) CheckSpellTargets(px typ.P) uint16 {
 
 	rightTilePos := tilePos
 	rightTilePos.X++
-	if rightTilePos.In(g.space.Rect) {
-		rightTargetId := g.space.GetSlot(0, rightTilePos)
+	if rightTilePos.In(space.Rect) {
+		rightTargetId := space.GetSlot(mapdef.Players.Int(), rightTilePos)
 		if rightTargetId != 0 {
 			if px.In(g.players[rightTargetId].CalcHitbox()) {
 				return rightTargetId

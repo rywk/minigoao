@@ -1,8 +1,14 @@
 package typ
 
+import "image"
+
 // Point
 type P struct {
 	X, Y int32
+}
+
+func (p *P) Point() image.Point {
+	return image.Pt(int(p.X), int(p.Y))
 }
 
 func (p *P) Add(x, y int32) P {

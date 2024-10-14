@@ -10,31 +10,33 @@ import (
 	"github.com/rywk/minigoao/pkg/constants/assets"
 	"github.com/rywk/minigoao/pkg/constants/mapdef"
 	"github.com/rywk/minigoao/pkg/grid"
-	"github.com/rywk/minigoao/pkg/msgs"
 	"github.com/rywk/minigoao/pkg/typ"
 )
 
 type MapConfig struct {
-	Width, Height         int
-	StartX, StartY        int
-	ViewWidth, ViewHeight int
-	GroundMapTextures     [][]assets.Image
-	StuffMapTextures      [][]assets.Image
+	GroundMapTextures [][]assets.Image
+	StuffMapTextures  [][]assets.Image
 }
 
-func MapConfigFromPlayerLogin(p *msgs.EventPlayerLogin) *MapConfig {
-	mc := MapConfig{}
-	mc.Width, mc.Height = constants.PixelWorldX, constants.PixelWorldY
-	mc.StartX, mc.StartY = int(p.Pos.X)*constants.TileSize, int(p.Pos.Y)*constants.TileSize
-	mc.ViewWidth, mc.ViewHeight = int(constants.GridViewportX), int(constants.GridViewportX)
-	mc.GroundMapTextures = mapdef.LobbyMapLayers[mapdef.Ground]
-	mc.StuffMapTextures = mapdef.LobbyMapLayers[mapdef.Stuff]
-	return &mc
+func (m *Map) FromType(t mapdef.MapType) {
+	m.mapType = t
+	switch t {
+	case mapdef.MapLobby:
+		m.cfg.GroundMapTextures = mapdef.LobbyMapLayers[mapdef.Ground]
+		m.cfg.StuffMapTextures = mapdef.LobbyMapLayers[mapdef.Stuff]
+	case mapdef.MapPvP1v1:
+		m.cfg.GroundMapTextures = mapdef.Onev1MapLayers[mapdef.Ground]
+		m.cfg.StuffMapTextures = mapdef.Onev1MapLayers[mapdef.Stuff]
+	case mapdef.MapPvP2v2:
+		m.cfg.GroundMapTextures = mapdef.Twov2MapLayers[mapdef.Ground]
+		m.cfg.StuffMapTextures = mapdef.Twov2MapLayers[mapdef.Stuff]
+	}
 }
 
 type Map struct {
 	g           *Game
-	cfg         *MapConfig
+	mapType     mapdef.MapType
+	cfg         MapConfig
 	mapBgChunks [][]*ebiten.Image
 	Space       *grid.Grid
 	drawOp      *ebiten.DrawImageOptions
@@ -42,13 +44,12 @@ type Map struct {
 
 const imageChunckSize = 256
 
-func NewMap(g *Game, c *MapConfig) *Map {
-	m := &Map{
-		g:      g,
-		cfg:    c,
-		drawOp: &ebiten.DrawImageOptions{},
-		Space:  grid.NewGrid(int32(constants.WorldX), int32(constants.WorldY), 3),
+func (m *Map) Reload(t mapdef.MapType) *Map {
+	if m.mapType == t {
+		return m
 	}
+	m.FromType(t)
+	m.Space = grid.NewGrid(int32(len(m.cfg.GroundMapTextures)), int32(len(m.cfg.GroundMapTextures[0])), uint8(mapdef.LayerTypes))
 	// chunks
 
 	// init empty images what will store the map in chunks
@@ -68,17 +69,69 @@ func NewMap(g *Game, c *MapConfig) *Map {
 			for tx := range tilePerChunk {
 				for ty := range tilePerChunk {
 					tileX, tileY := startX+tx, startY+ty
-					if tileX < 0 || tileX > len(c.GroundMapTextures)-1 || tileY < 0 || tileY > len(c.GroundMapTextures[tileX])-1 {
+					if tileX < 0 || tileX > len(m.cfg.GroundMapTextures)-1 || tileY < 0 || tileY > len(m.cfg.GroundMapTextures[tileX])-1 {
 						continue
 					}
-					floorT := c.GroundMapTextures[tileX][tileY]
-					stuffT := c.StuffMapTextures[tileX][tileY]
+					floorT := m.cfg.GroundMapTextures[tileX][tileY]
+					stuffT := m.cfg.StuffMapTextures[tileX][tileY]
 					op := &ebiten.DrawImageOptions{}
 					op.GeoM.Translate(float64(tx*constants.TileSize), float64(ty*constants.TileSize))
-					texture.LoadFloorTexture(floorT, tileX%4, tileY%4).Draw(m.mapBgChunks[x][y], op)
+					if floorT == assets.PvPTeam1Tile || floorT == assets.PvPTeam2Tile {
+						texture.LoadTexture(floorT).Draw(m.mapBgChunks[x][y], op)
+					} else {
+						texture.LoadFloorTexture(floorT, tileX%4, tileY%4).Draw(m.mapBgChunks[x][y], op)
+					}
+					texture.LoadTexture(stuffT).Draw(m.mapBgChunks[x][y], op)
 					if assets.IsSolid(stuffT) {
-						m.Space.Set(1, typ.P{X: int32(tileX), Y: int32(tileY)}, uint16(stuffT))
-						texture.LoadTexture(stuffT).Draw(m.mapBgChunks[x][y], op)
+						m.Space.Set(mapdef.Stuff.Int(), typ.P{X: int32(tileX), Y: int32(tileY)}, uint16(stuffT))
+					}
+				}
+			}
+		}
+	}
+	return m
+}
+func NewMap(g *Game, t mapdef.MapType) *Map {
+	m := &Map{
+		g:      g,
+		drawOp: &ebiten.DrawImageOptions{},
+		Space:  grid.NewGrid(int32(constants.WorldX), int32(constants.WorldY), uint8(mapdef.LayerTypes)),
+	}
+	m.FromType(t)
+	// chunks
+
+	// init empty images what will store the map in chunks
+	mapXChunks := constants.WorldX*constants.TileSize/imageChunckSize + 1
+
+	mapYChunks := constants.WorldY*constants.TileSize/imageChunckSize + 1
+	tilePerChunk := imageChunckSize / constants.TileSize
+
+	m.mapBgChunks = make([][]*ebiten.Image, mapXChunks)
+
+	for x := range m.mapBgChunks {
+		m.mapBgChunks[x] = make([]*ebiten.Image, mapYChunks)
+		for y := range m.mapBgChunks[x] {
+			m.mapBgChunks[x][y] = ebiten.NewImage(imageChunckSize, imageChunckSize)
+			m.mapBgChunks[x][y].Fill(color.Black)
+			startX, startY := x*tilePerChunk, y*tilePerChunk
+			for tx := range tilePerChunk {
+				for ty := range tilePerChunk {
+					tileX, tileY := startX+tx, startY+ty
+					if tileX < 0 || tileX > len(m.cfg.GroundMapTextures)-1 || tileY < 0 || tileY > len(m.cfg.GroundMapTextures[tileX])-1 {
+						continue
+					}
+					floorT := m.cfg.GroundMapTextures[tileX][tileY]
+					stuffT := m.cfg.StuffMapTextures[tileX][tileY]
+					op := &ebiten.DrawImageOptions{}
+					op.GeoM.Translate(float64(tx*constants.TileSize), float64(ty*constants.TileSize))
+					if floorT == assets.PvPTeam1Tile || floorT == assets.PvPTeam2Tile {
+						texture.LoadTexture(floorT).Draw(m.mapBgChunks[x][y], op)
+					} else {
+						texture.LoadFloorTexture(floorT, tileX%4, tileY%4).Draw(m.mapBgChunks[x][y], op)
+					}
+					texture.LoadTexture(stuffT).Draw(m.mapBgChunks[x][y], op)
+					if assets.IsSolid(stuffT) {
+						m.Space.Set(mapdef.Stuff.Int(), typ.P{X: int32(tileX), Y: int32(tileY)}, uint16(stuffT))
 					}
 				}
 			}

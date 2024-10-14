@@ -13,6 +13,7 @@ import (
 	"github.com/rywk/minigoao/pkg/constants/attack"
 	"github.com/rywk/minigoao/pkg/constants/direction"
 	"github.com/rywk/minigoao/pkg/constants/item"
+	"github.com/rywk/minigoao/pkg/constants/mapdef"
 	"github.com/rywk/minigoao/pkg/constants/skill"
 	"github.com/rywk/minigoao/pkg/typ"
 	"github.com/vmihailenco/msgpack/v5"
@@ -204,6 +205,7 @@ const (
 	EMeleeOk
 	EUseItemOk
 	EUpdateSkillsOk
+	ETpTo
 
 	EPlayerChangedSkin   // A Player in the viewport changed a part of how other players view it
 	EPlayerConnect       // Just used internally for when the client conn starts and a nick is sent
@@ -224,6 +226,8 @@ const (
 	EError
 	ELen
 )
+
+func (e E) U8() uint8 { return uint8(e) }
 
 const mapCoordinateSize = int(unsafe.Sizeof(uint32(0)))
 
@@ -254,6 +258,7 @@ var eventLen = [ELen]int{
 	1 + 1 + 1 + 2 + 4, // EMeleeOk -  1 byte (uint8) direction,  1 byte (bool) hit/miss, 1 byte (bool) killed target, 2 bytes (uint16) to define the player id, 4 bytes (uint32) damage
 	1 + 4 + 2 + 2,     // EUseItemOk - 1 byte (uint8) item, 4 byte (uint32) to define value changed (mana/health), new item count uint16, the slot used
 	-1,                // EUpdateSkillsOk
+	-1,                // ETpTo
 
 	6,  // EPlayerChangedSkin - 2 bytes (uint16) to define the player id 4 for the new skin
 	0,  // EPlayerConnect
@@ -300,6 +305,7 @@ var eventString = [ELen]string{
 	"EMeleeOk",
 	"EUseItemOk",
 	"EUpdateSkillsOk",
+	"ETpTo",
 
 	"EPlayerChangedSkin",
 	"EPlayerConnect",
@@ -373,6 +379,8 @@ func encodeAndWrite(m Msgs, e E, msg interface{}) error {
 		return m.WriteWithLen(e, EncodeMsgpack(msg.(*Experience)))
 	case EAccountLoginOk:
 		return m.WriteWithLen(e, EncodeMsgpack(msg.(*EventAccountLogin)))
+	case ETpTo:
+		return m.WriteWithLen(e, EncodeMsgpack(msg.(*EventPlayerTp)))
 	case ECharLogoutOk:
 		return m.Write(e, []byte{0})
 	case EPlayerChangedSkin:
@@ -414,7 +422,9 @@ func (m *M) EncodeAndWrite(e E, msg interface{}) error {
 }
 
 type EventRankList struct {
-	Characters []RankChar
+	Kills    []RankChar
+	Arena1v1 []RankChar
+	Arena2v2 []RankChar
 }
 
 type RankChar struct {
@@ -480,6 +490,7 @@ type EventPlayerLogin struct {
 	ID             uint16
 	Nick           string
 	Pos            typ.P
+	MapType        mapdef.MapType
 	Dir            direction.D
 	Speed          uint8
 	Dead           bool
@@ -489,6 +500,17 @@ type EventPlayerLogin struct {
 	Exp            Experience
 	VisiblePlayers []EventNewPlayer
 	KeyConfig      KeyConfig
+}
+type EventPlayerTp struct {
+	MapType        mapdef.MapType
+	Pos            typ.P
+	Dir            direction.D
+	Dead           bool
+	HP             int32
+	MP             int32
+	Inv            Inventory
+	Exp            Experience
+	VisiblePlayers []EventNewPlayer
 }
 type Inventory struct {
 	HealthPotions  InventoryPos
@@ -514,7 +536,12 @@ func NewInvetory() *Inventory {
 func EmptyInventoryPos() InventoryPos {
 	return InventoryPos{X: 255, Y: 255}
 }
-
+func (in *Inventory) UnequipAll() {
+	in.EquippedBody = EmptyInventoryPos()
+	in.EquippedWeapon = EmptyInventoryPos()
+	in.EquippedHead = EmptyInventoryPos()
+	in.EquippedShield = EmptyInventoryPos()
+}
 func (in *Inventory) GetWeapon() item.Item {
 	slot := in.EquippedWeapon
 	if slot.X == 255 {
@@ -969,6 +996,10 @@ type Character struct {
 	Py        int
 	Kills     int
 	Deaths    int
+	WinsVOne  int
+	LosesVOne int
+	WinsVTwo  int
+	LosesVTwo int
 	Skills    skill.Skills
 	Inventory Inventory
 	KeyConfig KeyConfig

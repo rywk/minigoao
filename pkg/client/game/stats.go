@@ -407,6 +407,79 @@ func (inv *Inventory) Draw(screen *ebiten.Image) {
 
 }
 
+type PvpSearch struct {
+	g      *Game
+	drawOp *ebiten.DrawImageOptions
+	bg     *ebiten.Image
+}
+
+func NewPvpSearch(g *Game) *PvpSearch {
+	bg := ebiten.NewImage(990, 580)
+	bg.Fill(color.RGBA{44, 9, 59, 210})
+	highlight := ebiten.NewImage(550, 40)
+	highlight.Fill(color.RGBA{40, 9, 129, 210})
+	r := &PvpSearch{
+		drawOp: &ebiten.DrawImageOptions{},
+		g:      g,
+		bg:     bg,
+	}
+
+	return r
+}
+func (r *PvpSearch) Draw(screen *ebiten.Image) {
+	r.drawOp.GeoM.Reset()
+	r.drawOp.GeoM.Translate(140, 40)
+	r.bg.Fill(color.RGBA{24, 1, 33, 230})
+
+	x := 24
+	y := 30
+
+	text.PrintBigAtBg(r.bg, "1v1", x+170, y-25)
+	text.PrintBigAt(r.bg, "Nick", x+29, y+10)
+	text.PrintBigAt(r.bg, "Wins", x+190, y+10)
+	text.PrintBigAt(r.bg, "Loses", x+270, y+10)
+	text.PrintBigAt(r.bg, "Ratio", x+350, y+10)
+	offy := 80
+
+	for i, ch := range r.g.rankingList.Arena1v1 {
+
+		// TODO: hightlight if youre in the ranking
+		text.PrintBigAt(r.bg, fmt.Sprintf("%d", i+1), x, offy+y*i)
+		text.PrintBigAt(r.bg, ch.Nick, x+30, offy+y*i)
+		text.PrintBigAt(r.bg, fmt.Sprintf("%d", ch.Kills), x+200, offy+y*i)
+		text.PrintBigAt(r.bg, fmt.Sprintf("%d", ch.Deaths), x+280, offy+y*i)
+		deaths := ch.Deaths
+		if deaths == 0 {
+			deaths = 1 // Avoid division by zero
+		}
+		kda := float64(ch.Kills) / float64(deaths)
+		text.PrintBigAt(r.bg, fmt.Sprintf("%.2f", kda), x+352, offy+y*i)
+	}
+
+	x = 550
+	text.PrintBigAtBg(r.bg, "2v2", x+170, y-25)
+	text.PrintBigAt(r.bg, "Nick", x+29, y+10)
+	text.PrintBigAt(r.bg, "Wins", x+190, y+10)
+	text.PrintBigAt(r.bg, "Loses", x+270, y+10)
+	text.PrintBigAt(r.bg, "Ratio", x+350, y+10)
+
+	for i, ch := range r.g.rankingList.Arena2v2 {
+
+		// TODO: hightlight if youre in the ranking
+		text.PrintBigAt(r.bg, fmt.Sprintf("%d", i+1), x, offy+y*i)
+		text.PrintBigAt(r.bg, ch.Nick, x+30, offy+y*i)
+		text.PrintBigAt(r.bg, fmt.Sprintf("%d", ch.Kills), x+200, offy+y*i)
+		text.PrintBigAt(r.bg, fmt.Sprintf("%d", ch.Deaths), x+280, offy+y*i)
+		deaths := ch.Deaths
+		if deaths == 0 {
+			deaths = 1 // Avoid division by zero
+		}
+		kda := float64(ch.Kills) / float64(deaths)
+		text.PrintBigAt(r.bg, fmt.Sprintf("%.2f", kda), x+352, offy+y*i)
+	}
+	screen.DrawImage(r.bg, r.drawOp)
+}
+
 type Ranking struct {
 	g         *Game
 	drawOp    *ebiten.DrawImageOptions
@@ -415,7 +488,7 @@ type Ranking struct {
 }
 
 func NewRanking(g *Game) *Ranking {
-	bg := ebiten.NewImage(600, 560)
+	bg := ebiten.NewImage(450, 560)
 	bg.Fill(color.RGBA{44, 9, 59, 210})
 	highlight := ebiten.NewImage(550, 40)
 	highlight.Fill(color.RGBA{40, 9, 129, 210})
@@ -431,31 +504,54 @@ func (r *Ranking) Update() {
 }
 func (r *Ranking) Draw(screen *ebiten.Image) {
 	r.drawOp.GeoM.Reset()
-	r.drawOp.GeoM.Translate(340, 40)
-	r.bg.Fill(color.RGBA{44, 9, 59, 210})
+	r.drawOp.GeoM.Translate(400, 40)
+	r.bg.Fill(color.RGBA{24, 1, 33, 230})
 
-	x := 28
+	x := 24
 	y := 30
-
-	text.PrintBigAt(r.bg, "Top", x-10, y-10)
-	text.PrintBigAt(r.bg, "Nick", x+64, y-10)
-	text.PrintBigAt(r.bg, "Kills", x+210, y-10)
-	text.PrintBigAt(r.bg, "Deaths", x+320, y-10)
-	text.PrintBigAt(r.bg, "Ratio", x+460, y-10)
 	offy := 60
-	for i, ch := range r.g.rankingList {
+
+	// //text.PrintBigAt(r.bg, "Top", x-10, y-10)
+	// text.PrintBigAt(r.bg, "Nick", x+29, y-10)
+	// text.PrintBigAt(r.bg, "Wins", x+190, y-10)
+	// text.PrintBigAt(r.bg, "Loses", x+270, y-10)
+	// text.PrintBigAt(r.bg, "Ratio", x+350, y-10)
+
+	// for i, ch := range r.g.rankingList.Arena1v1 {
+
+	// 	// TODO: hightlight if youre in the ranking
+	// 	text.PrintBigAt(r.bg, fmt.Sprintf("%d", i+1), x, offy+y*i)
+	// 	text.PrintBigAt(r.bg, ch.Nick, x+30, offy+y*i)
+	// 	text.PrintBigAt(r.bg, fmt.Sprintf("%d", ch.Kills), x+200, offy+y*i)
+	// 	text.PrintBigAt(r.bg, fmt.Sprintf("%d", ch.Deaths), x+280, offy+y*i)
+	// 	deaths := ch.Deaths
+	// 	if deaths == 0 {
+	// 		deaths = 1 // Avoid division by zero
+	// 	}
+	// 	kda := float64(ch.Kills) / float64(deaths)
+	// 	text.PrintBigAt(r.bg, fmt.Sprintf("%.2f", kda), x+352, offy+y*i)
+	// }
+
+	// x = 550
+	//text.PrintBigAt(r.bg, "Top", x-10, y-10)
+	text.PrintBigAt(r.bg, "Nick", x+29, y-10)
+	text.PrintBigAt(r.bg, "Kills", x+190, y-10)
+	text.PrintBigAt(r.bg, "Deaths", x+270, y-10)
+	text.PrintBigAt(r.bg, "Ratio", x+350, y-10)
+
+	for i, ch := range r.g.rankingList.Kills {
 
 		// TODO: hightlight if youre in the ranking
 		text.PrintBigAt(r.bg, fmt.Sprintf("%d", i+1), x, offy+y*i)
-		text.PrintBigAt(r.bg, ch.Nick, x+65, offy+y*i)
-		text.PrintBigAt(r.bg, fmt.Sprintf("%d", ch.Kills), x+220, offy+y*i)
-		text.PrintBigAt(r.bg, fmt.Sprintf("%d", ch.Deaths), x+330, offy+y*i)
+		text.PrintBigAt(r.bg, ch.Nick, x+30, offy+y*i)
+		text.PrintBigAt(r.bg, fmt.Sprintf("%d", ch.Kills), x+200, offy+y*i)
+		text.PrintBigAt(r.bg, fmt.Sprintf("%d", ch.Deaths), x+280, offy+y*i)
 		deaths := ch.Deaths
 		if deaths == 0 {
 			deaths = 1 // Avoid division by zero
 		}
 		kda := float64(ch.Kills) / float64(deaths)
-		text.PrintBigAt(r.bg, fmt.Sprintf("%.2f", kda), x+470, offy+y*i)
+		text.PrintBigAt(r.bg, fmt.Sprintf("%.2f", kda), x+352, offy+y*i)
 	}
 	screen.DrawImage(r.bg, r.drawOp)
 
@@ -545,18 +641,20 @@ func (b *Skills) Draw(screen *ebiten.Image) {
 	text.PrintBigAt(b.Background, "Vitality", xoff, yoff+height*2)
 	b.Vitality.Draw(b.Background, xoff*7, yoff+height*2)
 
-	text.PrintBigAt(b.Background, "Max HP", xoff, yoff+height*4)
-	text.PrintBigAt(b.Background, fmt.Sprintf("%d", b.g.player.Exp.Stats.MaxHP), xoff*7, yoff+height*4)
-	text.PrintBigAt(b.Background, "Max MP", xoff, yoff+height*5)
-	text.PrintBigAt(b.Background, fmt.Sprintf("%d", b.g.player.Exp.Stats.MaxMP), xoff*7, yoff+height*5)
-	text.PrintBigAt(b.Background, "Base Melee", xoff, yoff+height*6)
-	text.PrintBigAt(b.Background, fmt.Sprintf("%d", b.g.player.Exp.Stats.BaseMelee), xoff*7, yoff+height*6)
-	text.PrintBigAt(b.Background, "Base Spell", xoff, yoff+height*7)
-	text.PrintBigAt(b.Background, fmt.Sprintf("%d", b.g.player.Exp.Stats.BaseSpell), xoff*7, yoff+height*7)
-	text.PrintBigAt(b.Background, "Cast CD", xoff, yoff+height*8)
-	text.PrintBigAt(b.Background, fmt.Sprintf("%dms", b.g.player.Exp.Stats.ActionCD.Milliseconds()), xoff*7, yoff+height*8)
-	text.PrintBigAt(b.Background, "Melee-Case CD", xoff, yoff+height*9)
-	text.PrintBigAt(b.Background, fmt.Sprintf("%dms", b.g.player.Exp.Stats.SwitchCD.Milliseconds()), xoff*7, yoff+height*9)
+	yoff += 120
+	text.PrintBigAt(b.Background, "Stats", 168, yoff+height*2)
+	text.PrintBigAt(b.Background, "HP", xoff, yoff+height*4)
+	text.PrintBigAt(b.Background, fmt.Sprintf("%d", b.g.player.Exp.Stats.MaxHP), xoff*8, yoff+height*4)
+	text.PrintBigAt(b.Background, "MP", xoff, yoff+height*5)
+	text.PrintBigAt(b.Background, fmt.Sprintf("%d", b.g.player.Exp.Stats.MaxMP), xoff*8, yoff+height*5)
+	text.PrintBigAt(b.Background, "Melee Damage", xoff, yoff+height*7)
+	text.PrintBigAt(b.Background, fmt.Sprintf("%d", b.g.player.Exp.Stats.BaseMelee), xoff*8, yoff+height*7)
+	text.PrintBigAt(b.Background, "Spell Damage", xoff, yoff+height*8)
+	text.PrintBigAt(b.Background, fmt.Sprintf("%d", b.g.player.Exp.Stats.BaseSpell), xoff*8, yoff+height*8)
+	text.PrintBigAt(b.Background, "CD Spell cast", xoff, yoff+height*10)
+	text.PrintBigAt(b.Background, fmt.Sprintf("%dms", b.g.player.Exp.Stats.ActionCD.Milliseconds()), xoff*8, yoff+height*10)
+	text.PrintBigAt(b.Background, "CD Melee-Spell cast", xoff, yoff+height*11)
+	text.PrintBigAt(b.Background, fmt.Sprintf("%dms", b.g.player.Exp.Stats.SwitchCD.Milliseconds()), xoff*8, yoff+height*11)
 	b.drawOp.GeoM.Reset()
 	b.drawOp.GeoM.Translate(ScreenWidth-400, 0)
 	screen.DrawImage(b.Background, b.drawOp)
@@ -791,6 +889,10 @@ type Hud struct {
 	ranking       *Ranking
 	rankingButton *Button
 
+	pvpSearchOpen   bool
+	pvpSearch       *PvpSearch
+	pvpSearchButton *Button
+
 	inventory *Inventory
 
 	keyBinders []*KeyBinder[*Input]
@@ -836,6 +938,9 @@ func NewHud(g *Game) *Hud {
 		rankingOpen: false,
 		ranking:     NewRanking(g),
 
+		pvpSearchOpen: false,
+		pvpSearch:     NewPvpSearch(g),
+
 		hpBar: texture.Decode(img.HpBar_png),
 		mpBar: texture.Decode(img.MpBar_png),
 
@@ -860,9 +965,11 @@ func NewHud(g *Game) *Hud {
 	s.infoTooltipBg.Fill(color.RGBA{43, 33, 74, 255})
 	s.x = 0
 	s.y = float64(ScreenHeight - s.hudBg.Bounds().Dy())
-	s.optionsButton = NewButton(g, texture.Decode(img.ConfigIcon_png), btnImg, typ.P{X: ScreenWidth - 64, Y: int32(s.y) + 16})
-	s.skillsButton = NewButton(g, texture.Decode(img.Icon_png), btnImg, typ.P{X: ScreenWidth - 128, Y: int32(s.y) + 16})
-	s.rankingButton = NewButton(g, texture.Decode(img.IconBlood_png), btnImg, typ.P{X: ScreenWidth - 192, Y: int32(s.y) + 16})
+	off := int32(48)
+	s.optionsButton = NewButton(g, texture.Decode(img.ConfigIcon_png), btnImg, typ.P{X: ScreenWidth - off, Y: int32(s.y) + 16})
+	s.skillsButton = NewButton(g, texture.Decode(img.Icon_png), btnImg, typ.P{X: ScreenWidth - off*2, Y: int32(s.y) + 16})
+	s.rankingButton = NewButton(g, texture.Decode(img.IconBlood_png), btnImg, typ.P{X: ScreenWidth - off*3, Y: int32(s.y) + 16})
+	s.pvpSearchButton = NewButton(g, texture.Decode(img.IconPvp_png), btnImg, typ.P{X: ScreenWidth - off*4, Y: int32(s.y) + 16})
 
 	cooldownBarImg := texture.Decode(img.CooldownBase_png)
 	s.meleeCooldownInfo = &Cooldown{
@@ -1038,9 +1145,10 @@ func (s *Hud) Update() {
 			s.g.outQueue <- &GameMsg{E: msgs.EUpdateKeyConfig, Data: &keycfg}
 		}
 		s.optionsOpen = !s.optionsOpen
-		if s.skillsOpen || s.rankingOpen {
+		if s.skillsOpen || s.rankingOpen || s.pvpSearchOpen {
 			s.skillsOpen = false
 			s.rankingOpen = false
+			s.pvpSearchOpen = false
 		}
 	}
 	if s.optionsOpen {
@@ -1063,9 +1171,10 @@ func (s *Hud) Update() {
 			//s.g.player.Exp.Skills.FreePoints = uint16(s.skills.FreePoints)
 		}
 		s.skillsOpen = !s.skillsOpen
-		if s.optionsOpen || s.rankingOpen {
-			s.optionsOpen = false
+		if s.rankingOpen || s.optionsOpen || s.pvpSearchOpen {
 			s.rankingOpen = false
+			s.optionsOpen = false
+			s.pvpSearchOpen = false
 		}
 	}
 	if s.skillsOpen {
@@ -1083,9 +1192,10 @@ func (s *Hud) Update() {
 			s.g.outQueue <- &GameMsg{E: msgs.EGetRankList}
 		}
 		s.rankingOpen = !s.rankingOpen
-		if s.skillsOpen || s.optionsOpen {
+		if s.skillsOpen || s.optionsOpen || s.pvpSearchOpen {
 			s.skillsOpen = false
 			s.optionsOpen = false
+			s.pvpSearchOpen = false
 		}
 	}
 	if s.rankingOpen {
@@ -1096,12 +1206,33 @@ func (s *Hud) Update() {
 		}
 	}
 
+	if s.pvpSearchButton.Pressed() {
+		if !s.pvpSearchOpen {
+			s.g.outQueue <- &GameMsg{E: msgs.EGetRankList}
+		}
+		s.pvpSearchOpen = !s.pvpSearchOpen
+		if s.skillsOpen || s.optionsOpen || s.rankingOpen {
+			s.skillsOpen = false
+			s.optionsOpen = false
+			s.rankingOpen = false
+		}
+	}
+	if s.pvpSearchOpen {
+		//s.pvpSearch.Update()
+		if (s.g.mouseY < ScreenHeight-64) &&
+			ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
+			s.pvpSearchOpen = false
+		}
+	}
+
 	if s.rankingButton.Over {
 		s.ChangeSetTooltip("Ranking\n")
 	} else if s.skillsButton.Over {
 		s.ChangeSetTooltip("Skills\n")
 	} else if s.optionsButton.Over {
 		s.ChangeSetTooltip("Config\n")
+	} else if s.pvpSearchButton.Over {
+		s.ChangeSetTooltip("PvP Battles\n")
 	}
 	s.RefreshTooltip()
 }
@@ -1123,9 +1254,11 @@ func (s *Hud) Draw(screen *ebiten.Image) {
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(s.x, s.y)
 	screen.DrawImage(s.hudBg, op)
-	s.optionsButton.Draw(screen, ScreenWidth-64, int(s.y)+16)
-	s.skillsButton.Draw(screen, ScreenWidth-128, int(s.y)+16)
-	s.rankingButton.Draw(screen, ScreenWidth-192, int(s.y)+16)
+	off := 48
+	s.optionsButton.Draw(screen, ScreenWidth-off, int(s.y)+16)
+	s.skillsButton.Draw(screen, ScreenWidth-off*2, int(s.y)+16)
+	s.rankingButton.Draw(screen, ScreenWidth-off*3, int(s.y)+16)
+	s.pvpSearchButton.Draw(screen, ScreenWidth-off*4, int(s.y)+16)
 	op = &ebiten.DrawImageOptions{}
 	op.GeoM.Translate(s.x, s.y)
 	screen.DrawImage(s.hpBar.SubImage(s.hpBarRect).(*ebiten.Image), op)
@@ -1156,8 +1289,8 @@ func (s *Hud) Draw(screen *ebiten.Image) {
 	// op.GeoM.Translate(s.x+304, s.y+31)
 	// screen.DrawImage(s.bluePotionImg, op)
 
-	text.PrintAt(screen, fmt.Sprintf("Cast       %dms", s.g.player.Exp.Stats.ActionCD.Milliseconds()), int(s.x+958), int(s.y+14))
-	text.PrintAt(screen, fmt.Sprintf("Cast-Melee %dms", s.g.player.Exp.Stats.SwitchCD.Milliseconds()), int(s.x+958), int(s.y+34))
+	text.PrintAt(screen, fmt.Sprintf("Spell-Spell  %dms", s.g.player.Exp.Stats.ActionCD.Milliseconds()), int(s.x+958), int(s.y+14))
+	text.PrintAt(screen, fmt.Sprintf("Melee-Spell  %dms", s.g.player.Exp.Stats.SwitchCD.Milliseconds()), int(s.x+958), int(s.y+34))
 
 	for _, kb := range s.keyBinders {
 		kb.Draw(screen)
@@ -1173,6 +1306,9 @@ func (s *Hud) Draw(screen *ebiten.Image) {
 	}
 	if s.rankingOpen {
 		s.ranking.Draw(screen)
+	}
+	if s.pvpSearchOpen {
+		s.pvpSearch.Draw(screen)
 	}
 	s.inventory.Draw(screen)
 

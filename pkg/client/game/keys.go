@@ -108,7 +108,8 @@ type Keys struct {
 	chatInputOpen bool
 	enterDown     bool
 	typer         *typing.Typer
-	sentChat      string
+	sentChat      *ebiten.Image
+	sentChatOff   int
 	lastChat      time.Time
 	openCloseImg  *ebiten.Image
 
@@ -128,6 +129,8 @@ type Keys struct {
 	LastSpells [attack.SpellLen]time.Time
 
 	PotionCooldown time.Duration
+
+	ChatMsgImage *ebiten.Image
 }
 
 func NewKeys(g *Game, cfg *KeyConfig) *Keys {
@@ -398,23 +401,42 @@ func (k *Keys) PressedPotion() item.Item {
 
 	return item.None
 }
-func (k *Keys) DrawChat(screen *ebiten.Image, x, y int) {
+
+func (k *Keys) DrawChat2(screen *ebiten.Image, offset ebiten.GeoM) {
+
+	var chatMsg *ebiten.Image
+	var off int
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Concat(offset)
+	op.GeoM.Translate(k.g.player.Pos[0]+16, k.g.player.Pos[1]-40)
+
+	if k.enterDown {
+		//op := &ebiten.DrawImageOptions{}
+		//op.GeoM.Translate(float64(x-3), float64(y))
+		screen.DrawImage(k.openCloseImg, op)
+		return
+	}
+
 	// Blink the cursor.
 	if k.chatInputOpen {
 		t := k.typer.Text
-		off := len(t) * 3
+		off = len(t) * 3
 		if k.g.counter%60 < 30 {
 			t += "_"
+			chatMsg = text.PrintImgCol(t, color.RGBA{176, 82, 51, 0})
+		} else if len(t) > 0 {
+			chatMsg = text.PrintImgCol(t, color.RGBA{176, 82, 51, 0})
 		}
-		text.PrintColAt(screen, t, x-off, y, color.RGBA{176, 82, 51, 0})
-	} else if k.sentChat != "" {
-		off := len(k.sentChat) * 3
-		text.PrintAt(screen, k.sentChat, x-off, y)
+	} else if k.sentChat != nil {
+		op.GeoM.Translate(-float64(k.sentChatOff), 0)
+		screen.DrawImage(k.sentChat, op)
+		return
 	}
-	if k.enterDown {
-		op := &ebiten.DrawImageOptions{}
-		op.GeoM.Translate(float64(x-3), float64(y))
-		screen.DrawImage(k.openCloseImg, op)
+
+	if chatMsg != nil {
+
+		op.GeoM.Translate(-float64(off), 0)
+		screen.DrawImage(chatMsg, op)
 	}
 }
 func (k *Keys) ChatMessage() string {
@@ -423,11 +445,13 @@ func (k *Keys) ChatMessage() string {
 			k.enterDown = true
 			if k.chatInputOpen && k.typer.Text != "" {
 				k.lastChat = time.Now()
-				k.sentChat = strings.Trim(k.typer.Text, "\n")
+				msg := strings.Trim(k.typer.Text, "\n")
+				k.sentChatOff = len(msg) * 3
+				k.sentChat = text.PrintImg(msg)
 				k.typer.Text = ""
 				k.chatInputOpen = !k.chatInputOpen
 				k.keysLocked = !k.keysLocked
-				return k.sentChat
+				return msg
 			}
 			k.chatInputOpen = !k.chatInputOpen
 			k.keysLocked = !k.keysLocked
@@ -442,7 +466,7 @@ func (k *Keys) ChatMessage() string {
 		k.typer.Text = r.Replace(k.typer.Text)
 	}
 	if time.Since(k.lastChat) > constants.ChatMsgTTL {
-		k.sentChat = ""
+		k.sentChat = nil
 	}
 	return ""
 }

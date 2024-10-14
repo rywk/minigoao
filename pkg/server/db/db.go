@@ -35,7 +35,9 @@ type DB interface {
 	GetAccount(string, string) (*Account, error)
 	//DeleteAccount(string, string) error
 
-	GetTop20Kills() ([]*msgs.Character, error)
+	GetTopNKills(int) ([]*msgs.Character, error)
+	GetTopNPvP1v1(int) ([]*msgs.Character, error)
+	GetTopNPvP2v2(int) ([]*msgs.Character, error)
 	CreateCharacter(int, string) error
 	UpdateCharacter(ch msgs.Character) error
 	GetAccountCharacters(int) ([]msgs.Character, error)
@@ -45,7 +47,10 @@ type DB interface {
 	LogInCharacter(id int) error
 	LogOutAll() error
 	SaveAndLogOutAll(chars []msgs.Character) error
-
+	AddCharacterWinVOne(id int) error
+	AddCharacterLossVOne(id int) error
+	AddCharacterWinVTwo(id int) error
+	AddCharacterLossVTwo(id int) error
 	//DeleteCharacter(int) error
 }
 
@@ -112,6 +117,10 @@ const charatcersTable = `create table if not exists characters (
 	dir integer not null default 1,
 	kills integer not null default 0,
 	deaths integer not null default 0,
+	wins_v_one integer not null default 0,
+	loses_v_one integer not null default 0,
+	wins_v_two integer not null default 0,
+	loses_v_two integer not null default 0,
 	skills blob not null,
 	inventory blob not null,
 	keyconfig blob not null,
@@ -176,7 +185,78 @@ keyconfig = ?, skills = ?, kills = ?, deaths = ?, px = ?, py = ?, dir = ?, inven
 	}
 	return nil
 }
-
+func (d *Data) AddCharacterWinVOne(id int) error {
+	q := `update characters set wins_v_one = wins_v_one + 1 where id = ?`
+	res, err := d.db.Exec(q, id)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return ErrAlreadyExist
+		}
+		return err
+	}
+	rowsAff, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAff == 0 {
+		return errors.New("not found")
+	}
+	return nil
+}
+func (d *Data) AddCharacterLossVOne(id int) error {
+	q := `update characters set loses_v_one = loses_v_one + 1 where id = ?`
+	res, err := d.db.Exec(q, id)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return ErrAlreadyExist
+		}
+		return err
+	}
+	rowsAff, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAff == 0 {
+		return errors.New("not found")
+	}
+	return nil
+}
+func (d *Data) AddCharacterWinVTwo(id int) error {
+	q := `update characters set wins_v_two = wins_v_two + 1 where id = ?`
+	res, err := d.db.Exec(q, id)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return ErrAlreadyExist
+		}
+		return err
+	}
+	rowsAff, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAff == 0 {
+		return errors.New("not found")
+	}
+	return nil
+}
+func (d *Data) AddCharacterLossVTwo(id int) error {
+	q := `update characters set loses_v_two = loses_v_two + 1 where id = ?`
+	res, err := d.db.Exec(q, id)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return ErrAlreadyExist
+		}
+		return err
+	}
+	rowsAff, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAff == 0 {
+		return errors.New("not found")
+	}
+	return nil
+}
 func (d *Data) AddCharacterKill(id int) error {
 	q := `update characters set kills = kills + 1 where id = ?`
 	res, err := d.db.Exec(q, id)
@@ -314,6 +394,10 @@ func rowToChar(rows *sql.Rows) (*msgs.Character, error) {
 		&char.Dir,
 		&char.Kills,
 		&char.Deaths,
+		&char.WinsVOne,
+		&char.LosesVOne,
+		&char.WinsVTwo,
+		&char.LosesVTwo,
 		&sk,
 		&inven,
 		&kcfg,
@@ -374,10 +458,68 @@ func (d *Data) GetCharacter(id int) (*msgs.Character, error) {
 	return char, err
 }
 
-func (d *Data) GetTop20Kills() ([]*msgs.Character, error) {
-	q := "select id, nick, kills, deaths  from characters order by kills desc, deaths asc limit 16"
+func (d *Data) GetTopNKills(n int) ([]*msgs.Character, error) {
+	q := "select id, nick, kills, deaths  from characters order by kills desc, deaths asc limit ?"
 
-	rows, err := d.db.Query(q)
+	rows, err := d.db.Query(q, n)
+	if err != nil {
+		panic(err)
+	}
+	defer rows.Close()
+	chars := make([]*msgs.Character, 0)
+
+	for rows.Next() {
+		char := &msgs.Character{}
+		err = rows.Scan(
+			&char.ID,
+			&char.Nick,
+			&char.Kills,
+			&char.Deaths)
+		if err != nil {
+			log.Fatal(err)
+		}
+		chars = append(chars, char)
+	}
+	err = rows.Err()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return chars, err
+}
+func (d *Data) GetTopNPvP1v1(n int) ([]*msgs.Character, error) {
+	q := "select id, nick, wins_v_one, loses_v_one  from characters order by wins_v_one desc, loses_v_one asc limit ?"
+
+	rows, err := d.db.Query(q, n)
+	if err != nil {
+		panic(err)
+	}
+	defer rows.Close()
+	chars := make([]*msgs.Character, 0)
+
+	for rows.Next() {
+		char := &msgs.Character{}
+		err = rows.Scan(
+			&char.ID,
+			&char.Nick,
+			&char.Kills,
+			&char.Deaths)
+		if err != nil {
+			log.Fatal(err)
+		}
+		chars = append(chars, char)
+	}
+	err = rows.Err()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return chars, err
+}
+func (d *Data) GetTopNPvP2v2(n int) ([]*msgs.Character, error) {
+	q := "select id, nick, wins_v_two, loses_v_two  from characters order by wins_v_two desc, loses_v_two asc limit ?"
+
+	rows, err := d.db.Query(q, n)
 	if err != nil {
 		panic(err)
 	}

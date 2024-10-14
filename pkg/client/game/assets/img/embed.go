@@ -20,6 +20,8 @@ var (
 	IconSubstract_png []byte
 	//go:embed icon_blood.png
 	IconBlood_png []byte
+	//go:embed icon_pvp.png
+	IconPvp_png []byte
 	//go:embed equipped_item.png
 	EquippedItem_png []byte
 
@@ -31,9 +33,17 @@ var (
 
 	//go:embed brick_patch.png
 	BrickPatches_png []byte
+	//go:embed moss_light_brick_patch.png
+	MossBrickPatches_png []byte
+	//go:embed sand_brick_patch.png
+	SandBrickPatches_png []byte
 	//go:embed grass_patches.png
 	GrassPatches_png []byte
-	//go:embed rock.png
+	//go:embed tile_team_1.png
+	PvPTileTeam1_png []byte
+	//go:embed tile_team_2.png
+	PvPTileTeam2_png []byte
+	//go:embed rock2.png
 	Rock_png []byte
 	//go:embed ongo.png
 	Ongo_png []byte

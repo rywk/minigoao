@@ -16,6 +16,7 @@ import (
 	"github.com/rywk/minigoao/pkg/constants/attack"
 	"github.com/rywk/minigoao/pkg/constants/direction"
 	"github.com/rywk/minigoao/pkg/constants/item"
+	"github.com/rywk/minigoao/pkg/constants/mapdef"
 	"github.com/rywk/minigoao/pkg/grid"
 	"github.com/rywk/minigoao/pkg/msgs"
 	"github.com/rywk/minigoao/pkg/typ"
@@ -54,7 +55,8 @@ type P struct {
 	lastDir      direction.D
 	steps        []Step
 
-	chatMsg      string
+	chatMsg      *ebiten.Image
+	chatMsgOff   int
 	chatMsgStart time.Time
 
 	Exp msgs.Experience
@@ -114,13 +116,14 @@ func (p *P) Update(counter int) {
 	}
 	p.UpdateFrames(counter)
 	if time.Since(p.chatMsgStart) > constants.ChatMsgTTL {
-		p.chatMsg = ""
+		p.chatMsg = nil
 	}
 }
 
 func (p *P) SetChatMsg(msg string) {
 	p.chatMsgStart = time.Now()
-	p.chatMsg = msg
+	p.chatMsgOff = len(msg) * 3
+	p.chatMsg = text.PrintImg(msg)
 }
 
 const PlayerDrawOffsetX, PlayerDrawOffsetY = 3, -14
@@ -180,9 +183,11 @@ func (p *P) DrawOff(screen *ebiten.Image, offset ebiten.GeoM) {
 		p.DrawNick(screen, offset)
 	}
 	p.Effect.Draw(screen, offset)
-	if p.chatMsg != "" {
-		off := len(p.chatMsg) * 3
-		text.PrintAt(screen, p.chatMsg, int(p.Pos[0])+16-off, int(p.Pos[1]-40))
+	if p.chatMsg != nil {
+		p.drawOp.GeoM.Reset()
+		p.drawOp.GeoM.Concat(offset)
+		p.drawOp.GeoM.Translate(p.Pos[0]+float64(16-p.chatMsgOff), float64(p.Pos[1]-40))
+		screen.DrawImage(p.chatMsg, p.drawOp)
 	}
 }
 
@@ -326,7 +331,7 @@ func (p *P) WalkSteps(g *grid.Grid) {
 	p.Walking = true
 	p.Pos[0] = float64(p.X * constants.TileSize)
 	p.Pos[1] = float64(p.Y * constants.TileSize)
-	g.Move(0, typ.P{X: int32(p.X), Y: int32(p.Y)}, step.To)
+	g.Move(mapdef.Players.Int(), typ.P{X: int32(p.X), Y: int32(p.Y)}, step.To)
 	p.X, p.Y = step.To.X, step.To.Y
 }
 
@@ -381,30 +386,43 @@ func (p *P) RefreshEquipped() {
 		p.Armor = texture.LoadItemAninmatio(is.Item)
 	}
 }
+func (p *P) RefreshAllEquipped() {
+	p.RefreshBody()
+	p.RefreshHead()
+	p.RefreshWeapon()
+	p.RefreshShield()
+}
 func (p *P) RefreshBody() {
 	if p.Inv.EquippedBody.X == 255 {
 		p.Armor = nil
+		return
 	}
 	is := p.Inv.GetSlotv2(&p.Inv.EquippedBody)
 	p.Armor = texture.LoadItemAninmatio(is.Item)
 }
 func (p *P) RefreshHead() {
-	if p.Inv.EquippedHead.X != 255 {
-		is := p.Inv.GetSlotv2(&p.Inv.EquippedHead)
-		p.Helmet = texture.LoadItemHead(is.Item)
+	if p.Inv.EquippedHead.X == 255 {
+		p.Helmet = nil
+		return
 	}
+	is := p.Inv.GetSlotv2(&p.Inv.EquippedHead)
+	p.Helmet = texture.LoadItemHead(is.Item)
 }
 func (p *P) RefreshWeapon() {
-	if p.Inv.EquippedWeapon.X != 255 {
-		is := p.Inv.GetSlotv2(&p.Inv.EquippedWeapon)
-		p.Weapon = texture.LoadItemAninmatio(is.Item)
+	if p.Inv.EquippedWeapon.X == 255 {
+		p.Weapon = nil
+		return
 	}
+	is := p.Inv.GetSlotv2(&p.Inv.EquippedWeapon)
+	p.Weapon = texture.LoadItemAninmatio(is.Item)
 }
 func (p *P) RefreshShield() {
-	if p.Inv.EquippedShield.X != 255 {
-		is := p.Inv.GetSlotv2(&p.Inv.EquippedShield)
-		p.Shield = texture.LoadItemAninmatio(is.Item)
+	if p.Inv.EquippedShield.X == 255 {
+		p.Shield = nil
+		return
 	}
+	is := p.Inv.GetSlotv2(&p.Inv.EquippedShield)
+	p.Shield = texture.LoadItemAninmatio(is.Item)
 }
 func NewLogin(e *msgs.EventPlayerLogin) *P {
 	p := Create(e)
@@ -421,7 +439,28 @@ func NewLogin(e *msgs.EventPlayerLogin) *P {
 	p.Inv = e.Inv
 	return p
 }
-
+func (p *P) Tp(e *msgs.EventPlayerTp) *P {
+	p.X = e.Pos.X
+	p.Y = e.Pos.Y
+	p.Pos = f64.Vec2{ // pixel value of position
+		float64(e.Pos.X) * constants.TileSize,
+		float64(e.Pos.Y) * constants.TileSize}
+	p.Direction = e.Dir
+	p.Dead = e.Dead
+	p.Client = NewClientP()
+	p.Client.HP = int(e.HP)
+	p.Client.MP = int(e.MP)
+	p.Client.p = p
+	p.HPImg = ebiten.NewImage(30, 3)
+	p.MPImg = ebiten.NewImage(30, 3)
+	p.HPMPBGImg = ebiten.NewImage(32, 10)
+	p.HPImg.Fill(color.RGBA{255, 60, 60, 255})
+	p.MPImg.Fill(color.RGBA{40, 130, 250, 255})
+	p.HPMPBGImg.Fill(color.RGBA{0, 0, 0, 200})
+	p.Inv = e.Inv
+	p.Exp = e.Exp
+	return p
+}
 func Create(a *msgs.EventPlayerLogin) *P {
 	p := &P{
 		drawOp:    &ebiten.DrawImageOptions{},
@@ -564,9 +603,9 @@ type AtkDmgFxTxt struct {
 
 func (adt *AtkDmgFxTxt) Play() bool {
 	adt.img.Clear()
-	col := color.RGBA{194, 6, 6, 255}
+	col := color.RGBA{134, 6, 6, 255}
 	if adt.heal {
-		col = color.RGBA{6, 153, 194, 255}
+		col = color.RGBA{6, 113, 144, 255}
 	}
 
 	text.DrawNumbers(adt.img, adt.dmg, 0, 46-adt.y, col)

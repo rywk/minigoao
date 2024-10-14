@@ -13,6 +13,10 @@ const (
 	// Ground assets
 	Grass
 	Bricks
+	MossBricks
+	SandBricks
+	PvPTeam1Tile
+	PvPTeam2Tile
 	// Default skins
 	NakedBody
 	Head
@@ -51,10 +55,15 @@ const (
 	Len
 )
 
+func CanFight(a Image) bool {
+	return a == Bricks || a == SandBricks
+}
 func IsSolid(a Image) bool {
 	return a > SolidBlocks && a < Len
 }
-
+func BattleStarter(a Image) bool {
+	return a == PvPTeam1Tile || a == PvPTeam2Tile
+}
 func AssetName(a Image) string {
 	return reflect.TypeOf(a).Name()
 }

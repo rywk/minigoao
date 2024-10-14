@@ -33,6 +33,15 @@ var (
 			},
 			img: img.GrassPatches_png,
 		},
+		asset.MossBricks: {
+			c: SpriteConfig{
+				Width:  constants.TileSize,
+				Height: constants.TileSize,
+				GridW:  4,
+				GridH:  4,
+			},
+			img: img.MossBrickPatches_png,
+		},
 		asset.Bricks: {
 			c: SpriteConfig{
 				Width:  constants.TileSize,
@@ -41,6 +50,29 @@ var (
 				GridH:  4,
 			},
 			img: img.BrickPatches_png,
+		},
+		asset.SandBricks: {
+			c: SpriteConfig{
+				Width:  constants.TileSize,
+				Height: constants.TileSize,
+				GridW:  4,
+				GridH:  4,
+			},
+			img: img.SandBrickPatches_png,
+		},
+		asset.PvPTeam1Tile: {
+			c: SpriteConfig{
+				Width:  32,
+				Height: 32,
+			},
+			img: img.PvPTileTeam1_png,
+		},
+		asset.PvPTeam2Tile: {
+			c: SpriteConfig{
+				Width:  32,
+				Height: 32,
+			},
+			img: img.PvPTileTeam2_png,
 		},
 		asset.Rock: {
 			c: SpriteConfig{

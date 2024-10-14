@@ -2,10 +2,10 @@ package grid
 
 import (
 	"fmt"
+	"image"
 	"sync"
 
 	"github.com/rywk/minigoao/pkg/constants/direction"
-	"github.com/rywk/minigoao/pkg/msgs"
 	"github.com/rywk/minigoao/pkg/typ"
 )
 
@@ -50,7 +50,7 @@ func (s *Grid) Update(p typ.P) (*Tile, func()) {
 	return t, t.m.Unlock
 }
 
-func (s *Grid) Notify(p typ.P, e msgs.E, ev interface{}, ids ...uint16) {
+func (s *Grid) Notify(p typ.P, e uint8, ev interface{}, ids ...uint16) {
 	s.grid[p.X][p.Y].NotifyTile(Event{ids, p, e, ev})
 }
 
@@ -102,7 +102,9 @@ var gridErrors = []string{
 func (ge GridError) Error() string {
 	return gridErrors[ge]
 }
-
+func (g *Grid) GetPoint(layer int, p image.Point) uint16 {
+	return g.grid[p.X][p.Y].Layers[layer]
+}
 func (g *Grid) GetSlot(layer int, p typ.P) uint16 {
 	return g.grid[p.X][p.Y].Layers[layer]
 }
@@ -367,7 +369,7 @@ func (o *Obs) Nuke() {
 type Event struct {
 	ID   []uint16
 	From typ.P
-	E    msgs.E
+	E    uint8
 	Data interface{}
 }
 

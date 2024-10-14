@@ -102,8 +102,8 @@ const (
 	BaseMP             = 1300
 	BaseActionCooldown = time.Millisecond * 1000
 	BaseSwitchCooldown = time.Millisecond * 700
-	BaseMeleeDamage    = 1
-	BaseSpellDamage    = 1
+	BaseMeleeDamage    = 0
+	BaseSpellDamage    = 0
 )
 
 func (s Skills) Stats() Stats {

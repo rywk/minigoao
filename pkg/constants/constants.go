@@ -8,7 +8,7 @@ const (
 
 const (
 	TileSize                 = 32
-	WorldX, WorldY           = 100, 100
+	WorldX, WorldY           = 70, 60
 	PixelWorldX, PixelWorldY = WorldX * TileSize, WorldY * TileSize
 
 	// We keep a constant to use arrays

@@ -31,6 +31,7 @@ import (
 	"github.com/rywk/minigoao/pkg/constants/attack"
 	"github.com/rywk/minigoao/pkg/constants/direction"
 	"github.com/rywk/minigoao/pkg/constants/item"
+	"github.com/rywk/minigoao/pkg/constants/mapdef"
 	"github.com/rywk/minigoao/pkg/msgs"
 	"github.com/rywk/minigoao/pkg/typ"
 	"golang.org/x/image/math/f64"
@@ -128,7 +129,7 @@ type Game struct {
 
 	keys *Keys
 
-	rankingList []msgs.RankChar
+	rankingList msgs.EventRankList
 
 	SelectedSpell attack.Spell
 
@@ -621,7 +622,7 @@ func (g *Game) drawGame(screen *ebiten.Image) {
 			}
 			p.DrawOff(wi, offset)
 		}
-		g.keys.DrawChat(wi, int(g.player.Pos[0]+16), int(g.player.Pos[1]-40))
+		g.keys.DrawChat2(wi, offset)
 	})
 
 	g.stats.Draw(screen)
@@ -918,14 +919,28 @@ func (g *Game) StartGame(login *msgs.EventPlayerLogin) {
 
 func (g *Game) Login(e *msgs.EventPlayerLogin) {
 	g.sessionID = uint32(e.ID)
-	g.world = NewMap(g, MapConfigFromPlayerLogin(e))
+	g.world = NewMap(g, e.MapType)
 	g.player = player.NewLogin(e)
 	g.client = g.player.Client
 	for _, p := range e.VisiblePlayers {
 		g.AddToGame(&p)
 	}
 }
+func (g *Game) Tp(e *msgs.EventPlayerTp) {
+	g.ClearOthers()
+	g.world.Space.SetSlot(mapdef.Players.Int(), typ.P{g.player.X, g.player.Y}, 0)
+	g.world.Reload(e.MapType)
+	//g.leftForMove = 0
+	g.player = g.player.Tp(e)
+	g.world.Space.SetSlot(mapdef.Players.Int(), typ.P{g.player.X, g.player.Y}, uint16(g.player.ID))
 
+	g.playersY = append(g.playersY, g.player)
+	g.client = g.player.Client
+	for _, p := range e.VisiblePlayers {
+		g.AddToGame(&p)
+	}
+	g.SoundBoard.Play(assets.Spawn)
+}
 func (g *Game) WriteToServer() {
 	for m := range g.outQueue {
 		g.ms.EncodeAndWrite(m.E, m.Data)
@@ -967,6 +982,8 @@ func (g *Game) WriteEventQueue() {
 			dim.Data = msgs.DecodeEventPlayerChangedSkin(im.Data)
 		case msgs.EUpdateSkillsOk:
 			dim.Data = msgs.DecodeMsgpack(im.Data, &msgs.Experience{})
+		case msgs.ETpTo:
+			dim.Data = msgs.DecodeMsgpack(im.Data, &msgs.EventPlayerTp{})
 		case msgs.EPlayerSpawned:
 			msg := &msgs.EventPlayerSpawned{}
 			msgs.DecodeMsgpack(im.Data, msg)
@@ -1007,9 +1024,12 @@ func (g *Game) Clear() {
 	g.players = [50]*player.P{}
 	g.playersY = []YSortable{}
 }
-
+func (g *Game) ClearOthers() {
+	g.players = [50]*player.P{}
+	g.playersY = []YSortable{}
+}
 func (g *Game) AddToGame(event *msgs.EventNewPlayer) {
-	g.world.Space.SetSlot(0, event.Pos, event.ID)
+	g.world.Space.SetSlot(mapdef.Players.Int(), event.Pos, event.ID)
 	g.players[event.ID] = player.CreatePlayerSpawned(g.player, event)
 	g.players[event.ID].SetSoundboard(g.SoundBoard)
 	g.playersY = append(g.playersY, g.players[event.ID])
@@ -1019,8 +1039,11 @@ func (g *Game) ProcessEventQueue() error {
 	g.eventLock.Lock()
 	for _, ev := range g.eventQueue {
 		switch ev.E {
+		case msgs.ETpTo:
+			tpdata := ev.Data.(*msgs.EventPlayerTp)
+			g.Tp(tpdata)
 		case msgs.ERankList:
-			g.rankingList = ev.Data.(*msgs.EventRankList).Characters
+			g.rankingList = *ev.Data.(*msgs.EventRankList)
 		case msgs.EServerDisconnect:
 			g.ms.Close()
 			g.ms = nil
@@ -1056,16 +1079,19 @@ func (g *Game) ProcessEventQueue() error {
 			event := ev.Data.(*msgs.EventMeleeOk)
 			//log.Printf("CastMeleeOk m: %#v\n", event)
 			if g.player.Dead {
-				break
+				continue
 			}
 			if !event.Hit {
 				g.SoundBoard.Play(assets.MeleeAir)
 				g.player.Direction = event.Dir
-				break
+				continue
 			}
 			g.player.Direction = event.Dir
 			g.SoundBoard.Play(assets.MeleeBlood)
 			g.player.Effect.NewAttackNumber(int(event.Damage), false)
+			if g.players[event.ID] == nil {
+				continue
+			}
 			g.players[event.ID].Effect.NewMeleeHit()
 			g.players[event.ID].Dead = event.Killed
 			if event.Killed {
@@ -1085,6 +1111,8 @@ func (g *Game) ProcessEventQueue() error {
 				g.SoundBoard.Play(assets.Death)
 				g.player.Dead = true
 				g.player.Inmobilized = false
+				g.player.Inv.UnequipAll()
+				g.player.RefreshAllEquipped()
 			}
 		case msgs.EPlayerMelee:
 			event := ev.Data.(*msgs.EventPlayerMelee)
@@ -1092,7 +1120,7 @@ func (g *Game) ProcessEventQueue() error {
 			if !event.Hit {
 				g.players[event.From].Direction = event.Dir
 				g.SoundBoard.PlayFrom(assets.MeleeAir, g.player.X, g.player.Y, g.players[event.From].X, g.players[event.From].Y)
-				break
+				continue
 			}
 			g.players[event.ID].Direction = event.Dir
 			g.SoundBoard.PlayFrom(assets.MeleeBlood, g.player.X, g.player.Y, g.players[event.ID].X, g.players[event.ID].Y)
@@ -1107,6 +1135,9 @@ func (g *Game) ProcessEventQueue() error {
 			g.player.Client.MP = int(event.NewMP)
 			if uint32(event.ID) != g.sessionID {
 				g.player.Effect.NewAttackNumber(int(event.Damage), event.Spell == attack.SpellHealWounds || event.Spell == attack.SpellResurrect)
+				if g.players[event.ID] == nil {
+					continue
+				}
 				g.players[event.ID].Effect.NewSpellHit(event.Spell)
 				g.SoundBoard.PlayFrom(assets.SoundFromSpell(event.Spell), g.player.X, g.player.Y, g.players[event.ID].X, g.players[event.ID].Y)
 				g.players[event.ID].Dead = event.Killed
@@ -1141,6 +1172,8 @@ func (g *Game) ProcessEventQueue() error {
 				if g.player.Dead {
 					g.SoundBoard.Play(assets.Death)
 				}
+				g.player.Inv.UnequipAll()
+				g.player.RefreshAllEquipped()
 			}
 		case msgs.EPlayerSpell:
 			event := ev.Data.(*msgs.EventPlayerSpell)
@@ -1251,7 +1284,7 @@ func (g *Game) DespawnPlayer(pid uint16) {
 	p := g.players[pid]
 	g.players[pid] = nil
 	if !p.Dead {
-		g.world.Space.Set(0, typ.P{X: int32(p.X), Y: int32(p.Y)}, 0)
+		g.world.Space.Set(mapdef.Players.Int(), typ.P{X: int32(p.X), Y: int32(p.Y)}, 0)
 	}
 	for iy, ys := range g.playersY {
 		if py, ok := ys.(*player.P); ok && pid == uint16(py.ID) {
@@ -1380,12 +1413,12 @@ func (g *Game) AddGameStep(d direction.D) {
 	if outWorld {
 		return
 	}
-	stuff := g.world.Space.GetSlot(1, np)
+	stuff := g.world.Space.GetSlot(mapdef.Stuff.Int(), np)
 	if stuff != 0 && d == g.lastDir {
 		return
 	}
 
-	playerLayer := g.world.Space.GetSlot(0, np)
+	playerLayer := g.world.Space.GetSlot(mapdef.Players.Int(), np)
 
 	confident := !outWorld && !g.player.Inmobilized && playerLayer == 0 && stuff == 0
 	g.lastDir = d
