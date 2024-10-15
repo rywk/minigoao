@@ -33,11 +33,12 @@ func (s Spell) String() string {
 }
 
 type SpellProp struct {
-	Spell        Spell
-	BaseCooldown time.Duration
-	BaseDamage   int32
-	BaseManaCost int32
-	Cast         func(from, to Player, calc int32) error
+	Spell           Spell
+	BaseCooldown    time.Duration
+	BaseDamage      int32
+	BaseManaCost    int32
+	BaseManaReducer float64
+	Cast            func(from, to Player, calc int32) error
 }
 
 type Player interface {
@@ -47,6 +48,11 @@ type Player interface {
 	Revive()
 	SetParalized(bool)
 	IsParalized() bool
+}
+
+func (sp *SpellProp) RealManaCost(maxMP int32) int32 {
+	extraMP := float64(maxMP) * sp.BaseManaReducer
+	return sp.BaseManaCost + int32(extraMP)
 }
 
 var ErrorNoMana = errors.New("no mana")
@@ -61,9 +67,10 @@ var ErrorDoesNotHaveEffect = errors.New("does not have effect")
 var SpellProps = [SpellLen]SpellProp{
 	{Spell: SpellNone},
 	{
-		Spell:        SpellParalize,
-		BaseCooldown: time.Millisecond * 1100,
-		BaseManaCost: 300,
+		Spell:           SpellParalize,
+		BaseCooldown:    time.Millisecond * 1100,
+		BaseManaCost:    190,
+		BaseManaReducer: 0.1,
 		Cast: func(from, to Player, calc int32) error {
 			if from == to {
 				return ErrorSelfCast
@@ -78,7 +85,7 @@ var SpellProps = [SpellLen]SpellProp{
 	{
 		Spell:        SpellRemoveParalize,
 		BaseCooldown: time.Millisecond * 1100,
-		BaseManaCost: 340,
+		BaseManaCost: 360,
 		Cast: func(from, to Player, calc int32) error {
 			if !to.IsParalized() {
 				return ErrorDoesNotHaveEffect
@@ -88,10 +95,11 @@ var SpellProps = [SpellLen]SpellProp{
 		},
 	},
 	{
-		Spell:        SpellHealWounds,
-		BaseCooldown: time.Second,
-		BaseManaCost: 320,
-		BaseDamage:   12,
+		Spell:           SpellHealWounds,
+		BaseCooldown:    time.Millisecond * 1100,
+		BaseManaCost:    88,
+		BaseManaReducer: 0.24,
+		BaseDamage:      77,
 		Cast: func(_, to Player, calc int32) error {
 			to.Heal(calc)
 			return nil
@@ -101,7 +109,7 @@ var SpellProps = [SpellLen]SpellProp{
 		Spell:        SpellResurrect,
 		BaseCooldown: time.Millisecond * 1100,
 		BaseManaCost: 1200,
-		BaseDamage:   10,
+		BaseDamage:   35,
 		Cast: func(from, to Player, calc int32) error {
 			if !to.Dead() {
 				return ErrorTargetAlive
@@ -112,10 +120,11 @@ var SpellProps = [SpellLen]SpellProp{
 		},
 	},
 	{
-		Spell:        SpellElectricDischarge,
-		BaseCooldown: time.Millisecond * 1100,
-		BaseManaCost: 440,
-		BaseDamage:   56,
+		Spell:           SpellElectricDischarge,
+		BaseCooldown:    time.Millisecond * 1100,
+		BaseManaCost:    64,
+		BaseManaReducer: 0.32,
+		BaseDamage:      81,
 		Cast: func(from, to Player, calc int32) error {
 			if from == to {
 				return ErrorSelfCast
@@ -128,7 +137,7 @@ var SpellProps = [SpellLen]SpellProp{
 		Spell:        SpellExplode,
 		BaseCooldown: time.Millisecond * 1100,
 		BaseManaCost: 1000,
-		BaseDamage:   99,
+		BaseDamage:   122,
 		Cast: func(from, to Player, calc int32) error {
 			if from == to {
 				return ErrorSelfCast

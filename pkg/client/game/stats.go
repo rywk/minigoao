@@ -1649,14 +1649,14 @@ func (kb *KeyBinder[A]) DrawTooltips(screen *ebiten.Image, x, y int) {
 				kb.g.stats.ChangeSetTooltip(fmt.Sprintf("%v\n%v\nMana: %d",
 					kb.Desc,
 					roundDuration(attack.SpellProps[kb.Spell].BaseCooldown, 1).String(),
-					attack.SpellProps[kb.Spell].BaseManaCost))
+					attack.SpellProps[kb.Spell].RealManaCost(kb.g.player.Exp.Stats.MaxMP)))
 				return
 			}
 			kb.g.stats.ChangeSetTooltip(fmt.Sprintf("%v\n%v\nDamage: %d\nMana: %d",
 				kb.Desc,
 				roundDuration(attack.SpellProps[kb.Spell].BaseCooldown, 1).String(),
 				attack.SpellProps[kb.Spell].BaseDamage+kb.g.player.Exp.Stats.BaseSpell,
-				attack.SpellProps[kb.Spell].BaseManaCost))
+				attack.SpellProps[kb.Spell].RealManaCost(kb.g.player.Exp.Stats.MaxMP)))
 		}
 	}
 }

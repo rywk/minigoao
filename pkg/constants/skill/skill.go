@@ -89,16 +89,16 @@ type Stats struct {
 // Flatters
 const (
 	//actionCDF Value = 0.016
-	healthF Value = 1.9
-	manaF   Value = 19
+	healthF Value = 2.3
+	manaF   Value = 20
 
-	meleeF Value = 2
-	spellF Value = 2
+	meleeF Value = 2.1
+	spellF Value = 1.6
 )
 
 // Base stats
 const (
-	BaseHP             = 330
+	BaseHP             = 320
 	BaseMP             = 1300
 	BaseActionCooldown = time.Millisecond * 1000
 	BaseSwitchCooldown = time.Millisecond * 700
@@ -120,7 +120,11 @@ func (s Skills) Stats() Stats {
 
 func (s Skills) Buffs() Buffs {
 	b := Buffs{}
+	b[BuffMagicDefense] += s[Intelligence] * 0.2
+	b[BuffMagicDefense] += s[Vitality] * 0.05
 
+	b[BuffPhysicalDefense] += s[Vitality] * 0.2
+	b[BuffPhysicalDefense] += s[Intelligence] * 0.05
 	// b[BuffPhysicalDamage] += s[Vitality]
 	// b[BuffPhysicalDamage] -= s[Intelligence] * 0.4
 

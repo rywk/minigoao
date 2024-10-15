@@ -31,10 +31,13 @@ func Cast(from, to *Player) (int32, error) {
 		return 0, attack.ErrorTooFast
 	}
 
-	for _, tid := range from.team {
-		if tid == to.id {
-			log.Printf("spell attacking teamate")
-			return 0, errors.New("cannot attack teamate")
+	if from.SelectedSpell != attack.SpellHealWounds &&
+		from.SelectedSpell != attack.SpellResurrect {
+		for _, tid := range from.team {
+			if tid == to.id {
+				log.Printf("spell attacking teamate")
+				return 0, errors.New("cannot attack teamate")
+			}
 		}
 	}
 
@@ -50,31 +53,21 @@ func Cast(from, to *Player) (int32, error) {
 		return 0, attack.ErrorTooFast
 	}
 
-	if sp.Spell == attack.SpellResurrect {
-		if !from.dead {
-			if from.mp < sp.BaseManaCost {
-				return 0, attack.ErrorNoMana
-			}
-			from.mp = from.mp - sp.BaseManaCost
-		}
-		reviveHealMod := from.exp.Stats.BaseSpell + sp.BaseDamage + int32(from.exp.SkillBuffs[skill.BuffMagicDamage]+from.exp.ItemBuffs[skill.BuffMagicDamage])
-		err := sp.Cast(from, to, reviveHealMod)
-		if err != nil {
-			return 0, err
-		}
-		from.cds.LastAction = now
-		from.cds.LastSpells[from.SelectedSpell] = now
-		return reviveHealMod, nil
-	}
-
-	if from.mp < sp.BaseManaCost {
+	manaCost := sp.RealManaCost(from.exp.Stats.MaxMP)
+	if from.mp < manaCost {
 		return 0, attack.ErrorNoMana
 	}
-	from.mp = from.mp - sp.BaseManaCost
+	from.mp = from.mp - manaCost
 
 	itemBuff := int32(from.exp.ItemBuffs[skill.BuffMagicDamage] - to.exp.ItemBuffs[skill.BuffMagicDefense])
-	buff := int32(from.exp.SkillBuffs[skill.BuffMagicDamage] - to.exp.SkillBuffs[skill.BuffMagicDefense])
-	damage := from.exp.Stats.BaseSpell + sp.BaseDamage + buff + itemBuff
+	skillBuff := int32(from.exp.SkillBuffs[skill.BuffMagicDamage] - to.exp.SkillBuffs[skill.BuffMagicDefense])
+	if sp.Spell == attack.SpellResurrect ||
+		sp.Spell == attack.SpellHealWounds {
+		itemBuff = int32(from.exp.ItemBuffs[skill.BuffMagicDamage] + to.exp.ItemBuffs[skill.BuffMagicDefense])
+		skillBuff = int32(from.exp.SkillBuffs[skill.BuffMagicDamage] + to.exp.SkillBuffs[skill.BuffMagicDefense])
+	}
+
+	damage := from.exp.Stats.BaseSpell + sp.BaseDamage + skillBuff + itemBuff
 	if damage < 0 {
 		damage = 0
 	}
@@ -85,7 +78,7 @@ func Cast(from, to *Player) (int32, error) {
 
 	err := sp.Cast(from, to, damage)
 	if err != nil {
-		from.mp = from.mp + sp.BaseManaCost
+		from.mp = from.mp + manaCost
 		return 0, err
 	}
 	if to.dead {

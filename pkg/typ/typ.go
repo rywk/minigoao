@@ -36,6 +36,10 @@ type Rect struct {
 	Min, Max P
 }
 
+func (r *Rect) R() image.Rectangle {
+	return image.Rect(int(r.Min.X), int(r.Min.Y), int(r.Max.X), int(r.Max.Y))
+}
+
 func (r *Rect) Smaller(q int32) Rect {
 	return Rect{
 		Min: P{X: r.Min.X + q, Y: r.Min.Y + q},

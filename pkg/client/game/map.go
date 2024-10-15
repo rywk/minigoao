@@ -53,9 +53,9 @@ func (m *Map) Reload(t mapdef.MapType) *Map {
 	// chunks
 
 	// init empty images what will store the map in chunks
-	mapXChunks := constants.WorldX*constants.TileSize/imageChunckSize + 1
+	mapXChunks := m.Space.Rect.R().Dx()*constants.TileSize/imageChunckSize + 1
 
-	mapYChunks := constants.WorldY*constants.TileSize/imageChunckSize + 1
+	mapYChunks := m.Space.Rect.R().Dy()*constants.TileSize/imageChunckSize + 1
 	tilePerChunk := imageChunckSize / constants.TileSize
 
 	m.mapBgChunks = make([][]*ebiten.Image, mapXChunks)
