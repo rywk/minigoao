@@ -688,17 +688,17 @@ func EncodeMsgpack[T any](t *T) []byte {
 }
 
 type EventNewPlayer struct {
-	ID    uint16
-	Nick  string
-	Pos   typ.P
-	Dir   direction.D
-	Dead  bool
-	Speed uint8
-
-	Weapon item.Item
-	Shield item.Item
-	Body   item.Item
-	Head   item.Item
+	ID         uint16
+	Nick       string
+	Pos        typ.P
+	Dir        direction.D
+	Dead       bool
+	Speed      uint8
+	Meditating bool
+	Weapon     item.Item
+	Shield     item.Item
+	Body       item.Item
+	Head       item.Item
 }
 
 type EventPlayerSpawned = EventNewPlayer
