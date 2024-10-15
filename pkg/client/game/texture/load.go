@@ -108,6 +108,26 @@ var (
 		// 	},
 		// 	img: spellimg.SpellApoca_png,
 		// },
+		asset.Meditation: {
+			c: SpriteConfig{
+				Width:  133,
+				Height: 100,
+				DirectionLength: map[direction.D]int{
+					direction.Right: 20,
+				},
+			},
+			img: spellimg.Meditation_png,
+		},
+		asset.MeditationFront: {
+			c: SpriteConfig{
+				Width:  133,
+				Height: 100,
+				DirectionLength: map[direction.D]int{
+					direction.Right: 20,
+				},
+			},
+			img: spellimg.MeditationFront_png,
+		},
 		asset.SpellApoca: {
 			c: SpriteConfig{
 				Width:      80,

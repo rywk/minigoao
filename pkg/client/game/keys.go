@@ -446,11 +446,14 @@ func (k *Keys) ChatMessage() string {
 			if k.chatInputOpen && k.typer.Text != "" {
 				k.lastChat = time.Now()
 				msg := strings.Trim(k.typer.Text, "\n")
-				k.sentChatOff = len(msg) * 3
-				k.sentChat = text.PrintImg(msg)
+
 				k.typer.Text = ""
 				k.chatInputOpen = !k.chatInputOpen
 				k.keysLocked = !k.keysLocked
+				if msg[0] != '/' {
+					k.sentChatOff = len(msg) * 3
+					k.sentChat = text.PrintImg(msg)
+				}
 				return msg
 			}
 			k.chatInputOpen = !k.chatInputOpen

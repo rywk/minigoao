@@ -759,7 +759,15 @@ func (g *Game) playerMove(player *Player, incomingData IncomingMsg) {
 		notOk()
 		return
 	}
+	player.lastMove = time.Now()
 	player.pos = np
+	if player.meditating {
+		player.meditating = false
+		player.space.Notify(player.pos, msgs.EPlayerMeditating.U8(), &msgs.EventPlayerMeditating{
+			ID:         player.id,
+			Meditating: player.meditating,
+		})
+	}
 
 	groundId := player.space.GetSlot(mapdef.Ground.Int(), np)
 	switch assets.Image(groundId) {
@@ -798,7 +806,6 @@ func (g *Game) playerMove(player *Player, incomingData IncomingMsg) {
 		}
 
 	}
-	player.lastMove = time.Now()
 	player.obs.MoveOne(player.dir, func(x, y int32) {
 		newPlayerInSight := player.space.GetSlot(mapdef.Players.Int(), typ.P{X: x, Y: y})
 		if newPlayerInSight == 0 {
@@ -1596,6 +1603,8 @@ type Player struct {
 	team   []uint16
 	enemys []uint16
 
+	meditating bool
+
 	account       *db.Account
 	characters    []msgs.Character
 	characterID   int
@@ -1615,9 +1624,14 @@ const (
 
 func (p *Player) HandleCmd(cmd string) {
 	cmd = strings.ToLower(cmd)
+	log.Printf("handling cmd: %v", cmd)
 	switch cmd {
 	case PlayerCMDMeditar:
-
+		p.meditating = !p.meditating
+		p.space.Notify(p.pos, msgs.EPlayerMeditating.U8(), &msgs.EventPlayerMeditating{
+			ID:         p.id,
+			Meditating: p.meditating,
+		})
 	}
 }
 

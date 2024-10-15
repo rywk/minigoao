@@ -995,6 +995,8 @@ func (g *Game) WriteEventQueue() {
 			dim.Data = msgs.DecodeEventPlayerSpellRecieved(im.Data)
 		case msgs.EPlayerChangedSkin:
 			dim.Data = msgs.DecodeEventPlayerChangedSkin(im.Data)
+		case msgs.EPlayerMeditating:
+			dim.Data = msgs.DecodeEventPlayerMeditating(im.Data)
 		case msgs.EUpdateSkillsOk:
 			dim.Data = msgs.DecodeMsgpack(im.Data, &msgs.Experience{})
 		case msgs.ETpTo:
@@ -1268,6 +1270,13 @@ func (g *Game) ProcessEventQueue() error {
 		case msgs.EPlayerChangedSkin:
 			event := ev.Data.(*msgs.EventPlayerChangedSkin)
 			g.players[event.ID].MaybeLoadAnimations(event)
+		case msgs.EPlayerMeditating:
+			event := ev.Data.(*msgs.EventPlayerMeditating)
+			if g.sessionID == uint32(event.ID) {
+				g.player.IsMeditating = event.Meditating
+			} else {
+				g.players[event.ID].IsMeditating = event.Meditating
+			}
 		case msgs.EUpdateSkillsOk:
 			event := ev.Data.(*msgs.Experience)
 			g.player.Exp = *event

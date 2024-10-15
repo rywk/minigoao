@@ -18,10 +18,12 @@ type A interface {
 type AF interface {
 	Next(direction.D) *ebiten.Image
 	Finished() bool
+	Restart()
 }
 
 type Effect interface {
 	Play() bool
+	Reset()
 	EffectFrame() *ebiten.Image
 	EffectOpt(*ebiten.DrawImageOptions) *ebiten.DrawImageOptions
 }
@@ -132,7 +134,7 @@ func NewEffectAnimation(img *ebiten.Image, config SpriteConfig) *Animation {
 	return a
 }
 
-func NewEffectGridAnimation(img *ebiten.Image, config SpriteConfig) *Animation {
+func NewEffectGridAnimation(img *ebiten.Image, config SpriteConfig) Effect {
 	a := &Animation{currentDir: direction.Front}
 	y := config.Y
 	frames := config.DirectionLength[direction.Right]
@@ -146,7 +148,7 @@ func NewEffectGridAnimation(img *ebiten.Image, config SpriteConfig) *Animation {
 	return a
 }
 
-func NewBodyAnimation(img *ebiten.Image, config SpriteConfig) *Animation {
+func NewBodyAnimation(img *ebiten.Image, config SpriteConfig) A {
 	a := &Animation{currentDir: direction.Front, directionMap: make(map[direction.D]*Sprites)}
 	y := config.Y
 	for _, d := range direction.List {
@@ -170,6 +172,9 @@ func (a *Animation) EffectOpt(op *ebiten.DrawImageOptions) *ebiten.DrawImageOpti
 
 func (a *Animation) Play() bool {
 	return a.sprites.Next()
+}
+func (a *Animation) Reset() {
+	a.sprites.Reset()
 }
 
 func (a *Animation) EffectFrame() *ebiten.Image {

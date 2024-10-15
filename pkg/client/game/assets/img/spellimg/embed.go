@@ -31,6 +31,11 @@ var (
 	//go:embed spell_inmo_rm.png
 	SpellInmoRm_png []byte
 
+	//go:embed meditation.png
+	Meditation_png []byte
+	//go:embed meditation_front.png
+	MeditationFront_png []byte
+
 	// //go:embed heal_wounds_new.png
 	// SpellHealWoundsNew_png []byte
 	//go:embed spell_heal_wounds_3.png

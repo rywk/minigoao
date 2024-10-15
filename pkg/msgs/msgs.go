@@ -207,6 +207,7 @@ const (
 	EUpdateSkillsOk
 	ETpTo
 
+	EPlayerMeditating
 	EPlayerChangedSkin   // A Player in the viewport changed a part of how other players view it
 	EPlayerConnect       // Just used internally for when the client conn starts and a nick is sent
 	EPlayerLogin         // Player login response, with data about the character and the players in the viewport
@@ -260,6 +261,7 @@ var eventLen = [ELen]int{
 	-1,                // EUpdateSkillsOk
 	-1,                // ETpTo
 
+	3,  // EPlayerMeditating
 	6,  // EPlayerChangedSkin - 2 bytes (uint16) to define the player id 4 for the new skin
 	0,  // EPlayerConnect
 	-1, // EPlayerLogin - -1 dynamic size msgpack
@@ -307,6 +309,7 @@ var eventString = [ELen]string{
 	"EUpdateSkillsOk",
 	"ETpTo",
 
+	"EPlayerMeditating",
 	"EPlayerChangedSkin",
 	"EPlayerConnect",
 	"EPlayerLogin",
@@ -385,6 +388,8 @@ func encodeAndWrite(m Msgs, e E, msg interface{}) error {
 		return m.Write(e, []byte{0})
 	case EPlayerChangedSkin:
 		return m.Write(e, EncodeEventPlayerChangedSkin(msg.(*EventPlayerChangedSkin)))
+	case EPlayerMeditating:
+		return m.Write(e, EncodeEventPlayerMeditating(msg.(*EventPlayerMeditating)))
 	case EPlayerSpawned:
 		return m.WriteWithLen(e, EncodeMsgpack(msg.(*EventPlayerSpawned)))
 	case EPlayerDespawned:
@@ -419,6 +424,27 @@ func encodeAndWrite(m Msgs, e E, msg interface{}) error {
 }
 func (m *M) EncodeAndWrite(e E, msg interface{}) error {
 	return encodeAndWrite(m, e, msg)
+}
+
+type EventPlayerMeditating struct {
+	ID         uint16
+	Meditating bool
+}
+
+func DecodeEventPlayerMeditating(data []byte) *EventPlayerMeditating {
+	return &EventPlayerMeditating{
+		ID:         binary.BigEndian.Uint16(data[0:2]),
+		Meditating: data[2] == 1,
+	}
+}
+
+func EncodeEventPlayerMeditating(c *EventPlayerMeditating) []byte {
+	bs := make([]byte, EPlayerMeditating.Len())
+	binary.BigEndian.PutUint16(bs[0:2], c.ID)
+	if c.Meditating {
+		bs[2] = 1
+	}
+	return bs
 }
 
 type EventRankList struct {

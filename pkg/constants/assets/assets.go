@@ -33,6 +33,9 @@ const (
 	// items
 
 	// Effects
+	Meditation
+	MeditationFront
+
 	MeleeHit
 	SpellInmo
 	SpellInmoRm

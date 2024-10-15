@@ -36,6 +36,10 @@ type P struct {
 	Dead        bool
 	Inmobilized bool
 
+	IsMeditating    bool
+	Meditation      texture.Effect
+	MeditationFront texture.Effect
+
 	// other players use this, client uses inventory
 	ArmorID, WeaponID, HelmetID, ShieldID item.Item
 
@@ -141,6 +145,12 @@ func (p *P) DrawOff(screen *ebiten.Image, offset ebiten.GeoM) {
 		p.Effect.Draw(screen, offset)
 		return
 	}
+	meditOp := &ebiten.DrawImageOptions{}
+	meditOp.GeoM.Concat(offset)
+	meditOp.GeoM.Translate(p.Pos[0]-50, p.Pos[1]+PlayerDrawOffsetY-30)
+	if p.IsMeditating {
+		screen.DrawImage(p.Meditation.EffectFrame(), meditOp)
+	}
 	if p.Direction == direction.Back || p.Direction == direction.Left {
 		if p.Weapon != nil {
 			screen.DrawImage(p.Weapon.Frame(), p.drawOp)
@@ -176,11 +186,15 @@ func (p *P) DrawOff(screen *ebiten.Image, offset ebiten.GeoM) {
 		p.drawOp.GeoM.Translate(-5, -7)
 		screen.DrawImage(p.Helmet.Frame(), p.drawOp)
 	}
+
 	if p.local == nil {
 		p.DrawPlayerHPMP(screen, offset)
 
 	} else {
 		p.DrawNick(screen, offset)
+	}
+	if p.IsMeditating {
+		screen.DrawImage(p.MeditationFront.EffectFrame(), meditOp)
 	}
 	p.Effect.Draw(screen, offset)
 	if p.chatMsg != nil {
@@ -221,7 +235,17 @@ func (p *P) DrawPlayerHPMP(screen *ebiten.Image, offset ebiten.GeoM) {
 }
 
 func (p *P) UpdateFrames(c int) {
+	if c%2 == 0 {
+		if p.IsMeditating {
+			p.MeditationFront.Play()
+			if !p.Meditation.Play() {
+				p.Meditation.Reset()
+				p.MeditationFront.Reset()
+			}
+		}
+	}
 	if c%6 == 0 {
+
 		if p.Walking {
 			if p.Dead {
 				p.DeadBody.Next(p.Direction)
@@ -471,19 +495,21 @@ func Create(a *msgs.EventPlayerLogin) *P {
 		Pos: f64.Vec2{ // pixel value of position
 			float64(a.Pos.X) * constants.TileSize,
 			float64(a.Pos.Y) * constants.TileSize},
-		Nick:      a.Nick,
-		NickImg:   text.PrintImg(a.Nick),
-		Dead:      a.Dead,
-		Exp:       a.Exp,
-		MoveSpeed: float64(a.Speed),
-		ArmorID:   a.Inv.GetBody(),
-		HelmetID:  a.Inv.GetHead(),
-		WeaponID:  a.Inv.GetWeapon(),
-		ShieldID:  a.Inv.GetShield(),
-		NakedBody: texture.LoadAnimation(assets.NakedBody),
-		Head:      texture.LoadStill(assets.Head),
-		DeadBody:  texture.LoadAnimation(assets.DeadBody),
-		DeadHead:  texture.LoadStill(assets.DeadHead),
+		Nick:            a.Nick,
+		NickImg:         text.PrintImg(a.Nick),
+		Dead:            a.Dead,
+		Exp:             a.Exp,
+		MoveSpeed:       float64(a.Speed),
+		ArmorID:         a.Inv.GetBody(),
+		HelmetID:        a.Inv.GetHead(),
+		WeaponID:        a.Inv.GetWeapon(),
+		ShieldID:        a.Inv.GetShield(),
+		NakedBody:       texture.LoadAnimation(assets.NakedBody),
+		Head:            texture.LoadStill(assets.Head),
+		DeadBody:        texture.LoadAnimation(assets.DeadBody),
+		DeadHead:        texture.LoadStill(assets.DeadHead),
+		Meditation:      texture.LoadEffect(assets.Meditation),
+		MeditationFront: texture.LoadEffect(assets.MeditationFront),
 	}
 	p.Effect = &PEffects{
 		drawOp: &ebiten.DrawImageOptions{},
@@ -505,18 +531,19 @@ func CreatePlayerSpawned(local *P, a *msgs.EventPlayerSpawned) *P {
 		Pos: f64.Vec2{ // pixel value of position
 			float64(a.Pos.X) * constants.TileSize,
 			float64(a.Pos.Y) * constants.TileSize},
-		Nick:      a.Nick,
-		NickImg:   text.PrintImg(a.Nick),
-		Dead:      a.Dead,
-		MoveSpeed: float64(a.Speed),
-		ArmorID:   a.Body,
-		HelmetID:  a.Head,
-		WeaponID:  a.Weapon,
-		ShieldID:  a.Shield,
-		NakedBody: texture.LoadAnimation(assets.NakedBody),
-		Head:      texture.LoadStill(assets.Head),
-		DeadBody:  texture.LoadAnimation(assets.DeadBody),
-		DeadHead:  texture.LoadStill(assets.DeadHead),
+		Nick:       a.Nick,
+		NickImg:    text.PrintImg(a.Nick),
+		Dead:       a.Dead,
+		MoveSpeed:  float64(a.Speed),
+		ArmorID:    a.Body,
+		HelmetID:   a.Head,
+		WeaponID:   a.Weapon,
+		ShieldID:   a.Shield,
+		NakedBody:  texture.LoadAnimation(assets.NakedBody),
+		Head:       texture.LoadStill(assets.Head),
+		DeadBody:   texture.LoadAnimation(assets.DeadBody),
+		DeadHead:   texture.LoadStill(assets.DeadHead),
+		Meditation: texture.LoadEffect(assets.Meditation),
 	}
 	p.Effect = &PEffects{
 		drawOp: &ebiten.DrawImageOptions{},
@@ -582,7 +609,9 @@ func NewSpellOffset(a assets.Image) *SpellOffset {
 func (as *SpellOffset) Play() bool {
 	return as.fx.Play()
 }
-
+func (as *SpellOffset) Reset() {
+	as.fx.Reset()
+}
 func (as *SpellOffset) EffectFrame() *ebiten.Image {
 	return as.fx.EffectFrame()
 }
@@ -601,6 +630,9 @@ type AtkDmgFxTxt struct {
 	offx int
 }
 
+func (as *AtkDmgFxTxt) Reset() {
+
+}
 func (adt *AtkDmgFxTxt) Play() bool {
 	adt.img.Clear()
 	col := color.RGBA{134, 6, 6, 255}
