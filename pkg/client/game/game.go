@@ -1112,6 +1112,7 @@ func (g *Game) ProcessEventQueue() error {
 			g.players[event.ID].Effect.NewMeleeHit()
 			g.players[event.ID].Dead = event.Killed
 			if event.Killed {
+				g.players[event.ID].UnsetItems()
 				g.SoundBoard.PlayFrom(assets.KillBell, g.player.X, g.player.Y, g.players[event.ID].X, g.players[event.ID].Y)
 				g.SoundBoard.PlayFrom(assets.Death, g.player.X, g.player.Y, g.players[event.ID].X, g.players[event.ID].Y)
 			}
@@ -1144,6 +1145,7 @@ func (g *Game) ProcessEventQueue() error {
 			g.players[event.ID].Effect.NewMeleeHit()
 			g.players[event.ID].Dead = event.Killed
 			if event.Killed {
+				g.players[event.ID].UnsetItems()
 				g.SoundBoard.PlayFrom(assets.Death, g.player.X, g.player.Y, g.players[event.ID].X, g.players[event.ID].Y)
 			}
 		case msgs.ECastSpellOk:
@@ -1159,7 +1161,7 @@ func (g *Game) ProcessEventQueue() error {
 				g.SoundBoard.PlayFrom(assets.SoundFromSpell(event.Spell), g.player.X, g.player.Y, g.players[event.ID].X, g.players[event.ID].Y)
 				g.players[event.ID].Dead = event.Killed
 				if event.Killed {
-
+					g.players[event.ID].UnsetItems()
 					g.SoundBoard.PlayFrom(assets.Death, g.player.X, g.player.Y, g.players[event.ID].X, g.players[event.ID].Y)
 					g.SoundBoard.PlayFrom(assets.KillBell, g.player.X, g.player.Y, g.players[event.ID].X, g.players[event.ID].Y)
 				}
@@ -1199,6 +1201,7 @@ func (g *Game) ProcessEventQueue() error {
 			g.players[event.ID].Effect.NewSpellHit(event.Spell)
 			g.players[event.ID].Dead = event.Killed
 			if event.Killed {
+				g.players[event.ID].UnsetItems()
 				g.SoundBoard.PlayFrom(assets.Death, g.player.X, g.player.Y, g.players[event.ID].X, g.players[event.ID].Y)
 			}
 		case msgs.EUseItemOk:

@@ -372,6 +372,16 @@ func (p *P) LoadAnimations() {
 	p.Weapon = texture.LoadItemAninmatio(p.WeaponID)
 	p.Shield = texture.LoadItemAninmatio(p.ShieldID)
 }
+func (p *P) UnsetItems() {
+	p.ArmorID = 0
+	p.HelmetID = 0
+	p.ShieldID = 0
+	p.WeaponID = 0
+	p.Armor = nil
+	p.Helmet = nil
+	p.Weapon = nil
+	p.Shield = nil
+}
 
 func (p *P) MaybeLoadAnimations(c *msgs.EventPlayerChangedSkin) {
 	if p.ArmorID != c.Armor {
