@@ -134,13 +134,15 @@ func (d *Data) CreateCharacter(accountID int, nick string) error {
 	invd.SetTestItemsInventory()
 	inv := msgs.EncodeMsgpack(invd)
 
-	q := `insert into characters (account_id, nick, skills, inventory, keyconfig) values(?, ?, ?, ?, ?)`
+	q := `insert into characters (account_id, nick, skills, inventory, keyconfig, px, py) values(?, ?, ?, ?, ?, ?, ?)`
 	_, err := d.db.Exec(q,
 		accountID,
 		nick,
 		sk,
 		inv,
-		kcfg)
+		kcfg,
+		20,
+		33)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			return ErrAlreadyExist

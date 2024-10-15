@@ -587,6 +587,9 @@ func NewSkills(g *Game) *Skills {
 
 	btnImg := ebiten.NewImage(32, 32)
 	btnImg.Fill(color.RGBA{101, 32, 133, 0})
+	zeroBtnImg := ebiten.NewImage(84, 32)
+	zeroBtnImg.Fill(color.RGBA{101, 32, 133, 255})
+	text.PrintBigAt(zeroBtnImg, "Reset", 12, 0)
 	windowStart := typ.P{X: ScreenWidth - 400, Y: 0}
 	s := &Skills{
 		drawOp:        &ebiten.DrawImageOptions{},
@@ -594,7 +597,7 @@ func NewSkills(g *Game) *Skills {
 		W:             int32(bg.Bounds().Dx()),
 		H:             int32(bg.Bounds().Dy()),
 		saveButton:    NewButton(g, texture.Decode(img.IconDisk_png), btnImg, windowStart.Add(80, 40)),
-		zeroButton:    NewButton(g, texture.Decode(img.IconX_png), btnImg, windowStart.Add(280, 40)),
+		zeroButton:    NewButton(g, nil, zeroBtnImg, windowStart.Add(280, 40)),
 		Background:    bg,
 		FreePoints:    int(g.player.Exp.FreePoints),
 		updatedSkills: g.player.Exp.Skills,
