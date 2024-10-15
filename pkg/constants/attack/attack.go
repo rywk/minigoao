@@ -97,9 +97,9 @@ var SpellProps = [SpellLen]SpellProp{
 	{
 		Spell:           SpellHealWounds,
 		BaseCooldown:    time.Millisecond * 1100,
-		BaseManaCost:    88,
-		BaseManaReducer: 0.24,
-		BaseDamage:      77,
+		BaseManaCost:    10,
+		BaseManaReducer: 0.35,
+		BaseDamage:      72,
 		Cast: func(_, to Player, calc int32) error {
 			to.Heal(calc)
 			return nil

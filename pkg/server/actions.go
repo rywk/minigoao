@@ -63,8 +63,8 @@ func Cast(from, to *Player) (int32, error) {
 	skillBuff := int32(from.exp.SkillBuffs[skill.BuffMagicDamage] - to.exp.SkillBuffs[skill.BuffMagicDefense])
 	if sp.Spell == attack.SpellResurrect ||
 		sp.Spell == attack.SpellHealWounds {
-		itemBuff = int32(from.exp.ItemBuffs[skill.BuffMagicDamage] + to.exp.ItemBuffs[skill.BuffMagicDefense])
-		skillBuff = int32(from.exp.SkillBuffs[skill.BuffMagicDamage] + to.exp.SkillBuffs[skill.BuffMagicDefense])
+		itemBuff = int32(from.exp.ItemBuffs[skill.BuffMagicDamage])
+		skillBuff = int32(from.exp.SkillBuffs[skill.BuffMagicDamage])
 	}
 
 	damage := from.exp.Stats.BaseSpell + sp.BaseDamage + skillBuff + itemBuff
