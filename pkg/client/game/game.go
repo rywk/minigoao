@@ -1200,10 +1200,14 @@ func (g *Game) ProcessEventQueue() error {
 			g.SoundBoard.PlayFrom(assets.SoundFromSpell(event.Spell), g.player.X, g.player.Y, g.players[event.ID].X, g.players[event.ID].Y)
 			g.players[event.ID].Effect.NewSpellHit(event.Spell)
 			g.players[event.ID].Dead = event.Killed
+			if cast := g.players[event.Caster]; cast != nil {
+				cast.Effect.NewSpellCastWord(event.Spell)
+			}
 			if event.Killed {
 				g.players[event.ID].UnsetItems()
 				g.SoundBoard.PlayFrom(assets.Death, g.player.X, g.player.Y, g.players[event.ID].X, g.players[event.ID].Y)
 			}
+
 		case msgs.EUseItemOk:
 			event := ev.Data.(*msgs.EventUseItemOk)
 			if event.Item.Type() == item.TypeConsumable {

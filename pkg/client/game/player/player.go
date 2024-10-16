@@ -594,9 +594,22 @@ func (pfx *PEffects) NewAttackNumber(dmg int, heal bool) {
 		} else {
 			dmgs = strconv.FormatInt(int64(dmg), 10)
 		}
+		col := color.RGBA{134, 6, 6, 255}
+		if heal {
+			col = color.RGBA{6, 113, 144, 255}
+		}
 		offx := len(dmgs) * 4
-		pfx.active = append(pfx.active, &AtkDmgFxTxt{img: ebiten.NewImage(40, 60), dmg: dmgs, heal: heal, offx: offx})
+		pfx.active = append(pfx.active, &AtkDmgFxTxt{img: ebiten.NewImage(40, 60), dmg: dmgs, col: col, offx: offx})
 	}
+}
+
+func (pfx *PEffects) NewSpellCastWord(s attack.Spell) {
+	str := s.CastName()
+	offx := len(str) * 3
+	pfx.active = append(pfx.active, &AtkDmgFxTxt{
+		img: ebiten.NewImage(len(str)*8, 60),
+		dmg: str, col: color.RGBA{207, 174, 83, 200},
+		offx: offx, letters: true})
 }
 
 type SpellOffset struct {
@@ -634,12 +647,13 @@ func (as *SpellOffset) EffectOpt(op *ebiten.DrawImageOptions) *ebiten.DrawImageO
 }
 
 type AtkDmgFxTxt struct {
-	dmg  string
-	heal bool
-	img  *ebiten.Image
-	y    int
-	c    int
-	offx int
+	dmg     string
+	col     color.Color
+	img     *ebiten.Image
+	y       int
+	c       int
+	offx    int
+	letters bool
 }
 
 func (as *AtkDmgFxTxt) Reset() {
@@ -647,12 +661,13 @@ func (as *AtkDmgFxTxt) Reset() {
 }
 func (adt *AtkDmgFxTxt) Play() bool {
 	adt.img.Clear()
-	col := color.RGBA{134, 6, 6, 255}
-	if adt.heal {
-		col = color.RGBA{6, 113, 144, 255}
+
+	if adt.letters {
+		text.PrintColAt(adt.img, adt.dmg, 0, 46-adt.y, adt.col)
+	} else {
+		text.DrawNumbers(adt.img, adt.dmg, 0, 46-adt.y, adt.col)
 	}
 
-	text.DrawNumbers(adt.img, adt.dmg, 0, 46-adt.y, col)
 	if adt.y == 46 {
 		adt.y = 0
 		return false

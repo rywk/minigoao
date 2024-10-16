@@ -28,6 +28,20 @@ var spells = [SpellLen]string{
 	"SpellExplode",
 }
 
+var castName = [SpellLen]string{
+	"",
+	"IMMOBILES",
+	"DEMOBILES",
+	"SANAT VULNERA",
+	"VIVIFICA",
+	"TONITRUUM",
+	"RUPTIS",
+}
+
+func (s Spell) CastName() string {
+	return castName[s]
+}
+
 func (s Spell) String() string {
 	return spells[s]
 }
@@ -97,9 +111,9 @@ var SpellProps = [SpellLen]SpellProp{
 	{
 		Spell:           SpellHealWounds,
 		BaseCooldown:    time.Millisecond * 1100,
-		BaseManaCost:    10,
-		BaseManaReducer: 0.35,
-		BaseDamage:      72,
+		BaseManaCost:    -150,
+		BaseManaReducer: 0.4,
+		BaseDamage:      52,
 		Cast: func(_, to Player, calc int32) error {
 			to.Heal(calc)
 			return nil

@@ -273,7 +273,7 @@ var eventLen = [ELen]int{
 	-1, // EBroadcastChat
 
 	11,                // EPlayerMoved - 1 byte (uint8) direction, 2 bytes (uint16) player id, 8 bytes (uint32, uint32) x y
-	2 + 1 + 1,         // EPlayerSpell - 2 bytes (uint16) to define the target player id, 1 byte (uint8) to define the spell, 1 byte (bool) killed target
+	2 + 2 + 1 + 1,     // EPlayerSpell -  2 bytes (uint16) to define the target player id, 2 bytes (uint16) caster, 1 byte (uint8) to define the spell, 1 byte (bool) killed target
 	1 + 2 + 4 + 4,     // EPlayerSpellRecieved - 1 byte (uint8) to define the spell, 2 bytes (uint16) to define the (caster) player id, 4 bytes (uint32) to define the new hp, 4 bytes (uint32) to define the damage
 	1 + 1 + 1 + 2 + 2, // EPlayerMelee - 1 byte (bool) hit/miss, 1 byte (bool) killed target, 2 bytes (uint16) to define the target player id, 2 bytes (uint16) to define the attacker
 	1 + 2 + 4 + 4,     // EPlayerMeleeRecieved - 2 bytes (uint16) to define the (caster) player id, 4 bytes (uint32) to define the new hp, 4 bytes (uint32) to define the damage
@@ -868,6 +868,7 @@ func EncodeEventPlayerMoved(c *EventPlayerMoved) []byte {
 
 type EventPlayerSpell struct {
 	ID     uint16
+	Caster uint16
 	Spell  attack.Spell
 	Killed bool
 }
@@ -875,17 +876,19 @@ type EventPlayerSpell struct {
 func DecodeEventPlayerSpell(data []byte) *EventPlayerSpell {
 	return &EventPlayerSpell{
 		ID:     binary.BigEndian.Uint16(data[:2]),
-		Spell:  attack.Spell(data[2]),
-		Killed: data[3] != 0,
+		Caster: binary.BigEndian.Uint16(data[2:4]),
+		Spell:  attack.Spell(data[4]),
+		Killed: data[5] != 0,
 	}
 }
 
 func EncodeEventPlayerSpell(c *EventPlayerSpell) []byte {
 	bs := make([]byte, EPlayerSpell.Len())
 	binary.BigEndian.PutUint16(bs[:2], c.ID)
-	bs[2] = byte(c.Spell)
+	binary.BigEndian.PutUint16(bs[2:4], c.Caster)
+	bs[4] = byte(c.Spell)
 	if c.Killed {
-		bs[3] = 1
+		bs[5] = 1
 	}
 	return bs
 }
