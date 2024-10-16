@@ -31,7 +31,8 @@ func Cast(from, to *Player) (int32, error) {
 		return 0, attack.ErrorTooFast
 	}
 
-	if from.SelectedSpell != attack.SpellHealWounds &&
+	if from.SelectedSpell != attack.SpellRemoveParalize &&
+		from.SelectedSpell != attack.SpellHealWounds &&
 		from.SelectedSpell != attack.SpellResurrect {
 		for _, tid := range from.team {
 			if tid == to.id {
