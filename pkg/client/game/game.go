@@ -1153,7 +1153,11 @@ func (g *Game) ProcessEventQueue() error {
 			//log.Printf("CastSpellOk m: %#v\n", event)
 			g.player.Client.MP = int(event.NewMP)
 			if uint32(event.ID) != g.sessionID {
-				g.player.Effect.NewAttackNumber(int(event.Damage), event.Spell == attack.SpellHealWounds || event.Spell == attack.SpellResurrect)
+				if event.Spell == attack.SpellParalize || event.Spell == attack.SpellRemoveParalize {
+					g.player.Effect.NewSpellCastWord(event.Spell)
+				} else {
+					g.player.Effect.NewAttackNumber(int(event.Damage), event.Spell == attack.SpellHealWounds || event.Spell == attack.SpellResurrect)
+				}
 				if g.players[event.ID] == nil {
 					continue
 				}
@@ -1183,7 +1187,11 @@ func (g *Game) ProcessEventQueue() error {
 			}
 			g.SoundBoard.Play(assets.SoundFromSpell(event.Spell))
 			g.player.Effect.NewSpellHit(event.Spell)
-			caster.Effect.NewAttackNumber(int(event.Damage), event.Spell == attack.SpellHealWounds || event.Spell == attack.SpellResurrect)
+			if event.Spell == attack.SpellParalize || event.Spell == attack.SpellRemoveParalize {
+				caster.Effect.NewSpellCastWord(event.Spell)
+			} else {
+				caster.Effect.NewAttackNumber(int(event.Damage), event.Spell == attack.SpellHealWounds || event.Spell == attack.SpellResurrect)
+			}
 			g.player.Client.HP = int(event.NewHP)
 			if g.player.Client.HP == 0 {
 				g.player.Inmobilized = false
